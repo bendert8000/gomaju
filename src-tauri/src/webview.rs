@@ -10,3 +10,10 @@ const INIT_GUARD_SUFFIX: &str = "; } })();";
 pub fn guarded_init(global: &str, json: &str) -> String {
     format!("{INIT_GUARD_PREFIX}window.{global} = {json}{INIT_GUARD_SUFFIX}")
 }
+
+/// Init script that exposes the current UI locale to the page as `window.__RESTEE_LOCALE__`,
+/// so each window renders in the right language at load (read synchronously via `readInjected`).
+pub fn locale_init(locale: &str) -> String {
+    let json = serde_json::to_string(locale).unwrap_or_else(|_| "\"zh-Hant\"".into());
+    guarded_init("__RESTEE_LOCALE__", &json)
+}

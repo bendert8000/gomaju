@@ -98,6 +98,10 @@ pub struct HotkeysDto {
 pub struct ConfigFile {
     // Scalar fields first so the serialized TOML stays valid (tables/arrays last).
     pub version: u32,
+    /// UI language, `"zh-Hant"` (default) or `"en"`. Backend-owned: only the tray writes
+    /// it; window saves preserve it. Existing configs without the field default in.
+    #[serde(default = "default_locale")]
+    pub locale: String,
     #[serde(default)]
     pub autostart: bool,
     pub settings: SettingsDto,
@@ -114,6 +118,14 @@ pub struct ConfigFile {
 fn default_true() -> bool {
     true
 }
+
+/// Default UI language: Traditional Chinese.
+pub fn default_locale() -> String {
+    "zh-Hant".to_string()
+}
+
+/// The locale codes the app ships translations for.
+pub const SUPPORTED_LOCALES: [&str; 2] = ["zh-Hant", "en"];
 
 impl Default for SettingsDto {
     fn default() -> Self {
@@ -133,6 +145,7 @@ impl Default for ConfigFile {
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
+            locale: default_locale(),
             autostart: false,
             settings: SettingsDto::default(),
             hotkeys: HotkeysDto::default(),
@@ -240,6 +253,11 @@ impl ConfigFile {
     /// was changed, so the caller can decide to persist the corrected file.
     pub fn sanitize(&mut self) -> bool {
         let mut changed = false;
+        // Unknown/hand-edited locale falls back to the default so the UI can't wedge.
+        if !SUPPORTED_LOCALES.contains(&self.locale.as_str()) {
+            self.locale = default_locale();
+            changed = true;
+        }
         if sanitize_rules(&mut self.rules) {
             changed = true;
         }
@@ -368,6 +386,33 @@ mod tests {
         let text = toml::to_string_pretty(&cfg).unwrap();
         let parsed: ConfigFile = toml::from_str(&text).unwrap();
         assert_eq!(cfg, parsed);
+    }
+
+    #[test]
+    fn locale_defaults_and_round_trips() {
+        assert_eq!(ConfigFile::default().locale, "zh-Hant");
+        // A config TOML without `locale` (older file) deserializes to the default.
+        let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
+        let parsed: ConfigFile = toml::from_str(older).unwrap();
+        assert_eq!(parsed.locale, "zh-Hant");
+        // An explicit locale round-trips.
+        let mut cfg = ConfigFile::default();
+        cfg.locale = "en".into();
+        let parsed: ConfigFile = toml::from_str(&toml::to_string_pretty(&cfg).unwrap()).unwrap();
+        assert_eq!(parsed.locale, "en");
+    }
+
+    #[test]
+    fn sanitize_clamps_unknown_locale_to_default() {
+        let mut cfg = ConfigFile::default();
+        cfg.locale = "fr".into();
+        assert!(cfg.sanitize());
+        assert_eq!(cfg.locale, "zh-Hant");
+        // A supported locale is left alone.
+        cfg.locale = "en".into();
+        let changed = cfg.sanitize();
+        assert_eq!(cfg.locale, "en");
+        assert!(!changed);
     }
 
     #[test]

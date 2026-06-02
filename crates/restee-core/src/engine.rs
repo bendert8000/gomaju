@@ -65,9 +65,11 @@ pub enum Effect {
     },
 }
 
-/// The soonest upcoming break, for status display.
+/// One upcoming break, for status display.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NextBreak {
+    /// Stable rule id, so a UI can map a countdown back to a specific rule/card.
+    pub rule_id: String,
     pub rule_name: String,
     pub remaining_secs: u64,
 }
@@ -77,7 +79,10 @@ pub struct NextBreak {
 pub struct EngineStatus {
     pub state: RunState,
     /// Soonest enabled rule to fire (by remaining work); `None` if no rule is enabled.
+    /// Equal to `all.first()`.
     pub next: Option<NextBreak>,
+    /// Every enabled rule, soonest-first (by remaining work). Empty if none enabled.
+    pub all: Vec<NextBreak>,
 }
 
 struct RuleState {
@@ -132,20 +137,26 @@ impl Engine {
         self.state
     }
 
-    /// Snapshot for status display: current state + the soonest enabled rule to fire.
+    /// Snapshot for status display: current state + every enabled rule, soonest-first.
     pub fn status(&self) -> EngineStatus {
-        let next = self
-            .rules
+        // Collect enabled rules and sort by the full `Duration` remaining (not the
+        // truncated seconds) so sub-second ties keep their order, then map to secs.
+        let mut enabled: Vec<&RuleState> =
+            self.rules.iter().filter(|rs| rs.rule.enabled).collect();
+        enabled.sort_by_key(|rs| rs.remaining());
+        let all: Vec<NextBreak> = enabled
             .iter()
-            .filter(|rs| rs.rule.enabled)
-            .min_by_key(|rs| rs.remaining())
             .map(|rs| NextBreak {
+                rule_id: rs.rule.id.clone(),
                 rule_name: rs.rule.name.clone(),
                 remaining_secs: rs.remaining().as_secs(),
-            });
+            })
+            .collect();
+        let next = all.first().cloned();
         EngineStatus {
             state: self.state,
             next,
+            all,
         }
     }
 
@@ -226,6 +237,24 @@ impl Engine {
             effects.push(Effect::RuleReset {
                 rule_id: rs.rule.id.clone(),
             });
+        }
+        effects
+    }
+
+    /// Restart a single rule's countdown (by id) back to a full interval. Cancels a
+    /// pending warning only if it was for this rule. No-op if the id isn't found.
+    pub fn reset_timer(&mut self, rule_id: &str) -> Vec<Effect> {
+        let Some(rs) = self.rules.iter_mut().find(|rs| rs.rule.id == rule_id) else {
+            return vec![];
+        };
+        rs.work = Duration::ZERO;
+        rs.credited = false;
+        let mut effects = vec![Effect::RuleReset {
+            rule_id: rule_id.to_string(),
+        }];
+        if self.warned.as_deref() == Some(rule_id) {
+            self.warned = None;
+            effects.push(Effect::BreakWarningCancelled);
         }
         effects
     }
@@ -814,6 +843,31 @@ mod tests {
     }
 
     #[test]
+    fn status_all_lists_every_enabled_rule_soonest_first() {
+        let mut rules = vec![
+            rule("eye", 30, 5, Enforcement::Soft),
+            rule("long", 45, 10, Enforcement::Strict),
+            rule("off", 20, 5, Enforcement::Soft),
+        ];
+        rules[2].enabled = false; // disabled -> must be excluded from `all`
+        let mut engine = Engine::new(rules, Settings::default());
+        engine.start();
+        for _ in 0..10 {
+            engine.tick(secs(1), secs(0)); // each enabled rule's work = 10
+        }
+
+        let s = engine.status();
+        // Disabled "off" excluded; remaining eye 20 < long 35 -> soonest-first.
+        let names: Vec<&str> = s.all.iter().map(|b| b.rule_name.as_str()).collect();
+        assert_eq!(names, vec!["eye", "long"]);
+        assert_eq!(s.all[0].rule_id, "eye");
+        assert_eq!(s.all[0].remaining_secs, 20);
+        assert_eq!(s.all[1].remaining_secs, 35);
+        // `next` mirrors the soonest entry.
+        assert_eq!(s.next.as_ref(), s.all.first());
+    }
+
+    #[test]
     fn reset_timers_pushes_next_break_back_to_full_interval() {
         let mut engine = Engine::new(
             vec![rule("eye", 30, 5, Enforcement::Soft)],
@@ -827,6 +881,32 @@ mod tests {
 
         engine.reset_timers();
         assert_eq!(engine.status().next.unwrap().remaining_secs, 30);
+    }
+
+    #[test]
+    fn reset_timer_restarts_only_the_named_rule() {
+        let mut engine = Engine::new(
+            vec![
+                rule("eye", 30, 5, Enforcement::Soft),
+                rule("long", 50, 10, Enforcement::Strict),
+            ],
+            Settings::default(),
+        );
+        engine.start();
+        for _ in 0..10 {
+            engine.tick(secs(1), secs(0)); // each rule's work = 10
+        }
+        engine.reset_timer("eye"); // eye -> full 30; long stays at 40 remaining
+
+        let all = engine.status().all;
+        let remaining = |name: &str| {
+            all.iter()
+                .find(|b| b.rule_name == name)
+                .unwrap()
+                .remaining_secs
+        };
+        assert_eq!(remaining("eye"), 30);
+        assert_eq!(remaining("long"), 40);
     }
 
     #[test]

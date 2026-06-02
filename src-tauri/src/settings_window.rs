@@ -20,8 +20,10 @@ pub fn open(app: &AppHandle) {
             let _ = existing.set_focus();
             return;
         }
+        let locale = crate::i18n::current_locale(&app);
         match WebviewWindowBuilder::new(&app, SETTINGS_LABEL, WebviewUrl::App("index.html".into()))
-            .title("restee — Settings")
+            .title(crate::i18n::tr(&locale, "title.settings"))
+            .initialization_script(crate::webview::locale_init(&locale))
             .inner_size(760.0, 720.0)
             .min_inner_size(560.0, 480.0)
             .resizable(true)

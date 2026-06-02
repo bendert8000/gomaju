@@ -1,6 +1,8 @@
 // Shared break-rule editor used by both the Settings window (src/main.ts) and the
 // standalone Break-rules window (src/rules.ts) — single source of truth for the rule row.
 
+import { t } from "./i18n";
+
 export type Enforcement = "soft" | "strict";
 
 export interface RuleDto {
@@ -22,7 +24,7 @@ const rowSelect = (row: HTMLElement, cls: string): HTMLSelectElement =>
 export function defaultRule(): RuleDto {
   return {
     id: crypto.randomUUID(),
-    name: "New break",
+    name: t("editor.new_break"),
     interval_secs: 20 * 60,
     break_secs: 30,
     enforcement: "soft",
@@ -42,12 +44,12 @@ export function ruleRow(rule: RuleDto): HTMLElement {
     <input class="rule-interval" type="number" min="1" />
     <input class="rule-break" type="number" min="1" />
     <select class="rule-enforcement">
-      <option value="soft">Soft</option>
-      <option value="strict">Strict</option>
+      <option value="soft">${t("card.soft")}</option>
+      <option value="strict">${t("card.strict")}</option>
     </select>
     <input class="rule-enabled" type="checkbox" />
-    <input class="rule-repeat" type="checkbox" title="Repeat after each break — uncheck for a one-time break" />
-    <button class="rule-remove btn-ghost" type="button" title="Remove">✕</button>
+    <input class="rule-repeat" type="checkbox" title="${t("editor.repeat_title")}" />
+    <button class="rule-remove btn-ghost" type="button" title="${t("common.remove")}">✕</button>
   `;
   rowInput(row, ".rule-name").value = rule.name;
   rowInput(row, ".rule-interval").value = String(Math.round(rule.interval_secs / 60));
@@ -73,7 +75,7 @@ export function collectRules(container: HTMLElement): RuleDto[] {
     const brk = Number(rowInput(row, ".rule-break").value) || 1;
     return {
       id: row.dataset.id || crypto.randomUUID(),
-      name: rowInput(row, ".rule-name").value.trim() || "Break",
+      name: rowInput(row, ".rule-name").value.trim() || t("editor.fallback_break"),
       interval_secs: Math.max(1, Math.round(minutes)) * 60,
       break_secs: Math.max(1, Math.round(brk)),
       enforcement: rowSelect(row, ".rule-enforcement").value as Enforcement,

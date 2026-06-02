@@ -10,84 +10,83 @@
   <body class="settings-page">
     <header class="settings-header">
       <h1>restee</h1>
-      <span id="idle-status" class="badge" title="Idle detection backend"></span>
+      <span id="idle-status" class="badge" data-i18n-title="settings.idle_title"></span>
     </header>
 
     <main class="settings-main">
       <div class="status-banner" id="status-banner">
         <span id="status-text">…</span>
-        <button id="reset-btn" class="btn-ghost btn-sm" type="button" title="Restart the countdown to the next break">Reset</button>
       </div>
 
       <section class="card">
-        <h2>Rules</h2>
-        <p class="muted">Take a break after some active work. Soft = gentle, skippable. Strict = covers the screen.</p>
+        <h2 data-i18n="settings.rules_heading">Rules</h2>
+        <p class="muted" data-i18n="settings.rules_desc">Take a break after some active work. Soft = gentle, skippable. Strict = covers the screen.</p>
         <div class="rules-head">
-          <span>Name</span>
-          <span>Every (min)</span>
-          <span>Break (sec)</span>
-          <span>Type</span>
-          <span>On</span>
-          <span>Repeat</span>
+          <span data-i18n="settings.col_name">Name</span>
+          <span data-i18n="settings.col_every">Every (min)</span>
+          <span data-i18n="settings.col_break">Break (sec)</span>
+          <span data-i18n="settings.col_type">Type</span>
+          <span data-i18n="settings.col_on">On</span>
+          <span data-i18n="settings.col_repeat">Repeat</span>
           <span></span>
         </div>
         <div id="rules"></div>
-        <button id="add-rule" type="button" class="btn-ghost">+ Add rule</button>
+        <button id="add-rule" type="button" class="btn-ghost" data-i18n="settings.add_rule">+ Add rule</button>
       </section>
 
       <section class="card">
-        <h2>Behavior</h2>
+        <h2 data-i18n="settings.behavior_heading">Behavior</h2>
         <label class="field">
-          <span>When you go idle</span>
+          <span data-i18n="settings.idle_label">When you go idle</span>
           <select id="idle-policy">
-            <option value="pause">Pause counting</option>
-            <option value="credit">Count it as a break</option>
+            <option value="pause" data-i18n="settings.idle_pause">Pause counting</option>
+            <option value="credit" data-i18n="settings.idle_credit">Count it as a break</option>
           </select>
         </label>
         <label class="field">
-          <span>Strict-break escape</span>
+          <span data-i18n="settings.escape_label">Strict-break escape</span>
           <select id="escape-mode">
-            <option value="friction">Hold to skip</option>
-            <option value="easy">Easy skip button</option>
-            <option value="no_easy_escape">No easy escape</option>
+            <option value="friction" data-i18n="settings.escape_friction">Hold to skip</option>
+            <option value="easy" data-i18n="settings.escape_easy">Easy skip button</option>
+            <option value="no_easy_escape" data-i18n="settings.escape_none">No easy escape</option>
           </select>
         </label>
         <label class="field">
-          <span>Warn before break (seconds, 0 = off)</span>
+          <span data-i18n="settings.warn_label">Warn before break (seconds, 0 = off)</span>
           <input id="warn-seconds" type="number" min="0" />
         </label>
         <label class="field">
-          <span>Idle threshold (seconds)</span>
+          <span data-i18n="settings.idle_threshold_label">Idle threshold (seconds)</span>
           <input id="away-threshold" type="number" min="1" />
         </label>
         <label class="field field--checkbox">
           <input id="sound" type="checkbox" />
-          <span>Play a chime when a break starts</span>
+          <span data-i18n="settings.sound_label">Play a chime when a break starts</span>
         </label>
         <label class="field field--checkbox">
           <input id="notifications" type="checkbox" />
-          <span>Show a notification on soft breaks</span>
+          <span data-i18n="settings.notif_label">Show a notification on soft breaks</span>
         </label>
         <label class="field field--checkbox">
           <input id="autostart" type="checkbox" />
-          <span>Launch at login</span>
+          <span data-i18n="settings.autostart_label">Launch at login</span>
         </label>
       </section>
 
       <section class="card">
-        <h2>Global hotkeys <span class="muted">(optional)</span></h2>
-        <p class="muted">e.g. <code>CommandOrControl+Alt+B</code>. Leave blank to unbind.</p>
-        <label class="field"><span>Start / pause</span><input id="hk-toggle" type="text" placeholder="unset" /></label>
-        <label class="field"><span>Break now</span><input id="hk-break" type="text" placeholder="unset" /></label>
-        <label class="field"><span>Skip break</span><input id="hk-skip" type="text" placeholder="unset" /></label>
+        <h2><span data-i18n="settings.hotkeys_heading">Global hotkeys</span> <span class="muted" data-i18n="settings.hotkeys_optional">(optional)</span></h2>
+        <p class="muted"><span data-i18n="settings.hotkeys_eg">e.g. </span><code>CommandOrControl+Alt+B</code><span data-i18n="settings.hotkeys_unbind">. Leave blank to unbind.</span></p>
+        <label class="field"><span data-i18n="settings.hk_toggle">Start / pause</span><input id="hk-toggle" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>
+        <label class="field"><span data-i18n="settings.hk_break">Break now</span><input id="hk-break" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>
+        <label class="field"><span data-i18n="settings.hk_skip">Skip break</span><input id="hk-skip" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>
       </section>
     </main>
 
     <footer class="settings-footer">
       <span id="save-msg" class="muted"></span>
       <div class="actions">
-        <button id="close-btn" type="button" class="btn-ghost">Close</button>
-        <button id="save-btn" type="button" class="btn-primary">Save</button>
+        <button id="close-btn" type="button" class="btn-ghost" data-i18n="common.close">Close</button>
+        <button id="save-btn" type="button" class="btn-primary" data-i18n="common.save">Save</button>
       </div>
     </footer>
   </body>

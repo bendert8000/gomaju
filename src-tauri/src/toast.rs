@@ -32,7 +32,12 @@ pub fn close(app: &AppHandle) {
 
 fn build_toast(app: &AppHandle, info: &WarningInfo) {
     let json = serde_json::to_string(info).unwrap_or_else(|_| "null".into());
-    let init = crate::webview::guarded_init("__RESTEE_WARNING__", &json);
+    // One combined init script (payload + locale).
+    let init = format!(
+        "{}{}",
+        crate::webview::guarded_init("__RESTEE_WARNING__", &json),
+        crate::webview::locale_init(&crate::i18n::current_locale(app)),
+    );
     match WebviewWindowBuilder::new(app, TOAST_LABEL, WebviewUrl::App("toast.html".into()))
         .title("restee")
         .decorations(false)

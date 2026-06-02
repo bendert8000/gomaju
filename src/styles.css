@@ -264,7 +264,6 @@ body {
 .status-banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
   padding: 0.6rem 0.7rem 0.6rem 1rem;
   border-radius: 10px;
@@ -272,6 +271,34 @@ body {
   font-variant-numeric: tabular-nums;
   background: rgba(106, 166, 255, 0.12);
   border: 1px solid rgba(106, 166, 255, 0.28);
+}
+/* Each enabled break is its own row: label on the left, its Reset button on the right. */
+#status-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.status-row--note {
+  opacity: 0.7;
+}
+.status-row__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-row__reset {
+  flex: none;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.76rem;
 }
 
 .btn-sm {
@@ -457,6 +484,13 @@ input[type="checkbox"] {
 .alarm-doy {
   width: 4.5rem;
 }
+.alarm-next {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.alarm-next:empty {
+  display: none;
+}
 
 /* --- Break-rules dashboard (quick select) --- */
 
@@ -553,6 +587,41 @@ input[type="checkbox"] {
   font-size: 0.82rem;
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
+}
+.rule-card__countdown {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--on);
+  opacity: 0.9;
+}
+.rule-card__countdown:empty {
+  display: none;
+}
+/* Row under each card: the live countdown + that break's own Reset button. */
+.rule-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.35rem;
+}
+.rule-item[data-on="false"] .rule-card__foot {
+  display: none; /* a disabled break has nothing to count down or reset */
+}
+/* Reset is tinted with the break's accent (blue = Soft, orange = Strict). */
+.rule-card__reset {
+  flex: none;
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 0.18rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: background 0.15s;
+}
+.rule-card__reset:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 .rule-card__badge {
   flex: none;

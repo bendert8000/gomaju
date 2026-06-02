@@ -67,14 +67,19 @@ pub fn cmd_skip(app: AppHandle, state: State<'_, AppState>) {
     runtime::action_skip(&app, state.inner());
 }
 
+/// Per-break reset: restart a single rule's countdown (the window banners' per-row Reset).
+/// Reset-all lives on the tray "Reset timer" item (`runtime::confirm_then_reset`).
 #[tauri::command]
-pub fn cmd_reset_timers(
+pub fn cmd_reset_timer(
     window: WebviewWindow,
     app: AppHandle,
-    state: State<'_, AppState>,
+    rule_id: String,
 ) -> Result<(), String> {
-    require_settings(&window)?;
-    runtime::action_reset(&app, state.inner());
+    gate(
+        is_settings(window.label()) || is_rules(window.label()),
+        "settings/rules",
+    )?;
+    runtime::confirm_then_reset_one(&app, rule_id);
     Ok(())
 }
 
@@ -103,12 +108,20 @@ pub fn cmd_close_settings(window: WebviewWindow, app: AppHandle) -> Result<(), S
     Ok(())
 }
 
-/// Current run state + time to the soonest break, for the settings status banner.
+/// One enabled break's countdown, for the status banners + dashboard cards.
+#[derive(Serialize)]
+pub struct NextBreakDto {
+    pub rule_id: String,
+    pub rule_name: String,
+    pub remaining_secs: u64,
+}
+
+/// Current run state + every enabled break (soonest-first), for the settings /
+/// Today's breaks banners and the per-card countdowns.
 #[derive(Serialize)]
 pub struct StatusDto {
     pub state: &'static str,
-    pub next_rule: Option<String>,
-    pub next_secs: Option<u64>,
+    pub all: Vec<NextBreakDto>,
 }
 
 #[tauri::command]
@@ -116,12 +129,23 @@ pub fn cmd_get_status(
     window: WebviewWindow,
     state: State<'_, AppState>,
 ) -> Result<StatusDto, String> {
-    require_settings(&window)?;
+    // Read-only status, shown in both the Settings banner and the Break-rules dashboard.
+    gate(
+        is_settings(window.label()) || is_rules(window.label()),
+        "settings/rules",
+    )?;
     let snapshot = state.engine.lock().unwrap().status();
     Ok(StatusDto {
         state: snapshot.state.as_str(),
-        next_rule: snapshot.next.as_ref().map(|n| n.rule_name.clone()),
-        next_secs: snapshot.next.map(|n| n.remaining_secs),
+        all: snapshot
+            .all
+            .into_iter()
+            .map(|n| NextBreakDto {
+                rule_id: n.rule_id,
+                rule_name: n.rule_name,
+                remaining_secs: n.remaining_secs,
+            })
+            .collect(),
     })
 }
 
@@ -162,6 +186,10 @@ pub fn cmd_save_config(
         // once-rule auto-disable (runtime::persist_rule_disabled) can't interleave a stale
         // snapshot between them. On a write error the guard drops with the cache untouched.
         let mut guard = state.config.lock().unwrap();
+        // Locale is backend-owned (only the tray changes it). The Settings form never edits
+        // it, and an incoming payload without the field would serde-default to "zh-Hant" —
+        // so preserve the stored value rather than let a Save clobber a language switch.
+        config.locale = guard.locale.clone();
         config::save(&state.config_path, &config).map_err(|e| e.to_string())?;
         *guard = config.clone();
     }
@@ -188,6 +216,36 @@ pub fn cmd_get_alarms(
     Ok(state.config.lock().unwrap().alarms.clone())
 }
 
+/// The next fire instant for one enabled alarm, for the Alarms window's "Next: …" label.
+#[derive(Serialize)]
+pub struct AlarmFireDto {
+    pub id: String,
+    /// Unix timestamp (seconds) of the next fire.
+    pub at_secs: i64,
+}
+
+/// Compute the next fire time of every *enabled* alarm whose schedule still has one.
+/// Reflects the saved config (the window refreshes this on load / save / focus).
+#[tauri::command]
+pub fn cmd_get_alarm_fires(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<Vec<AlarmFireDto>, String> {
+    require_alarms(&window)?;
+    let now = chrono::Local::now();
+    let alarms = state.config.lock().unwrap().alarms.clone();
+    let fires = alarms
+        .iter()
+        .filter_map(|a| {
+            crate::alarm::next_fire(a, now).map(|when| AlarmFireDto {
+                id: a.id.clone(),
+                at_secs: when.timestamp(),
+            })
+        })
+        .collect();
+    Ok(fires)
+}
+
 /// Persist the edited alarm list. Clone the current config, swap in the new alarms,
 /// sanitize, write to disk, and only then update the in-memory cache — so a failed
 /// write never leaves the cache ahead of the file. Returns the sanitized alarms so the
@@ -205,10 +263,14 @@ pub fn cmd_save_alarms(
     // Only the alarms changed here, so validate just those (rules/settings in the cached
     // config were already sanitized at load / their own save).
     alarm::sanitize_alarms(&mut config.alarms);
-    config::save(&state.config_path, &config).map_err(|e| e.to_string())?;
-
     let sanitized = config.alarms.clone();
-    *state.config.lock().unwrap() = config;
+
+    // Hold the lock across save + cache swap, and re-read the backend-owned locale so a
+    // language switch made since the clone above isn't lost.
+    let mut guard = state.config.lock().unwrap();
+    config.locale = guard.locale.clone();
+    config::save(&state.config_path, &config).map_err(|e| e.to_string())?;
+    *guard = config;
     Ok(sanitized)
 }
 
@@ -274,7 +336,12 @@ pub fn cmd_close_rules(window: WebviewWindow, app: AppHandle) -> Result<(), Stri
 
 /// Open the Settings window from the rules dashboard's "Edit in Settings…" button.
 #[tauri::command]
-pub fn cmd_open_settings(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+pub async fn cmd_open_settings(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    // Async so this runs off the main thread. Creating a window *synchronously* from within
+    // a webview's IPC handler pumps a nested event loop and deadlocks the app (the tray path
+    // is a native menu event, so it's unaffected). `settings_window::open` marshals the actual
+    // window build to the main thread via `run_on_main_thread`, which now posts cleanly from
+    // this off-main-thread command instead of re-entering the loop.
     require_rules(&window)?;
     settings_window::open(&app);
     Ok(())

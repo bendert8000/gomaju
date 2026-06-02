@@ -29,6 +29,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
 rodio = "0.19"
 # Wall-clock + local timezone + weekday/month math for clock alarms (the engine is
 # clock-free; alarm scheduling lives in this layer). Already transitive in Cargo.lock.

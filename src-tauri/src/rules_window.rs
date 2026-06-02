@@ -20,8 +20,10 @@ pub fn open(app: &AppHandle) {
             let _ = existing.set_focus();
             return;
         }
+        let locale = crate::i18n::current_locale(&app);
         match WebviewWindowBuilder::new(&app, RULES_LABEL, WebviewUrl::App("rules.html".into()))
-            .title("restee — Break rules")
+            .title(crate::i18n::tr(&locale, "title.rules"))
+            .initialization_script(crate::webview::locale_init(&locale))
             .inner_size(640.0, 600.0)
             .min_inner_size(560.0, 420.0)
             .resizable(true)

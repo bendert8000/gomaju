@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fmtMMSS } from "./util";
+import { applyI18n, t } from "./i18n";
+import { renderStatusBanner, type StatusDto } from "./status";
 import { collectRules, defaultRule, renderRules, ruleRow, type RuleDto } from "./rule-editor";
 
 // --- Types mirroring the Rust config DTOs ---
@@ -37,12 +38,6 @@ interface ConfigFile {
 interface SaveOutcome {
   config: ConfigFile;
   hotkey_errors: string[];
-}
-
-interface StatusDto {
-  state: "stopped" | "running" | "paused" | "in_break";
-  next_rule: string | null;
-  next_secs: number | null;
 }
 
 const $ = <T extends HTMLElement>(id: string): T =>
@@ -125,14 +120,16 @@ async function save(): Promise<void> {
     current = outcome.config;
     render(current); // reflect any clamping the backend applied
     if (outcome.hotkey_errors.length) {
-      msg.textContent = `Saved, but some hotkeys failed: ${outcome.hotkey_errors.join("; ")}`;
+      msg.textContent = t("settings.save_hotkey_fail", {
+        errors: outcome.hotkey_errors.join("; "),
+      });
       msg.className = "warn";
     } else {
-      msg.textContent = "Saved ✓";
+      msg.textContent = t("common.saved");
       msg.className = "ok";
     }
   } catch (err) {
-    msg.textContent = `Save failed: ${err}`;
+    msg.textContent = t("settings.save_fail", { err: String(err) });
     msg.className = "warn";
   }
 }
@@ -140,16 +137,7 @@ async function save(): Promise<void> {
 // --- Live status banner (time to next break) ---
 
 function renderStatus(s: StatusDto): void {
-  let text: string;
-  if (s.state === "in_break") {
-    text = "On a break now";
-  } else if (s.next_secs == null) {
-    text = s.state === "paused" ? "Paused — no enabled rules" : "No enabled rules";
-  } else {
-    const detail = `${fmtMMSS(s.next_secs)}${s.next_rule ? ` · ${s.next_rule}` : ""}`;
-    text = s.state === "paused" ? `Paused — next break in ${detail}` : `Next break in ${detail}`;
-  }
-  $("status-text").textContent = text;
+  renderStatusBanner(s, $("status-text"));
   $("status-banner").dataset.state = s.state;
 }
 
@@ -162,6 +150,8 @@ async function refreshStatus(): Promise<void> {
 }
 
 async function init(): Promise<void> {
+  document.title = t("title.settings");
+  applyI18n(document.body);
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
   current = await invoke<ConfigFile>("cmd_get_config");
   render(current);
@@ -169,7 +159,7 @@ async function init(): Promise<void> {
   try {
     const status = await invoke<string>("cmd_get_idle_status");
     const badge = $("idle-status");
-    badge.textContent = `idle: ${status}`;
+    badge.textContent = t("settings.idle_badge", { status });
     badge.dataset.status = status;
   } catch {
     /* non-fatal */
@@ -185,14 +175,6 @@ async function init(): Promise<void> {
   // Keep the rules grid in sync with edits made in the standalone Break-rules window.
   window.addEventListener("focus", () => {
     refreshRulesFromDisk();
-  });
-  $("reset-btn").addEventListener("click", async () => {
-    try {
-      await invoke("cmd_reset_timers");
-      await refreshStatus(); // reflect the restarted countdown immediately
-    } catch (err) {
-      console.error("restee: reset failed", err);
-    }
   });
   $("save-btn").addEventListener("click", save);
   $("close-btn").addEventListener("click", () => invoke("cmd_close_settings"));

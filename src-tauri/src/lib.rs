@@ -5,6 +5,7 @@ mod audio;
 mod autostart;
 mod commands;
 mod hotkeys;
+mod i18n;
 mod idle;
 mod overlay;
 mod runtime;
@@ -37,6 +38,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -106,7 +108,8 @@ pub fn run() {
             if open_rules {
                 rules_window::open(&handle);
             } else if notify_on_start {
-                runtime::show_startup_notification(&handle, "Restee is running now");
+                let loc = i18n::current_locale(&handle);
+                runtime::show_startup_notification(&handle, i18n::tr(&loc, "notif.startup"));
             }
 
             // Test/demo aids, compiled only into debug builds (dev / `tauri dev`).
@@ -135,7 +138,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::cmd_skip,
-            commands::cmd_reset_timers,
+            commands::cmd_reset_timer,
             commands::cmd_get_config,
             commands::cmd_get_idle_status,
             commands::cmd_get_status,
@@ -143,6 +146,7 @@ pub fn run() {
             commands::cmd_close_settings,
             commands::cmd_window_ready,
             commands::cmd_get_alarms,
+            commands::cmd_get_alarm_fires,
             commands::cmd_save_alarms,
             commands::cmd_close_alarms,
             commands::cmd_get_rules,

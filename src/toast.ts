@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "./i18n";
 import { fmtMMSS, readInjected } from "./util";
 
 // Confirm the embedded toast actually rendered.
@@ -22,7 +23,7 @@ const titleEl = document.getElementById("toast-title")!;
 const subEl = document.getElementById("toast-sub")!;
 const barEl = document.getElementById("toast-bar") as HTMLElement;
 
-titleEl.textContent = `${info.name} soon`;
+titleEl.textContent = t("toast.title", { name: info.name });
 
 const total = Math.max(1, info.lead_secs);
 let remaining = info.lead_secs;
@@ -30,7 +31,8 @@ let remaining = info.lead_secs;
 function render(): void {
   // "soon" (not "now") at zero: under idle/suspend the engine may delay the actual
   // start, so the countdown reaching zero doesn't guarantee the break is starting.
-  subEl.textContent = remaining > 0 ? `starting in ${fmtMMSS(remaining)}` : "starting soon…";
+  subEl.textContent =
+    remaining > 0 ? t("toast.starting_in", { mmss: fmtMMSS(remaining) }) : t("toast.starting_soon");
   // Bar fills toward 100% as the break approaches.
   const pct = Math.max(0, Math.min(100, ((total - remaining) / total) * 100));
   barEl.style.width = `${pct}%`;

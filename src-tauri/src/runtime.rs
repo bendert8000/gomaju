@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use restee_core::{config, Effect, Enforcement, RunState};
 
@@ -83,10 +84,14 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 );
                 let _ = app.emit("break-start", rule_id.clone());
 
-                let (sound, notify) = {
+                let (sound, notify, locale) = {
                     let state = app.state::<AppState>();
                     let cfg = state.config.lock().unwrap();
-                    (cfg.settings.sound, cfg.settings.notifications)
+                    (
+                        cfg.settings.sound,
+                        cfg.settings.notifications,
+                        cfg.locale.clone(),
+                    )
                 };
                 if sound {
                     crate::audio::play_chime();
@@ -94,7 +99,8 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 // Notifications augment soft breaks; strict breaks already take
                 // over the whole screen, so a toast would be redundant.
                 if notify && *enforcement == Enforcement::Soft {
-                    show_notification(app, &format!("{name} — time for a quick break"));
+                    let body = crate::i18n::tr(&locale, "notif.soft_break").replace("{name}", name);
+                    show_notification(app, &body);
                 }
             }
             Effect::BreakTick {
@@ -177,6 +183,91 @@ pub fn action_reset(app: &AppHandle, state: &AppState) {
     apply_effects(app, &fx);
 }
 
+/// Ask the user to confirm before wiping the countdown, then reset on "Reset".
+///
+/// Shared by the tray "Reset timer" item and the Settings "Reset" button. Uses the
+/// non-blocking callback form of the dialog so it is safe from the tray's main-thread
+/// menu handler (a `blocking_show` there could deadlock the event loop) and from the
+/// command thread alike. The state is re-fetched from the handle inside the callback,
+/// since a borrowed `&AppState` can't outlive into the `'static` closure.
+pub fn confirm_then_reset(app: &AppHandle) {
+    let loc = crate::i18n::current_locale(app);
+    let handle = app.clone();
+    app.dialog()
+        .message(crate::i18n::tr(&loc, "dialog.reset_timer_msg"))
+        .title(crate::i18n::tr(&loc, "dialog.reset_timer_title"))
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            crate::i18n::tr(&loc, "dialog.reset").to_string(),
+            crate::i18n::tr(&loc, "dialog.cancel").to_string(),
+        ))
+        .show(move |confirmed| {
+            if confirmed {
+                let state = handle.state::<AppState>();
+                action_reset(&handle, state.inner());
+            } else {
+                eprintln!("restee: timer reset cancelled");
+            }
+        });
+}
+
+/// Per-break variant of [`confirm_then_reset`]: confirm, then restart just one rule's
+/// countdown. Names the break in the dialog. No-op if the rule id is gone.
+pub fn confirm_then_reset_one(app: &AppHandle, rule_id: String) {
+    let (name, loc) = {
+        let st = app.state::<AppState>();
+        let cfg = st.config.lock().unwrap();
+        match cfg.rules.iter().find(|r| r.id == rule_id) {
+            Some(r) => (r.name.clone(), cfg.locale.clone()),
+            None => return,
+        }
+    };
+    let handle = app.clone();
+    app.dialog()
+        .message(crate::i18n::tr(&loc, "dialog.reset_break_msg").replace("{name}", &name))
+        .title(crate::i18n::tr(&loc, "dialog.reset_break_title"))
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            crate::i18n::tr(&loc, "dialog.reset").to_string(),
+            crate::i18n::tr(&loc, "dialog.cancel").to_string(),
+        ))
+        .show(move |confirmed| {
+            if confirmed {
+                let st = handle.state::<AppState>();
+                let fx = st.engine.lock().unwrap().reset_timer(&rule_id);
+                apply_effects(&handle, &fx);
+            } else {
+                eprintln!("restee: break reset cancelled ({rule_id})");
+            }
+        });
+}
+
+/// Switch the UI language (from the tray): persist it to config, then relabel the tray
+/// immediately. Open windows pick up the new language when reopened (the locale is injected
+/// at window creation), so no window event is emitted.
+pub fn set_locale(app: &AppHandle, code: &str) {
+    {
+        let st = app.state::<AppState>();
+        let mut guard = st.config.lock().unwrap();
+        if guard.locale == code {
+            return; // already this language
+        }
+        let mut snapshot = guard.clone();
+        snapshot.locale = code.to_string();
+        if let Err(e) = config::save(&st.config_path, &snapshot) {
+            eprintln!("restee: failed to persist locale ({e})");
+            return;
+        }
+        *guard = snapshot;
+        eprintln!("restee: locale set to {code}");
+    }
+    // Read the run state under the engine lock and drop it before refresh_tray (which
+    // re-locks the engine — don't nest). Clear the tray cache + update the tooltip first.
+    let state = app.state::<AppState>().engine.lock().unwrap().state();
+    crate::tray::invalidate_for_locale(app, code);
+    refresh_tray(app, state);
+}
+
 /// Track when the timer (re)entered Running. Cleared on pause/stop; left intact
 /// across breaks (InBreak) so elapsed time keeps counting through a break.
 fn update_running_since(app: &AppHandle, state: RunState) {
@@ -193,16 +284,26 @@ fn update_running_since(app: &AppHandle, state: RunState) {
     }
 }
 
-/// Update the tray Start/Pause checks + elapsed text for the given state.
+/// Update the tray Start/Pause checks, elapsed text, and "next break in …" info line.
 pub fn refresh_tray(app: &AppHandle, state: RunState) {
-    let running_secs = app
-        .state::<AppState>()
+    let st = app.state::<AppState>();
+    let running_secs = st
         .running_since
         .lock()
         .unwrap()
         .map(|since| since.elapsed().as_secs())
         .unwrap_or(0);
-    crate::tray::refresh(app, state, running_secs);
+    // Re-lock the engine (released by callers before refresh) for the per-rule countdowns.
+    let breaks: Vec<(String, u64)> = st
+        .engine
+        .lock()
+        .unwrap()
+        .status()
+        .all
+        .into_iter()
+        .map(|n| (n.rule_name, n.remaining_secs))
+        .collect();
+    crate::tray::refresh(app, state, running_secs, breaks);
 }
 
 /// Show an OS notification titled "restee" with `body`. Best-effort: on Windows the

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "./i18n";
 import { fmtMMSS, readInjected } from "./util";
 
 // Confirm to the backend that the embedded overlay actually rendered.
@@ -59,12 +60,12 @@ const HOLD_MS = 3000;
 // Skip affordance per escape mode.
 if (info.kind === "soft" || info.escape_mode === "easy") {
   skipBtn.hidden = false;
-  skipLabel.textContent = "Skip";
+  skipLabel.textContent = t("overlay.skip");
   skipBtn.addEventListener("click", skip);
-  if (info.kind === "soft") hintEl.textContent = "Look ~20 feet away and relax your eyes.";
+  if (info.kind === "soft") hintEl.textContent = t("overlay.soft_hint");
 } else if (info.escape_mode === "friction") {
   skipBtn.hidden = false;
-  skipLabel.textContent = "Hold to skip";
+  skipLabel.textContent = t("overlay.hold_to_skip");
   let holdTimer: number | undefined;
   const beginHold = () => {
     if (holdTimer !== undefined) return;
@@ -72,7 +73,7 @@ if (info.kind === "soft" || info.escape_mode === "easy") {
     // the bar reaching the end is exactly when the skip fires.
     skipFill.style.transition = `width ${HOLD_MS}ms linear`;
     skipFill.style.width = "100%";
-    skipLabel.textContent = "Keep holding…";
+    skipLabel.textContent = t("overlay.keep_holding");
     holdTimer = window.setTimeout(skip, HOLD_MS);
   };
   const cancelHold = () => {
@@ -82,24 +83,24 @@ if (info.kind === "soft" || info.escape_mode === "easy") {
     }
     skipFill.style.transition = "none";
     skipFill.style.width = "0";
-    skipLabel.textContent = "Hold to skip";
+    skipLabel.textContent = t("overlay.hold_to_skip");
   };
   skipBtn.addEventListener("pointerdown", beginHold);
   skipBtn.addEventListener("pointerup", cancelHold);
   skipBtn.addEventListener("pointerleave", cancelHold);
 } else {
-  hintEl.textContent = "Step away from the screen for a bit.";
+  hintEl.textContent = t("overlay.strict_hint");
 }
 
 // Safety floor: hold Esc ~10s for an emergency exit, regardless of escape mode.
 // The fill grows 0 -> 100% over the same duration, in lockstep with the timer.
 const EMERGENCY_HOLD_MS = 10000;
-const EMERGENCY_HINT = "Hold Esc to exit in an emergency";
+const EMERGENCY_HINT = t("overlay.emergency");
 emergencyLabel.textContent = EMERGENCY_HINT;
 let escTimer: number | undefined;
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && escTimer === undefined) {
-    emergencyLabel.textContent = "Keep holding Esc…";
+    emergencyLabel.textContent = t("overlay.keep_holding_esc");
     emergencyFill.style.transition = `width ${EMERGENCY_HOLD_MS}ms linear`;
     emergencyFill.style.width = "100%";
     escTimer = window.setTimeout(skip, EMERGENCY_HOLD_MS);

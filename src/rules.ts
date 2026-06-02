@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { applyI18n, t } from "./i18n";
+import { fmtMMSS } from "./util";
 import type { RuleDto } from "./rule-editor";
+import { renderStatusBanner, type StatusDto } from "./status";
 
 // "Quick select today's breaks" dashboard: each rule is a big tappable card. Details are
 // read-only (edit them in Settings); only On/Off (tap the card) and Repeat/Once (segmented
@@ -8,12 +11,12 @@ import type { RuleDto } from "./rule-editor";
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 function humanEvery(intervalSecs: number): string {
-  return `every ${Math.max(1, Math.round(intervalSecs / 60))} min`;
+  return t("card.every", { n: Math.max(1, Math.round(intervalSecs / 60)) });
 }
 function humanBreak(breakSecs: number): string {
   return breakSecs >= 60 && breakSecs % 60 === 0
-    ? `${breakSecs / 60} min break`
-    : `${breakSecs}s break`;
+    ? t("card.break_min", { n: breakSecs / 60 })
+    : t("card.break_sec", { n: breakSecs });
 }
 
 let msgTimer: number | undefined;
@@ -31,7 +34,9 @@ function showMsg(text: string, warn = false): void {
 function applyOn(item: HTMLElement, on: boolean): void {
   item.dataset.on = String(on);
   (item.querySelector(".rule-card") as HTMLElement).setAttribute("aria-pressed", String(on));
-  (item.querySelector(".rule-card__state") as HTMLElement).textContent = on ? "ON" : "OFF";
+  (item.querySelector(".rule-card__state") as HTMLElement).textContent = on
+    ? t("card.on")
+    : t("card.off");
 }
 function applyRepeat(item: HTMLElement, repeat: boolean): void {
   item.dataset.repeat = String(repeat);
@@ -55,7 +60,7 @@ async function persist(item: HTMLElement, revert: () => void): Promise<void> {
     });
   } catch (err) {
     revert();
-    showMsg(`Couldn't update: ${err}`, true);
+    showMsg(t("rules.couldnt_update", { err: String(err) }), true);
   }
 }
 
@@ -85,7 +90,7 @@ function card(rule: RuleDto, index: number): HTMLElement {
     <button class="rule-card" type="button" aria-pressed="${rule.enabled}">
       <span class="rule-card__status">
         <span class="rule-card__lamp" aria-hidden="true"></span>
-        <span class="rule-card__state">${rule.enabled ? "ON" : "OFF"}</span>
+        <span class="rule-card__state">${rule.enabled ? t("card.on") : t("card.off")}</span>
       </span>
       <span class="rule-card__body">
         <span class="rule-card__name"></span>
@@ -93,20 +98,30 @@ function card(rule: RuleDto, index: number): HTMLElement {
       </span>
       <span class="rule-card__badge"></span>
     </button>
+    <div class="rule-card__foot">
+      <span class="rule-card__countdown"></span>
+      <button class="rule-card__reset" type="button">${t("card.reset")}</button>
+    </div>
     <div class="rule-repeat" role="group" aria-label="Repeat mode">
-      <button class="seg" type="button" data-val="repeat" aria-pressed="${rule.repeat}">⟳ Repeat</button>
-      <button class="seg" type="button" data-val="once" aria-pressed="${!rule.repeat}">1× Once</button>
+      <button class="seg" type="button" data-val="repeat" aria-pressed="${rule.repeat}">${t("card.repeat")}</button>
+      <button class="seg" type="button" data-val="once" aria-pressed="${!rule.repeat}">${t("card.once")}</button>
     </div>
   `;
   (item.querySelector(".rule-card__name") as HTMLElement).textContent = rule.name;
   (item.querySelector(".rule-card__meta") as HTMLElement).textContent =
     `${humanEvery(rule.interval_secs)} · ${humanBreak(rule.break_secs)}`;
   (item.querySelector(".rule-card__badge") as HTMLElement).textContent =
-    rule.enforcement === "strict" ? "Strict" : "Soft";
+    rule.enforcement === "strict" ? t("card.strict") : t("card.soft");
 
   (item.querySelector(".rule-card") as HTMLButtonElement).addEventListener("click", () =>
     toggleOn(item),
   );
+  (item.querySelector(".rule-card__reset") as HTMLButtonElement).addEventListener("click", () => {
+    // Backend pops a Reset/Cancel confirm; the live poll reflects the reset.
+    void invoke("cmd_reset_timer", { ruleId: rule.id }).catch((err) =>
+      console.error("restee: reset failed", err),
+    );
+  });
   for (const seg of item.querySelectorAll<HTMLButtonElement>(".seg")) {
     seg.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -122,7 +137,7 @@ function render(rules: RuleDto[]): void {
   if (rules.length === 0) {
     const empty = document.createElement("p");
     empty.className = "muted";
-    empty.textContent = "No break rules yet — add some in Settings.";
+    empty.textContent = t("rules.empty");
     deck.appendChild(empty);
     return;
   }
@@ -133,9 +148,37 @@ async function load(): Promise<void> {
   render(await invoke<RuleDto[]>("cmd_get_rules"));
 }
 
+// Live status — banner lists all enabled breaks (shared phrasing with Settings), and
+// each enabled card gets its own countdown.
+async function refreshStatus(): Promise<void> {
+  let s: StatusDto;
+  try {
+    s = await invoke<StatusDto>("cmd_get_status");
+  } catch {
+    return; // non-fatal
+  }
+  renderStatusBanner(s, $("status-text"));
+  $("status-banner").dataset.state = s.state;
+
+  // Per-card countdowns: only while actually running, and only on cards shown ON (so a
+  // stale poll can't contradict an optimistic OFF toggle made before the engine reconfigures).
+  const remaining = new Map(s.all.map((b) => [b.rule_id, b.remaining_secs]));
+  for (const item of document.querySelectorAll<HTMLElement>(".rule-item")) {
+    const secs = remaining.get(item.dataset.id ?? "");
+    const show = s.state === "running" && item.dataset.on === "true" && secs != null;
+    (item.querySelector(".rule-card__countdown") as HTMLElement).textContent = show
+      ? t("card.next_in", { mmss: fmtMMSS(secs) })
+      : "";
+  }
+}
+
 async function init(): Promise<void> {
+  document.title = t("title.rules");
+  applyI18n(document.body);
   invoke("cmd_window_ready", { label: "rules" }).catch(() => {});
   await load();
+  await refreshStatus();
+  window.setInterval(refreshStatus, 1000);
   $("settings-btn").addEventListener("click", () => invoke("cmd_open_settings"));
   $("close-btn").addEventListener("click", () => invoke("cmd_close_rules"));
   // Re-sync from disk when returning to this window (e.g. after editing in Settings, or a

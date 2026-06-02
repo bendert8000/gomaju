@@ -9,22 +9,25 @@
   </head>
   <body class="settings-page">
     <header class="settings-header">
-      <h1>Today's breaks</h1>
+      <h1 data-i18n="rules.heading">Today's breaks</h1>
     </header>
 
     <main class="settings-main">
-      <p class="muted">
+      <p class="muted" data-i18n="rules.intro">
         Tap a card to switch a break on or off for today. To change names or timings, edit
         the details in Settings.
       </p>
       <div id="rules" class="rule-deck"></div>
+      <div class="status-banner" id="status-banner">
+        <span id="status-text">…</span>
+      </div>
     </main>
 
     <footer class="settings-footer">
       <span id="msg" class="muted"></span>
       <div class="actions">
-        <button id="settings-btn" type="button" class="btn-ghost">Edit in Settings…</button>
-        <button id="close-btn" type="button" class="btn-primary">Close</button>
+        <button id="settings-btn" type="button" class="btn-ghost" data-i18n="rules.edit_in_settings">Edit in Settings…</button>
+        <button id="close-btn" type="button" class="btn-primary" data-i18n="common.close">Close</button>
       </div>
     </footer>
   </body>

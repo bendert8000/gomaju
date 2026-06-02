@@ -9,27 +9,27 @@
   </head>
   <body class="settings-page">
     <header class="settings-header">
-      <h1>restee — Alarms</h1>
+      <h1 data-i18n="alarms.heading">restee — Alarms</h1>
     </header>
 
     <main class="settings-main">
       <section class="card">
-        <h2>Alarms</h2>
-        <p class="muted">
+        <h2 data-i18n="alarms.section_heading">Alarms</h2>
+        <p class="muted" data-i18n="alarms.desc">
           A notification and sound at a set clock time. Alarms fire even while the break
           timer is paused or a break is on screen. An alarm only fires if restee is
           running at that minute — there's no catch-up for times missed while it was closed.
         </p>
         <div id="alarms"></div>
-        <button id="add-alarm" type="button" class="btn-ghost">+ Add alarm</button>
+        <button id="add-alarm" type="button" class="btn-ghost" data-i18n="alarms.add">+ Add alarm</button>
       </section>
     </main>
 
     <footer class="settings-footer">
       <span id="save-msg" class="muted"></span>
       <div class="actions">
-        <button id="close-btn" type="button" class="btn-ghost">Close</button>
-        <button id="save-btn" type="button" class="btn-primary">Save</button>
+        <button id="close-btn" type="button" class="btn-ghost" data-i18n="common.close">Close</button>
+        <button id="save-btn" type="button" class="btn-primary" data-i18n="common.save">Save</button>
       </div>
     </footer>
   </body>

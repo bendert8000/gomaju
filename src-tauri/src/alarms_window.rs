@@ -20,8 +20,10 @@ pub fn open(app: &AppHandle) {
             let _ = existing.set_focus();
             return;
         }
+        let locale = crate::i18n::current_locale(&app);
         match WebviewWindowBuilder::new(&app, ALARMS_LABEL, WebviewUrl::App("alarms.html".into()))
-            .title("restee — Alarms")
+            .title(crate::i18n::tr(&locale, "title.alarms"))
+            .initialization_script(crate::webview::locale_init(&locale))
             .inner_size(640.0, 720.0)
             .min_inner_size(520.0, 480.0)
             .resizable(true)
