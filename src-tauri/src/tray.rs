@@ -27,14 +27,17 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let break_now = MenuItem::with_id(app, "break_now", "Break now", true, None::<&str>)?;
     let skip = MenuItem::with_id(app, "skip", "Skip break", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
+    let rules = MenuItem::with_id(app, "rules", "Break rules…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let alarms = MenuItem::with_id(app, "alarms", "Alarms…", true, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit restee", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
         &[
-            &start, &pause, &reset, &break_now, &skip, &sep1, &settings, &sep2, &quit,
+            &start, &pause, &reset, &break_now, &skip, &sep1, &rules, &settings, &alarms, &sep2,
+            &quit,
         ],
     )?;
 
@@ -56,7 +59,9 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "reset" => runtime::action_reset(app, state.inner()),
                 "break_now" => runtime::action_break_now(app, state.inner()),
                 "skip" => runtime::action_skip(app, state.inner()),
+                "rules" => crate::rules_window::open(app),
                 "settings" => crate::settings_window::open(app),
+                "alarms" => crate::alarms_window::open(app),
                 "quit" => {
                     eprintln!("restee: quit requested");
                     app.exit(0);

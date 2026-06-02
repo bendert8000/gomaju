@@ -1,20 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fmtMMSS } from "./util";
+import { collectRules, defaultRule, renderRules, ruleRow, type RuleDto } from "./rule-editor";
 
 // --- Types mirroring the Rust config DTOs ---
 
-type Enforcement = "soft" | "strict";
 type IdlePolicy = "pause" | "credit";
 type EscapeMode = "friction" | "easy" | "no_easy_escape";
-
-interface RuleDto {
-  id: string;
-  name: string;
-  interval_secs: number;
-  break_secs: number;
-  enforcement: Enforcement;
-  enabled: boolean;
-}
 
 interface SettingsDto {
   idle_policy: IdlePolicy;
@@ -38,6 +29,9 @@ interface ConfigFile {
   settings: SettingsDto;
   hotkeys: HotkeysDto;
   rules: RuleDto[];
+  // Preserved-but-not-edited here: kept (via the `{ ...current }` spread in
+  // collectConfig) so a Settings save never drops alarms set in the Alarms window.
+  alarms?: unknown[];
 }
 
 interface SaveOutcome {
@@ -57,10 +51,6 @@ const $ = <T extends HTMLElement>(id: string): T =>
 // Typed accessors so call sites don't repeat `as HTMLInputElement` / `as HTMLSelectElement`.
 const inp = (id: string): HTMLInputElement => $(id);
 const sel = (id: string): HTMLSelectElement => $(id);
-const rowInput = (row: HTMLElement, cls: string): HTMLInputElement =>
-  row.querySelector(cls) as HTMLInputElement;
-const rowSelect = (row: HTMLElement, cls: string): HTMLSelectElement =>
-  row.querySelector(cls) as HTMLSelectElement;
 
 // Read a non-negative integer from an input, keeping 0 (which `|| fallback` would drop).
 function readNonNegative(id: string, fallback: number): number {
@@ -70,58 +60,10 @@ function readNonNegative(id: string, fallback: number): number {
 
 let current: ConfigFile;
 
-// --- Rule rows ---
-
-function ruleRow(rule: RuleDto): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "rule-row";
-  row.dataset.id = rule.id;
-  row.innerHTML = `
-    <input class="rule-name" type="text" value="" />
-    <input class="rule-interval" type="number" min="1" />
-    <input class="rule-break" type="number" min="1" />
-    <select class="rule-enforcement">
-      <option value="soft">Soft</option>
-      <option value="strict">Strict</option>
-    </select>
-    <input class="rule-enabled" type="checkbox" />
-    <button class="rule-remove btn-ghost" type="button" title="Remove">✕</button>
-  `;
-  rowInput(row, ".rule-name").value = rule.name;
-  rowInput(row, ".rule-interval").value = String(Math.round(rule.interval_secs / 60));
-  rowInput(row, ".rule-break").value = String(rule.break_secs);
-  rowSelect(row, ".rule-enforcement").value = rule.enforcement;
-  rowInput(row, ".rule-enabled").checked = rule.enabled;
-  row.querySelector(".rule-remove")!.addEventListener("click", () => row.remove());
-  return row;
-}
-
-function renderRules(rules: RuleDto[]): void {
-  const container = $("rules");
-  container.innerHTML = "";
-  for (const rule of rules) container.appendChild(ruleRow(rule));
-}
-
-function collectRules(): RuleDto[] {
-  const rows = Array.from(document.querySelectorAll<HTMLElement>(".rule-row"));
-  return rows.map((row) => {
-    const minutes = Number(rowInput(row, ".rule-interval").value) || 1;
-    const brk = Number(rowInput(row, ".rule-break").value) || 1;
-    return {
-      id: row.dataset.id || crypto.randomUUID(),
-      name: rowInput(row, ".rule-name").value.trim() || "Break",
-      interval_secs: Math.max(1, Math.round(minutes)) * 60,
-      break_secs: Math.max(1, Math.round(brk)),
-      enforcement: rowSelect(row, ".rule-enforcement").value as Enforcement,
-      enabled: rowInput(row, ".rule-enabled").checked,
-    };
-  });
-}
-
 // --- Form <-> config ---
 
 function render(cfg: ConfigFile): void {
-  renderRules(cfg.rules);
+  renderRules($("rules"), cfg.rules);
   sel("idle-policy").value = cfg.settings.idle_policy;
   sel("escape-mode").value = cfg.settings.escape_mode;
   inp("warn-seconds").value = String(cfg.settings.warn_seconds);
@@ -158,8 +100,22 @@ function collectConfig(): ConfigFile {
       break_now: blankToNull(inp("hk-break").value),
       skip: blankToNull(inp("hk-skip").value),
     },
-    rules: collectRules(),
+    rules: collectRules($("rules")),
   };
+}
+
+// Re-sync the rules grid from disk (e.g. after the standalone Break-rules window saved
+// changes while this window was in the background). Only the rules grid is re-rendered,
+// so in-progress behavior/hotkey edits are left intact. Updating `current` also keeps
+// preserved fields (notably `alarms`) fresh for the next save.
+async function refreshRulesFromDisk(): Promise<void> {
+  try {
+    const fresh = await invoke<ConfigFile>("cmd_get_config");
+    current = fresh;
+    renderRules($("rules"), fresh.rules);
+  } catch {
+    /* non-fatal */
+  }
 }
 
 async function save(): Promise<void> {
@@ -224,16 +180,11 @@ async function init(): Promise<void> {
   window.setInterval(refreshStatus, 1000);
 
   $("add-rule").addEventListener("click", () => {
-    $("rules").appendChild(
-      ruleRow({
-        id: crypto.randomUUID(),
-        name: "New break",
-        interval_secs: 20 * 60,
-        break_secs: 30,
-        enforcement: "soft",
-        enabled: true,
-      }),
-    );
+    $("rules").appendChild(ruleRow(defaultRule()));
+  });
+  // Keep the rules grid in sync with edits made in the standalone Break-rules window.
+  window.addEventListener("focus", () => {
+    refreshRulesFromDisk();
   });
   $("reset-btn").addEventListener("click", async () => {
     try {

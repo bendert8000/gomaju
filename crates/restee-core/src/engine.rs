@@ -58,6 +58,11 @@ pub enum Effect {
     RuleReset {
         rule_id: String,
     },
+    /// A non-repeating ("once") rule fired its break and the engine disabled it; the host
+    /// should persist `enabled = false` for this rule so it doesn't re-arm on restart.
+    RuleDisabled {
+        rule_id: String,
+    },
 }
 
 /// The soonest upcoming break, for status display.
@@ -426,6 +431,16 @@ impl Engine {
             escape_mode: self.settings.escape_mode,
         });
         effects.push(Effect::StateChanged(RunState::InBreak));
+
+        // A "once" rule fires a single break, then disables itself so it can't fire again
+        // (the host persists this). Pushed last so the overlay shows before the host's disk
+        // write; `enabled = false` is already respected by pick_firing_rule next tick.
+        if !rule.repeat {
+            self.rules[idx].rule.enabled = false;
+            effects.push(Effect::RuleDisabled {
+                rule_id: rule.id.clone(),
+            });
+        }
         effects
     }
 }
@@ -459,6 +474,7 @@ mod tests {
             break_duration: secs(brk),
             enforcement,
             enabled: true,
+            repeat: true,
         }
     }
 
@@ -566,6 +582,85 @@ mod tests {
             "skip should emit EndBreak, got {e:?}"
         );
         assert_eq!(engine.state(), RunState::Running);
+    }
+
+    fn once_rule(id: &str, interval: u64, brk: u64, enforcement: Enforcement) -> Rule {
+        let mut r = rule(id, interval, brk, enforcement);
+        r.repeat = false;
+        r
+    }
+
+    #[test]
+    fn a_once_rule_fires_a_single_break_then_never_again() {
+        let mut engine = Engine::new(
+            vec![once_rule("eye", 2, 1, Enforcement::Soft)],
+            Settings::default(),
+        );
+        engine.start();
+
+        let mut fired = false;
+        for _ in 0..2 {
+            let fx = engine.tick(secs(1), secs(0));
+            fired |= fx.iter().any(|e| matches!(e, Effect::StartBreak { .. }));
+        }
+        assert!(fired, "a once rule should fire after its interval");
+        assert_eq!(engine.state(), RunState::InBreak);
+
+        engine.tick(secs(1), secs(0)); // 1s break elapses -> back to Running
+        assert_eq!(engine.state(), RunState::Running);
+
+        let mut refired = false;
+        for _ in 0..5 {
+            let fx = engine.tick(secs(1), secs(0));
+            refired |= fx.iter().any(|e| matches!(e, Effect::StartBreak { .. }));
+        }
+        assert!(!refired, "a once rule must not fire a second time");
+    }
+
+    #[test]
+    fn fire_break_emits_rule_disabled_only_for_once_rules() {
+        // Repeating rule: fires, but no RuleDisabled.
+        let mut engine = Engine::new(
+            vec![rule("rep", 1, 1, Enforcement::Soft)],
+            Settings::default(),
+        );
+        engine.start();
+        let fx = engine.tick(secs(1), secs(0));
+        assert!(fx.iter().any(|e| matches!(e, Effect::StartBreak { .. })));
+        assert!(!fx.iter().any(|e| matches!(e, Effect::RuleDisabled { .. })));
+
+        // Once rule: fires and emits RuleDisabled for that id.
+        let mut engine = Engine::new(
+            vec![once_rule("once", 1, 1, Enforcement::Soft)],
+            Settings::default(),
+        );
+        engine.start();
+        let fx = engine.tick(secs(1), secs(0));
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "once")),
+            "once rule should emit RuleDisabled, got {fx:?}"
+        );
+    }
+
+    #[test]
+    fn break_now_consumes_a_once_rule() {
+        let mut engine = Engine::new(
+            vec![once_rule("once", 100, 5, Enforcement::Strict)],
+            Settings::default(),
+        );
+        engine.start();
+        let fx = engine.break_now();
+        assert!(fx.iter().any(|e| matches!(e, Effect::StartBreak { .. })));
+        assert!(fx.iter().any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "once")));
+
+        engine.skip(); // end the break
+        // The once rule is now disabled, so a manual break has nothing to fire.
+        let again = engine.break_now();
+        assert!(
+            !again.iter().any(|e| matches!(e, Effect::StartBreak { .. })),
+            "a consumed once rule must not fire again, got {again:?}"
+        );
     }
 
     #[test]

@@ -1,3 +1,5 @@
+mod alarm;
+mod alarms_window;
 mod app_state;
 mod audio;
 mod autostart;
@@ -6,6 +8,7 @@ mod hotkeys;
 mod idle;
 mod overlay;
 mod runtime;
+mod rules_window;
 mod settings_window;
 mod toast;
 mod tray;
@@ -81,6 +84,8 @@ pub fn run() {
             tray::build_tray(&handle)?;
             runtime::refresh_tray(&handle, restee_core::RunState::Running);
             runtime::spawn_ticker(handle.clone(), idle);
+            // Wall-clock alarms run on their own thread, independent of the break engine.
+            alarm::spawn_scheduler(handle.clone());
 
             // Apply persisted hotkeys + autostart preference.
             let hotkey_errors = hotkeys::apply(&handle, &hotkeys_cfg);
@@ -89,9 +94,18 @@ pub fn run() {
             }
             autostart::apply(&handle, autostart_wanted);
 
-            // Let the user know the (windowless) app is up and running in the tray.
-            // Auto-dismissed after ~2s so it doesn't linger.
-            if notify_on_start {
+            // Cold start: open the break-rules window so setup is front-and-center. The
+            // visible window already signals the app started, so we skip the otherwise-
+            // redundant "Restee is running now" toast when opening it. Debug builds honor
+            // RESTEE_NO_OPEN_RULES to suppress the auto-open (handy under `tauri dev`).
+            #[cfg(debug_assertions)]
+            let open_rules = std::env::var("RESTEE_NO_OPEN_RULES").is_err();
+            #[cfg(not(debug_assertions))]
+            let open_rules = true;
+
+            if open_rules {
+                rules_window::open(&handle);
+            } else if notify_on_start {
                 runtime::show_startup_notification(&handle, "Restee is running now");
             }
 
@@ -103,6 +117,9 @@ pub fn run() {
             {
                 if std::env::var("RESTEE_OPEN_SETTINGS").is_ok() {
                     settings_window::open(&handle);
+                }
+                if std::env::var("RESTEE_OPEN_ALARMS").is_ok() {
+                    alarms_window::open(&handle);
                 }
                 if std::env::var("RESTEE_BREAK_ON_START").is_ok() {
                     let h = handle.clone();
@@ -125,6 +142,13 @@ pub fn run() {
             commands::cmd_save_config,
             commands::cmd_close_settings,
             commands::cmd_window_ready,
+            commands::cmd_get_alarms,
+            commands::cmd_save_alarms,
+            commands::cmd_close_alarms,
+            commands::cmd_get_rules,
+            commands::cmd_set_rule_flags,
+            commands::cmd_close_rules,
+            commands::cmd_open_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the restee application")

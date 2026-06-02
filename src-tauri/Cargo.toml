@@ -30,6 +30,9 @@ tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-notification = "2"
 rodio = "0.19"
+# Wall-clock + local timezone + weekday/month math for clock alarms (the engine is
+# clock-free; alarm scheduling lives in this layer). Already transitive in Cargo.lock.
+chrono = "0.4"
 
 # Windows-only: drive the WinRT toast directly for the startup notification so we
 # can dismiss it after ~2s. tauri-plugin-notification exposes no control over toast

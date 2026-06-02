@@ -31,4 +31,7 @@ pub struct Rule {
     pub break_duration: Duration,
     pub enforcement: Enforcement,
     pub enabled: bool,
+    /// Whether the rule recurs. `true` (default) re-arms after each break; `false` (once)
+    /// fires a single break, then the engine disables the rule (and the host persists it).
+    pub repeat: bool,
 }

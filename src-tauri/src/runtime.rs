@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use restee_core::{Effect, Enforcement, RunState};
+use restee_core::{config, Effect, Enforcement, RunState};
 
 use crate::app_state::AppState;
 use crate::idle::IdleSource;
@@ -119,7 +119,34 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 refresh_tray(app, *state);
             }
             Effect::RuleReset { .. } => {}
+            Effect::RuleDisabled { rule_id } => {
+                persist_rule_disabled(app, rule_id);
+            }
         }
+    }
+}
+
+/// Persist a fired "once" rule as `enabled = false` so it doesn't re-arm on restart. The
+/// `config` lock is held across the disk write so it serializes with the window save
+/// commands — a concurrent Save can't interleave a stale snapshot. Save-first: the cache is
+/// only committed after the write succeeds. Best-effort; the engine already disabled the
+/// rule for this session, so a write failure only costs restart-survival.
+fn persist_rule_disabled(app: &AppHandle, rule_id: &str) {
+    let st = app.state::<AppState>();
+    let mut guard = st.config.lock().unwrap();
+    if !guard.rules.iter().any(|r| r.id == rule_id && r.enabled) {
+        return; // already disabled / gone — nothing to persist
+    }
+    let mut snapshot = guard.clone();
+    if let Some(r) = snapshot.rules.iter_mut().find(|r| r.id == rule_id) {
+        r.enabled = false;
+    }
+    match config::save(&st.config_path, &snapshot) {
+        Ok(()) => {
+            *guard = snapshot;
+            eprintln!("restee: once-rule '{rule_id}' disabled after firing");
+        }
+        Err(e) => eprintln!("restee: failed to persist once-rule disable ({e})"),
     }
 }
 

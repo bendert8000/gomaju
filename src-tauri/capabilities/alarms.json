@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "alarms",
+  "description": "Capability for the alarms window. Empty permission set: it needs no core API access — it only invokes app-defined commands (cmd_get_alarms / cmd_save_alarms / cmd_close_alarms / cmd_window_ready), which are not capability-gated. Those alarm commands are restricted to this window by the require_alarms() caller-check in src/commands.rs.",
+  "windows": ["alarms"],
+  "permissions": []
+}

@@ -344,7 +344,7 @@ input[type="checkbox"] {
 .rules-head,
 .rule-row {
   display: grid;
-  grid-template-columns: 1fr 6rem 6rem 6rem 2rem 2rem;
+  grid-template-columns: 1fr 6rem 6rem 6rem 2rem 3.5rem 2rem;
   gap: 0.5rem;
   align-items: center;
 }
@@ -403,4 +403,233 @@ input[type="checkbox"] {
 .warn {
   color: #f0a36a;
   font-size: 0.82rem;
+}
+
+/* --- Alarms window --- */
+
+.alarm-item {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.alarm-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.alarm-name {
+  flex: 1;
+  min-width: 8rem;
+}
+.alarm-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+.alarm-remove {
+  padding: 0.3rem 0.6rem;
+}
+.alarm-detail {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+.alarm-detail.show {
+  display: inline-flex;
+}
+.alarm-detail-weekly.show {
+  flex-wrap: wrap;
+}
+.wd-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+.alarm-dom,
+.alarm-doy {
+  width: 4.5rem;
+}
+
+/* --- Break-rules dashboard (quick select) --- */
+
+.rule-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rule-item {
+  --accent: #6aa6ff;
+  --on: #5fd29a; /* status light + ON text when a break is on today (matches .ok success green) */
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  animation: rule-rise 0.32s ease both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+@keyframes rule-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rule-item {
+    animation: none;
+  }
+}
+
+.rule-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #e9edf2;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.2s,
+    background 0.2s,
+    opacity 0.2s,
+    transform 0.06s;
+}
+.rule-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.rule-card:active {
+  transform: scale(0.99);
+}
+
+.rule-card__status {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  width: 2.2rem;
+}
+.rule-card__lamp {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.2s;
+}
+.rule-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.rule-card__name {
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rule-card__meta {
+  font-size: 0.82rem;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+.rule-card__badge {
+  flex: none;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.rule-card__state {
+  flex: none;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.5;
+}
+
+/* ON */
+.rule-item[data-on="true"] .rule-card {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, rgba(255, 255, 255, 0.03));
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 10px 30px -16px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.rule-item[data-on="true"] .rule-card__lamp {
+  border-color: var(--on);
+  background: var(--on);
+  box-shadow: 0 0 10px -1px var(--on);
+}
+.rule-item[data-on="true"] .rule-card__state {
+  color: var(--on);
+  opacity: 1;
+}
+
+/* OFF */
+.rule-item[data-on="false"] .rule-card {
+  opacity: 0.62;
+}
+.rule-item[data-on="false"] .rule-card:hover {
+  opacity: 0.82;
+}
+
+/* Repeat segmented control */
+.rule-repeat {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-left: 0.25rem;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.seg {
+  font: inherit;
+  font-size: 0.74rem;
+  border: none;
+  background: transparent;
+  color: #e9edf2;
+  opacity: 0.55;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s,
+    color 0.15s;
+}
+.seg:hover {
+  opacity: 0.85;
+}
+.rule-item[data-repeat="true"] .seg[data-val="repeat"],
+.rule-item[data-repeat="false"] .seg[data-val="once"] {
+  opacity: 1;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }

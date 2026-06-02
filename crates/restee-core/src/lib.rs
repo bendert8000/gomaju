@@ -4,6 +4,7 @@
 //! `(delta, idle)` each tick and interprets the [`Effect`]s it returns. That keeps
 //! all the timing/priority logic fully unit-testable in isolation.
 
+pub mod alarm;
 pub mod config;
 mod engine;
 mod rule;

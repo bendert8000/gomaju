@@ -34,6 +34,8 @@ export default defineConfig(async () => ({
         main: "index.html",
         overlay: "overlay.html",
         toast: "toast.html",
+        alarms: "alarms.html",
+        rules: "rules.html",
       },
     },
   },

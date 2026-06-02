@@ -45,6 +45,8 @@ break, or **tray → Settings…** to edit rules.
 Handy test hooks (env vars):
 - `RESTEE_BREAK_ON_START=1` — fire a break ~2s after launch.
 - `RESTEE_OPEN_SETTINGS=1` — open the settings window on launch.
+- `RESTEE_OPEN_ALARMS=1` — open the alarms window on launch.
+- `RESTEE_NO_OPEN_RULES=1` — suppress the break-rules window that otherwise opens on every launch.
 
 ## Test
 

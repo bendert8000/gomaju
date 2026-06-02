@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::alarm::{self, AlarmDto};
 use crate::rule::{Enforcement, Rule};
 use crate::settings::{EscapeMode, IdlePolicy, Settings};
 
@@ -54,6 +55,10 @@ pub struct RuleDto {
     pub enforcement: EnforcementDto,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Whether the rule recurs. Defaults to `true` (repeating) so configs written before
+    /// this field existed keep their old behavior; `false` = a one-time break.
+    #[serde(default = "default_true")]
+    pub repeat: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +104,11 @@ pub struct ConfigFile {
     #[serde(default)]
     pub hotkeys: HotkeysDto,
     pub rules: Vec<RuleDto>,
+    // Table arrays are serialized last; keep `alarms` after `rules`. Omitted from the
+    // file when empty so existing configs stay clean and round-trips don't emit a
+    // stray `alarms = []` that TOML would attach to the final `[[rules]]` table.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alarms: Vec<AlarmDto>,
 }
 
 fn default_true() -> bool {
@@ -134,6 +144,7 @@ impl Default for ConfigFile {
                     break_secs: 60,
                     enforcement: EnforcementDto::Soft,
                     enabled: true,
+                    repeat: true,
                 },
                 RuleDto {
                     id: "long-break".into(),
@@ -142,8 +153,10 @@ impl Default for ConfigFile {
                     break_secs: 10 * 60,
                     enforcement: EnforcementDto::Strict,
                     enabled: true,
+                    repeat: true,
                 },
             ],
+            alarms: vec![],
         }
     }
 }
@@ -185,6 +198,7 @@ impl RuleDto {
             break_duration: Duration::from_secs(self.break_secs),
             enforcement: self.enforcement.into(),
             enabled: self.enabled,
+            repeat: self.repeat,
         }
     }
 }
@@ -201,11 +215,34 @@ impl SettingsDto {
     }
 }
 
+/// Clamp each rule's durations into safe bounds; returns true if anything changed.
+/// Extracted so the rules-only save path (`cmd_save_rules`) can validate just rules,
+/// the way `alarm::sanitize_alarms` does for the alarms-only path.
+pub fn sanitize_rules(rules: &mut [RuleDto]) -> bool {
+    let mut changed = false;
+    for r in rules {
+        let interval = r.interval_secs.clamp(MIN_INTERVAL_SECS, u64::MAX);
+        if interval != r.interval_secs {
+            r.interval_secs = interval;
+            changed = true;
+        }
+        let brk = r.break_secs.clamp(MIN_BREAK_SECS, MAX_BREAK_SECS);
+        if brk != r.break_secs {
+            r.break_secs = brk;
+            changed = true;
+        }
+    }
+    changed
+}
+
 impl ConfigFile {
     /// Clamp any out-of-range values into safe bounds. Returns `true` if anything
     /// was changed, so the caller can decide to persist the corrected file.
     pub fn sanitize(&mut self) -> bool {
         let mut changed = false;
+        if sanitize_rules(&mut self.rules) {
+            changed = true;
+        }
         let clamp = |v: &mut u64, lo: u64, hi: u64, changed: &mut bool| {
             let c = (*v).clamp(lo, hi);
             if c != *v {
@@ -213,10 +250,6 @@ impl ConfigFile {
                 *changed = true;
             }
         };
-        for r in &mut self.rules {
-            clamp(&mut r.interval_secs, MIN_INTERVAL_SECS, u64::MAX, &mut changed);
-            clamp(&mut r.break_secs, MIN_BREAK_SECS, MAX_BREAK_SECS, &mut changed);
-        }
         clamp(&mut self.settings.warn_seconds, 0, MAX_WARN_SECS, &mut changed);
         if self.settings.away_threshold_secs < 1 {
             self.settings.away_threshold_secs = 1;
@@ -224,6 +257,9 @@ impl ConfigFile {
         }
         if self.settings.gap_threshold_secs < 1 {
             self.settings.gap_threshold_secs = 1;
+            changed = true;
+        }
+        if alarm::sanitize_alarms(&mut self.alarms) {
             changed = true;
         }
         changed
@@ -332,6 +368,45 @@ mod tests {
         let text = toml::to_string_pretty(&cfg).unwrap();
         let parsed: ConfigFile = toml::from_str(&text).unwrap();
         assert_eq!(cfg, parsed);
+    }
+
+    #[test]
+    fn round_trips_with_alarms_after_rules() {
+        use crate::alarm::{AlarmDto, RepeatDto};
+        let cfg = ConfigFile {
+            alarms: vec![
+                AlarmDto {
+                    id: "a1".into(),
+                    name: "Standup".into(),
+                    time: "09:30".into(),
+                    repeat: RepeatDto::Weekly,
+                    weekdays: vec![0, 1, 2, 3, 4],
+                    day_of_month: 0,
+                    month: 0,
+                    date: None,
+                    enabled: true,
+                },
+                AlarmDto {
+                    id: "a2".into(),
+                    name: "New Year".into(),
+                    time: "00:00".into(),
+                    repeat: RepeatDto::Yearly,
+                    weekdays: vec![],
+                    day_of_month: 1,
+                    month: 1,
+                    date: None,
+                    enabled: true,
+                },
+            ],
+            ..ConfigFile::default()
+        };
+        // The serialized [[alarms]] tables must follow [[rules]] and parse back as
+        // top-level alarms, not as fields of the last rule.
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        let parsed: ConfigFile = toml::from_str(&text).unwrap();
+        assert_eq!(cfg, parsed);
+        assert_eq!(parsed.alarms.len(), 2);
+        assert_eq!(parsed.rules.len(), 2);
     }
 
     #[test]

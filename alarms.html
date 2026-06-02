@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>restee — Alarms</title>
+    <script type="module" src="/src/alarms.ts" defer></script>
+  </head>
+  <body class="settings-page">
+    <header class="settings-header">
+      <h1>restee — Alarms</h1>
+    </header>
+
+    <main class="settings-main">
+      <section class="card">
+        <h2>Alarms</h2>
+        <p class="muted">
+          A notification and sound at a set clock time. Alarms fire even while the break
+          timer is paused or a break is on screen. An alarm only fires if restee is
+          running at that minute — there's no catch-up for times missed while it was closed.
+        </p>
+        <div id="alarms"></div>
+        <button id="add-alarm" type="button" class="btn-ghost">+ Add alarm</button>
+      </section>
+    </main>
+
+    <footer class="settings-footer">
+      <span id="save-msg" class="muted"></span>
+      <div class="actions">
+        <button id="close-btn" type="button" class="btn-ghost">Close</button>
+        <button id="save-btn" type="button" class="btn-primary">Save</button>
+      </div>
+    </footer>
+  </body>
+</html>
