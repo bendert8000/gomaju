@@ -1,0 +1,17 @@
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+use restee_core::{config::ConfigFile, Engine};
+
+use crate::idle::IdleStatus;
+
+/// Application state shared between the tray, commands, and the ticker thread.
+/// The engine and config are each behind their own mutex (low contention: the
+/// ticker locks the engine ~once/second; commands lock briefly).
+pub struct AppState {
+    pub engine: Mutex<Engine>,
+    pub config: Mutex<ConfigFile>,
+    pub config_path: PathBuf,
+    /// Health of the idle backend, decided once at startup.
+    pub idle_status: IdleStatus,
+}

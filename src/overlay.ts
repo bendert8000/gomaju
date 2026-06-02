@@ -1,0 +1,118 @@
+import { invoke } from "@tauri-apps/api/core";
+import { fmtMMSS, readInjected } from "./util";
+
+// Confirm to the backend that the embedded overlay actually rendered.
+invoke("cmd_window_ready", { label: "overlay" }).catch(() => {});
+
+type Escape = "friction" | "easy" | "no_easy_escape";
+
+interface BreakInfo {
+  kind: "soft" | "strict";
+  name: string;
+  duration_secs: number;
+  escape_mode: Escape;
+}
+
+// Injected by the Rust side via an initialization script, so the overlay renders
+// correctly without depending on event timing.
+const info = readInjected<BreakInfo>("__RESTEE_BREAK__", {
+  kind: "soft",
+  name: "Break",
+  duration_secs: 60,
+  escape_mode: "easy",
+});
+
+document.body.classList.add(info.kind === "strict" ? "overlay--strict" : "overlay--soft");
+
+const nameEl = document.getElementById("break-name")!;
+const timerEl = document.getElementById("break-timer")!;
+const hintEl = document.getElementById("break-hint")!;
+const skipBtn = document.getElementById("skip-btn") as HTMLButtonElement;
+const skipLabel = document.getElementById("skip-label")!;
+const skipFill = document.getElementById("skip-fill") as HTMLElement;
+const emergencyLabel = document.getElementById("emergency-label")!;
+const emergencyFill = document.getElementById("emergency-fill") as HTMLElement;
+
+nameEl.textContent = info.name;
+
+// Local visual countdown. The engine is authoritative and closes the window at
+// the real end of the break.
+let remaining = info.duration_secs;
+timerEl.textContent = fmtMMSS(remaining);
+const countdown = window.setInterval(() => {
+  remaining = Math.max(0, remaining - 1);
+  timerEl.textContent = fmtMMSS(remaining);
+  if (remaining <= 0) window.clearInterval(countdown);
+}, 1000);
+
+async function skip(): Promise<void> {
+  try {
+    await invoke("cmd_skip");
+  } catch (err) {
+    console.error("restee: skip failed", err);
+  }
+}
+
+// How long the friction "hold to skip" must be held.
+const HOLD_MS = 3000;
+
+// Skip affordance per escape mode.
+if (info.kind === "soft" || info.escape_mode === "easy") {
+  skipBtn.hidden = false;
+  skipLabel.textContent = "Skip";
+  skipBtn.addEventListener("click", skip);
+  if (info.kind === "soft") hintEl.textContent = "Look ~20 feet away and relax your eyes.";
+} else if (info.escape_mode === "friction") {
+  skipBtn.hidden = false;
+  skipLabel.textContent = "Hold to skip";
+  let holdTimer: number | undefined;
+  const beginHold = () => {
+    if (holdTimer !== undefined) return;
+    // The fill animates 0 -> 100% over HOLD_MS, in lockstep with the timer, so
+    // the bar reaching the end is exactly when the skip fires.
+    skipFill.style.transition = `width ${HOLD_MS}ms linear`;
+    skipFill.style.width = "100%";
+    skipLabel.textContent = "Keep holding…";
+    holdTimer = window.setTimeout(skip, HOLD_MS);
+  };
+  const cancelHold = () => {
+    if (holdTimer !== undefined) {
+      window.clearTimeout(holdTimer);
+      holdTimer = undefined;
+    }
+    skipFill.style.transition = "none";
+    skipFill.style.width = "0";
+    skipLabel.textContent = "Hold to skip";
+  };
+  skipBtn.addEventListener("pointerdown", beginHold);
+  skipBtn.addEventListener("pointerup", cancelHold);
+  skipBtn.addEventListener("pointerleave", cancelHold);
+} else {
+  hintEl.textContent = "Step away from the screen for a bit.";
+}
+
+// Safety floor: hold Esc ~10s for an emergency exit, regardless of escape mode.
+// The fill grows 0 -> 100% over the same duration, in lockstep with the timer.
+const EMERGENCY_HOLD_MS = 10000;
+const EMERGENCY_HINT = "Hold Esc to exit in an emergency";
+emergencyLabel.textContent = EMERGENCY_HINT;
+let escTimer: number | undefined;
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && escTimer === undefined) {
+    emergencyLabel.textContent = "Keep holding Esc…";
+    emergencyFill.style.transition = `width ${EMERGENCY_HOLD_MS}ms linear`;
+    emergencyFill.style.width = "100%";
+    escTimer = window.setTimeout(skip, EMERGENCY_HOLD_MS);
+  }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Escape") {
+    if (escTimer !== undefined) {
+      window.clearTimeout(escTimer);
+      escTimer = undefined;
+    }
+    emergencyFill.style.transition = "none";
+    emergencyFill.style.width = "0";
+    emergencyLabel.textContent = EMERGENCY_HINT;
+  }
+});

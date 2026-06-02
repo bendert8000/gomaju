@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "restee",
+  "version": "0.1.0",
+  "identifier": "com.restee.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "restee",
+    "copyright": "Copyright © 2026 restee",
+    "category": "Productivity",
+    "shortDescription": "A break reminder for engineers.",
+    "longDescription": "restee is a cross-platform, tray-resident break reminder. It nudges you to rest your eyes and step away on customizable intervals, with gentle soft breaks and screen-covering strict breaks.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  }
+}

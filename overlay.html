@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>restee</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="overlay">
+    <main class="overlay__content">
+      <div class="overlay__name" id="break-name">Time for a break</div>
+      <div class="overlay__timer" id="break-timer">--:--</div>
+      <div class="overlay__hint" id="break-hint"></div>
+      <button id="skip-btn" class="overlay__skip" hidden>
+        <span class="overlay__skip-fill" id="skip-fill"></span>
+        <span class="overlay__skip-label" id="skip-label">Skip</span>
+      </button>
+      <div class="overlay__emergency" id="emergency">
+        <span id="emergency-label">Hold Esc to exit in an emergency</span>
+        <span class="overlay__emergency-track">
+          <span class="overlay__emergency-fill" id="emergency-fill"></span>
+        </span>
+      </div>
+    </main>
+    <script type="module" src="/src/overlay.ts"></script>
+  </body>
+</html>

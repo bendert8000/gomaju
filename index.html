@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>restee — Settings</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body class="settings-page">
+    <header class="settings-header">
+      <h1>restee</h1>
+      <span id="idle-status" class="badge" title="Idle detection backend"></span>
+    </header>
+
+    <main class="settings-main">
+      <section class="card">
+        <h2>Rules</h2>
+        <p class="muted">Take a break after some active work. Soft = gentle, skippable. Strict = covers the screen.</p>
+        <div class="rules-head">
+          <span>Name</span>
+          <span>Every (min)</span>
+          <span>Break (sec)</span>
+          <span>Type</span>
+          <span>On</span>
+          <span></span>
+        </div>
+        <div id="rules"></div>
+        <button id="add-rule" type="button" class="btn-ghost">+ Add rule</button>
+      </section>
+
+      <section class="card">
+        <h2>Behavior</h2>
+        <label class="field">
+          <span>When you go idle</span>
+          <select id="idle-policy">
+            <option value="pause">Pause counting</option>
+            <option value="credit">Count it as a break</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Strict-break escape</span>
+          <select id="escape-mode">
+            <option value="friction">Hold to skip</option>
+            <option value="easy">Easy skip button</option>
+            <option value="no_easy_escape">No easy escape</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Warn before break (seconds, 0 = off)</span>
+          <input id="warn-seconds" type="number" min="0" />
+        </label>
+        <label class="field">
+          <span>Idle threshold (seconds)</span>
+          <input id="away-threshold" type="number" min="1" />
+        </label>
+        <label class="field field--checkbox">
+          <input id="sound" type="checkbox" />
+          <span>Play a chime when a break starts</span>
+        </label>
+        <label class="field field--checkbox">
+          <input id="notifications" type="checkbox" />
+          <span>Show a notification on soft breaks</span>
+        </label>
+        <label class="field field--checkbox">
+          <input id="autostart" type="checkbox" />
+          <span>Launch at login</span>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Global hotkeys <span class="muted">(optional)</span></h2>
+        <p class="muted">e.g. <code>CommandOrControl+Alt+B</code>. Leave blank to unbind.</p>
+        <label class="field"><span>Start / pause</span><input id="hk-toggle" type="text" placeholder="unset" /></label>
+        <label class="field"><span>Break now</span><input id="hk-break" type="text" placeholder="unset" /></label>
+        <label class="field"><span>Skip break</span><input id="hk-skip" type="text" placeholder="unset" /></label>
+      </section>
+    </main>
+
+    <footer class="settings-footer">
+      <span id="save-msg" class="muted"></span>
+      <div class="actions">
+        <button id="close-btn" type="button" class="btn-ghost">Close</button>
+        <button id="save-btn" type="button" class="btn-primary">Save</button>
+      </div>
+    </footer>
+  </body>
+</html>
