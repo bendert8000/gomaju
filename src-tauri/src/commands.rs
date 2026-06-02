@@ -31,6 +31,17 @@ pub fn cmd_skip(app: AppHandle, state: State<'_, AppState>) {
 }
 
 #[tauri::command]
+pub fn cmd_reset_timers(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_settings(&window)?;
+    runtime::action_reset(&app, state.inner());
+    Ok(())
+}
+
+#[tauri::command]
 pub fn cmd_get_config(
     window: WebviewWindow,
     state: State<'_, AppState>,
@@ -53,6 +64,28 @@ pub fn cmd_close_settings(window: WebviewWindow, app: AppHandle) -> Result<(), S
     require_settings(&window)?;
     settings_window::close(&app);
     Ok(())
+}
+
+/// Current run state + time to the soonest break, for the settings status banner.
+#[derive(Serialize)]
+pub struct StatusDto {
+    pub state: &'static str,
+    pub next_rule: Option<String>,
+    pub next_secs: Option<u64>,
+}
+
+#[tauri::command]
+pub fn cmd_get_status(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<StatusDto, String> {
+    require_settings(&window)?;
+    let snapshot = state.engine.lock().unwrap().status();
+    Ok(StatusDto {
+        state: snapshot.state.as_str(),
+        next_rule: snapshot.next.as_ref().map(|n| n.rule_name.clone()),
+        next_secs: snapshot.next.map(|n| n.remaining_secs),
+    })
 }
 
 /// Open to all windows — each window pings on load to confirm it rendered. The label

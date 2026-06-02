@@ -30,3 +30,17 @@ tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-notification = "2"
 rodio = "0.19"
+
+# Windows-only: drive the WinRT toast directly for the startup notification so we
+# can dismiss it after ~2s. tauri-plugin-notification exposes no control over toast
+# lifetime, and a native Windows banner can't be shown for less than the OS minimum.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Data_Xml_Dom", "UI_Notifications"] }
+
+[features]
+# DO NOT REMOVE. Enables loading the embedded frontend (tauri:// protocol) in
+# production builds. `tauri dev`/`tauri build` toggle this automatically, but a
+# plain `cargo build` does NOT — without it the app loads from the dev server
+# (devUrl) and shows ERR_CONNECTION_REFUSED when no Vite server is running.
+# Build a runnable production binary with: cargo build --release --features custom-protocol
+custom-protocol = ["tauri/custom-protocol"]

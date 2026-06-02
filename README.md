@@ -71,6 +71,22 @@ Produces installers under `src-tauri/target/release/bundle/`:
 Cross-platform installers are produced automatically in CI — see
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
+### Run a release binary without bundling
+
+To produce a standalone, runnable binary (no installers) — e.g. for quick local
+testing:
+
+```bash
+cargo build --release --features custom-protocol   # → target/release/restee
+```
+
+> **Do not** build a runnable app with a bare `cargo build`/`cargo build --release`.
+> Without the `custom-protocol` feature, Tauri compiles the app in **dev mode**, so
+> every window tries to load the frontend from the Vite dev server
+> (`http://localhost:1420`). With no dev server running you get a blank window /
+> `ERR_CONNECTION_REFUSED`. `npm run tauri dev` and `npm run tauri build` enable the
+> feature automatically; a plain `cargo build` does not.
+
 ### Signing (follow-up)
 
 Builds are currently **unsigned**. For distribution:

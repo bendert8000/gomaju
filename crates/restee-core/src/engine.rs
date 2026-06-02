@@ -60,6 +60,21 @@ pub enum Effect {
     },
 }
 
+/// The soonest upcoming break, for status display.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NextBreak {
+    pub rule_name: String,
+    pub remaining_secs: u64,
+}
+
+/// A read-only snapshot of the engine for status display.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineStatus {
+    pub state: RunState,
+    /// Soonest enabled rule to fire (by remaining work); `None` if no rule is enabled.
+    pub next: Option<NextBreak>,
+}
+
 struct RuleState {
     rule: Rule,
     work: Duration,
@@ -110,6 +125,23 @@ impl Engine {
 
     pub fn state(&self) -> RunState {
         self.state
+    }
+
+    /// Snapshot for status display: current state + the soonest enabled rule to fire.
+    pub fn status(&self) -> EngineStatus {
+        let next = self
+            .rules
+            .iter()
+            .filter(|rs| rs.rule.enabled)
+            .min_by_key(|rs| rs.remaining())
+            .map(|rs| NextBreak {
+                rule_name: rs.rule.name.clone(),
+                remaining_secs: rs.remaining().as_secs(),
+            });
+        EngineStatus {
+            state: self.state,
+            next,
+        }
     }
 
     /// Begin counting (from Stopped or Paused).
@@ -173,6 +205,24 @@ impl Engine {
         self.rules = new_rules;
         self.warned = None;
         vec![]
+    }
+
+    /// Restart every rule's countdown (e.g. the user took a break on their own), so
+    /// the next break is a full interval away. Cancels any pending warning. Does not
+    /// change run state or an active break.
+    pub fn reset_timers(&mut self) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        if self.warned.take().is_some() {
+            effects.push(Effect::BreakWarningCancelled);
+        }
+        for rs in &mut self.rules {
+            rs.work = Duration::ZERO;
+            rs.credited = false;
+            effects.push(Effect::RuleReset {
+                rule_id: rs.rule.id.clone(),
+            });
+        }
+        effects
     }
 
     /// Immediately start the highest-priority enabled rule's break (the "break now"
@@ -646,6 +696,60 @@ mod tests {
             }
         }
         assert!(cancelled, "an idle-credited break should cancel its pending warning");
+    }
+
+    #[test]
+    fn status_reports_the_soonest_next_break() {
+        let rules = vec![
+            rule("eye", 30, 5, Enforcement::Soft),
+            rule("long", 45, 10, Enforcement::Strict),
+        ];
+        let mut engine = Engine::new(rules, Settings::default());
+        engine.start();
+        for _ in 0..10 {
+            engine.tick(secs(1), secs(0)); // each rule's work = 10
+        }
+
+        let s = engine.status();
+        assert_eq!(s.state, RunState::Running);
+        let next = s.next.expect("a next break");
+        // eye remaining 20 < long remaining 35 -> eye is soonest.
+        assert_eq!(next.rule_name, "eye");
+        assert_eq!(next.remaining_secs, 20);
+    }
+
+    #[test]
+    fn reset_timers_pushes_next_break_back_to_full_interval() {
+        let mut engine = Engine::new(
+            vec![rule("eye", 30, 5, Enforcement::Soft)],
+            Settings::default(),
+        );
+        engine.start();
+        for _ in 0..20 {
+            engine.tick(secs(1), secs(0)); // work 20 -> 10 remaining
+        }
+        assert_eq!(engine.status().next.unwrap().remaining_secs, 10);
+
+        engine.reset_timers();
+        assert_eq!(engine.status().next.unwrap().remaining_secs, 30);
+    }
+
+    #[test]
+    fn reset_timers_cancels_a_pending_warning() {
+        let settings = Settings {
+            warn: secs(5),
+            ..Settings::default()
+        };
+        let mut engine = Engine::new(vec![rule("eye", 10, 3, Enforcement::Soft)], settings);
+        engine.start();
+        for _ in 0..6 {
+            engine.tick(secs(1), secs(0)); // work 6 -> inside the warning window
+        }
+        let e = engine.reset_timers();
+        assert!(
+            e.iter().any(|x| matches!(x, Effect::BreakWarningCancelled)),
+            "reset should cancel a pending warning, got {e:?}"
+        );
     }
 
     fn warned_ids(effects: &[Effect]) -> Vec<String> {

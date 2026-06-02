@@ -58,6 +58,7 @@ pub fn run() {
             let cfg = outcome.config;
             let autostart_wanted = cfg.autostart;
             let hotkeys_cfg = cfg.hotkeys.clone();
+            let notify_on_start = cfg.settings.notifications;
 
             let (rules, settings) = cfg.to_engine_inputs();
             let mut engine = Engine::new(rules, settings);
@@ -73,9 +74,12 @@ pub fn run() {
                 config: Mutex::new(cfg),
                 config_path,
                 idle_status,
+                // The engine starts Running, so the clock is already ticking.
+                running_since: Mutex::new(Some(std::time::Instant::now())),
             });
 
             tray::build_tray(&handle)?;
+            runtime::refresh_tray(&handle, restee_core::RunState::Running);
             runtime::spawn_ticker(handle.clone(), idle);
 
             // Apply persisted hotkeys + autostart preference.
@@ -84,6 +88,12 @@ pub fn run() {
                 eprintln!("restee: hotkey not registered — {err}");
             }
             autostart::apply(&handle, autostart_wanted);
+
+            // Let the user know the (windowless) app is up and running in the tray.
+            // Auto-dismissed after ~2s so it doesn't linger.
+            if notify_on_start {
+                runtime::show_startup_notification(&handle, "Restee is running now");
+            }
 
             // Test/demo aids, compiled only into debug builds (dev / `tauri dev`).
             // Release ignores these env vars. For a hard guarantee one could use a
@@ -108,8 +118,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::cmd_skip,
+            commands::cmd_reset_timers,
             commands::cmd_get_config,
             commands::cmd_get_idle_status,
+            commands::cmd_get_status,
             commands::cmd_save_config,
             commands::cmd_close_settings,
             commands::cmd_window_ready,
@@ -117,10 +129,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the restee application")
         .run(|_app, event| {
-            // No persistent window: keep the app alive (tray-resident) when the
-            // last overlay/window closes.
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                api.prevent_exit();
+            // No persistent window: keep the app alive (tray-resident) when an
+            // overlay/settings window closes (`code == None`). But honor an explicit
+            // quit — `app.exit(code)` arrives here with `code == Some(_)`, and must
+            // NOT be prevented, or the tray "Quit" does nothing.
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if code.is_none() {
+                    api.prevent_exit();
+                }
             }
         });
 }

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { fmtMMSS } from "./util";
 
 // --- Types mirroring the Rust config DTOs ---
 
@@ -42,6 +43,12 @@ interface ConfigFile {
 interface SaveOutcome {
   config: ConfigFile;
   hotkey_errors: string[];
+}
+
+interface StatusDto {
+  state: "stopped" | "running" | "paused" | "in_break";
+  next_rule: string | null;
+  next_secs: number | null;
 }
 
 const $ = <T extends HTMLElement>(id: string): T =>
@@ -174,6 +181,30 @@ async function save(): Promise<void> {
   }
 }
 
+// --- Live status banner (time to next break) ---
+
+function renderStatus(s: StatusDto): void {
+  let text: string;
+  if (s.state === "in_break") {
+    text = "On a break now";
+  } else if (s.next_secs == null) {
+    text = s.state === "paused" ? "Paused — no enabled rules" : "No enabled rules";
+  } else {
+    const detail = `${fmtMMSS(s.next_secs)}${s.next_rule ? ` · ${s.next_rule}` : ""}`;
+    text = s.state === "paused" ? `Paused — next break in ${detail}` : `Next break in ${detail}`;
+  }
+  $("status-text").textContent = text;
+  $("status-banner").dataset.state = s.state;
+}
+
+async function refreshStatus(): Promise<void> {
+  try {
+    renderStatus(await invoke<StatusDto>("cmd_get_status"));
+  } catch {
+    /* non-fatal */
+  }
+}
+
 async function init(): Promise<void> {
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
   current = await invoke<ConfigFile>("cmd_get_config");
@@ -188,6 +219,10 @@ async function init(): Promise<void> {
     /* non-fatal */
   }
 
+  // Live "time to next break" banner — poll while the settings window is open.
+  await refreshStatus();
+  window.setInterval(refreshStatus, 1000);
+
   $("add-rule").addEventListener("click", () => {
     $("rules").appendChild(
       ruleRow({
@@ -199,6 +234,14 @@ async function init(): Promise<void> {
         enabled: true,
       }),
     );
+  });
+  $("reset-btn").addEventListener("click", async () => {
+    try {
+      await invoke("cmd_reset_timers");
+      await refreshStatus(); // reflect the restarted countdown immediately
+    } catch (err) {
+      console.error("restee: reset failed", err);
+    }
   });
   $("save-btn").addEventListener("click", save);
   $("close-btn").addEventListener("click", () => invoke("cmd_close_settings"));

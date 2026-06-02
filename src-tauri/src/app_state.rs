@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use restee_core::{config::ConfigFile, Engine};
 
@@ -14,4 +15,7 @@ pub struct AppState {
     pub config_path: PathBuf,
     /// Health of the idle backend, decided once at startup.
     pub idle_status: IdleStatus,
+    /// When the timer last (re)entered Running; `None` while paused/stopped. Used to
+    /// show elapsed running time in the tray. Kept across breaks (InBreak doesn't reset).
+    pub running_since: Mutex<Option<Instant>>,
 }

@@ -9,6 +9,6 @@ mod engine;
 mod rule;
 mod settings;
 
-pub use engine::{Effect, Engine, RunState};
+pub use engine::{Effect, Engine, EngineStatus, NextBreak, RunState};
 pub use rule::{Enforcement, Rule};
 pub use settings::{EscapeMode, IdlePolicy, Settings};
