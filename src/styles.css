@@ -53,12 +53,62 @@ body {
   opacity: 0.95;
 }
 
+/* Optional per-rule note, read-only, shown smaller right under the break name. */
+.overlay__note {
+  margin-top: -0.75rem; /* sit close under the name (the flex column gap is 1.25rem) */
+  font-size: clamp(0.9rem, 2vw, 1.4rem);
+  font-weight: 400;
+  opacity: 0.78;
+  max-width: 40rem;
+  white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
+}
+
 .overlay__timer {
   font-size: clamp(4rem, 16vw, 11rem);
   font-weight: 200;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   animation: restee-breathe 4s ease-in-out infinite;
+}
+
+/* Progress-bar break display (alternative to the big timer). The fill drains
+   full -> empty over the break; the countdown text sits inside it. */
+.overlay__progress {
+  position: relative;
+  width: min(60vw, 675px);
+  height: clamp(2.6rem, 6.75vw, 4.5rem);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* `display: flex` above would otherwise override the `hidden` attribute. */
+.overlay__progress[hidden] {
+  display: none;
+}
+.overlay__progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%; /* base = full; JS drains it. Matching the first paint avoids a startup animation. */
+  z-index: 0;
+  background: rgba(120, 170, 255, 0.45); /* soft (blue) */
+  transition: width 1s linear;
+}
+.overlay--strict .overlay__progress-fill {
+  background: rgba(255, 140, 106, 0.45); /* strict (orange) */
+}
+.overlay__progress-text {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(1.25rem, 3.5vw, 2.25rem);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .overlay__hint {
@@ -261,58 +311,6 @@ body {
   gap: 1rem;
 }
 
-.status-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.7rem 0.6rem 1rem;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
-  background: rgba(106, 166, 255, 0.12);
-  border: 1px solid rgba(106, 166, 255, 0.28);
-}
-/* Each enabled break is its own row: label on the left, its Reset button on the right. */
-#status-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.status-row--note {
-  opacity: 0.7;
-}
-.status-row__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.status-row__reset {
-  flex: none;
-  padding: 0.12rem 0.5rem;
-  font-size: 0.76rem;
-}
-
-.btn-sm {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.82rem;
-}
-.status-banner[data-state="paused"] {
-  background: rgba(240, 163, 106, 0.12);
-  border-color: rgba(240, 163, 106, 0.3);
-}
-.status-banner[data-state="in_break"] {
-  background: rgba(95, 210, 154, 0.12);
-  border-color: rgba(95, 210, 154, 0.3);
-}
 
 .card {
   background: rgba(255, 255, 255, 0.03);
@@ -353,7 +351,8 @@ code {
 }
 
 input,
-select {
+select,
+textarea {
   background: #0b0f16;
   color: #e9edf2;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -385,6 +384,21 @@ input[type="checkbox"] {
 }
 .rule-row input[type="number"] {
   width: 100%;
+}
+/* On / Repeat are checkbox columns — center the checkbox under its centered header so the
+   two columns line up evenly (their tracks differ in width: 2rem vs 3.5rem). */
+.rules-head .col-center,
+.rule-row .rule-enabled,
+.rule-row .rule-repeat {
+  justify-self: center;
+}
+/* Per-rule note: a full-width line beneath the rule's controls (it wraps to the grid's
+   next implicit row, spanning every column). */
+.rule-note {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 2.4rem;
+  resize: vertical; /* multi-line note; user can drag taller */
 }
 
 .settings-footer {
@@ -488,6 +502,10 @@ input[type="checkbox"] {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
+/* Date suffix after the countdown is dimmer than the lead-in countdown. */
+.alarm-next__at {
+  opacity: 0.55;
+}
 .alarm-next:empty {
   display: none;
 }
@@ -588,6 +606,13 @@ input[type="checkbox"] {
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }
+.rule-card__note {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: 0.1rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
+}
 .rule-card__countdown {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
@@ -668,8 +693,9 @@ input[type="checkbox"] {
   opacity: 0.82;
 }
 
-/* Repeat toggle (radio-style) */
-.rule-repeat {
+/* Repeat toggle (radio-style) — scoped to the dashboard card so it never leaks onto the
+   Settings grid's plain `.rule-repeat` checkbox (same class name, different control). */
+.rule-item .rule-repeat {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
@@ -687,10 +713,10 @@ input[type="checkbox"] {
     opacity 0.15s,
     color 0.15s;
 }
-.rule-repeat:hover {
+.rule-item .rule-repeat:hover {
   opacity: 0.9;
 }
-.rule-repeat__dot {
+.rule-item .rule-repeat__dot {
   width: 0.85rem;
   height: 0.85rem;
   flex: none;

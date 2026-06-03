@@ -68,7 +68,7 @@ function alarmRow(a: AlarmDto): HTMLElement {
         ${t("alarms.day")} <input class="alarm-doy" type="number" min="1" max="31" />
       </span>
     </div>
-    <div class="alarm-next muted"></div>
+    <div class="alarm-next"></div>
   `;
 
   q<HTMLInputElement>(row, ".alarm-name").value = a.name;
@@ -156,7 +156,22 @@ function fmtFire(epochSecs: number): string {
   });
 }
 
-/** Fill each row's "Next: …" label from the backend; enabled alarms only. */
+/** Compact countdown to the next fire: 2d 3h / 14h 23m / 23m / 45s. */
+function fmtCountdown(secs: number): string {
+  const total = Math.max(0, Math.floor(secs));
+  const d = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+
+/** Refresh each enabled alarm's "in <countdown> — <next fire>" line from the backend. Polled
+ *  every second (see init) so the countdown ticks live; disabled alarms get no line. Only the
+ *  ".alarm-next" element is touched, never the editable inputs. */
 async function refreshFires(): Promise<void> {
   let fires: AlarmFireDto[];
   try {
@@ -165,10 +180,20 @@ async function refreshFires(): Promise<void> {
     return; // non-fatal
   }
   const byId = new Map(fires.map((f) => [f.id, f.at_secs]));
+  const nowSecs = Date.now() / 1000;
   for (const row of document.querySelectorAll<HTMLElement>(".alarm-item")) {
     const at = byId.get(row.dataset.id ?? "");
-    q<HTMLElement>(row, ".alarm-next").textContent =
-      at == null ? "" : t("alarms.next", { when: fmtFire(at) });
+    const el = q<HTMLElement>(row, ".alarm-next");
+    if (at == null) {
+      el.replaceChildren(); // disabled / no upcoming fire -> hidden via :empty
+      continue;
+    }
+    const countdown = document.createElement("span");
+    countdown.textContent = t("alarms.in", { dur: fmtCountdown(at - nowSecs) });
+    const when = document.createElement("span");
+    when.className = "alarm-next__at";
+    when.textContent = ` — ${fmtFire(at)}`;
+    el.replaceChildren(countdown, when);
   }
 }
 
@@ -204,8 +229,11 @@ async function init(): Promise<void> {
     save,
     close: () => void invoke("cmd_close_alarms"),
   });
-  // Keep the labels current (e.g. a once-alarm that fired + auto-disabled) without
-  // re-rendering rows, which would discard any in-progress edits.
+  // Live countdowns: poll the backend each second (cheap; mirrors the rules window's status
+  // poll, and auto-picks-up an alarm re-arming after it fires). Only the ".alarm-next" lines
+  // are rewritten — never the editable rows — so in-progress edits are never discarded.
+  window.setInterval(() => void refreshFires(), 1000);
+  // Refresh immediately on focus too (snappy return from another window).
   window.addEventListener("focus", () => {
     refreshFires().catch(() => {});
   });

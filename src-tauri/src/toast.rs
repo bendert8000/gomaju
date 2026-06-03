@@ -39,7 +39,7 @@ fn build_toast(app: &AppHandle, info: &WarningInfo) {
         crate::webview::locale_init(&crate::i18n::current_locale(app)),
     );
     match WebviewWindowBuilder::new(app, TOAST_LABEL, WebviewUrl::App("toast.html".into()))
-        .title("restee")
+        .title("Restee")
         .decorations(false)
         .always_on_top(true)
         .visible_on_all_workspaces(true)

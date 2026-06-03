@@ -54,6 +54,8 @@ pub enum Effect {
     },
     EndBreak {
         rule_id: String,
+        /// True if the break ran to its full duration; false if the user skipped it early.
+        completed: bool,
     },
     RuleReset {
         rule_id: String,
@@ -193,7 +195,10 @@ impl Engine {
             .unwrap_or_default();
         self.state = RunState::Running;
         vec![
-            Effect::EndBreak { rule_id },
+            Effect::EndBreak {
+                rule_id,
+                completed: false, // user skipped before the duration elapsed
+            },
             Effect::StateChanged(RunState::Running),
         ]
     }
@@ -393,7 +398,10 @@ impl Engine {
             self.active = None;
             self.state = RunState::Running;
             return vec![
-                Effect::EndBreak { rule_id },
+                Effect::EndBreak {
+                    rule_id,
+                    completed: true, // ran the full break duration
+                },
                 Effect::StateChanged(RunState::Running),
             ];
         }
@@ -557,9 +565,9 @@ mod tests {
         assert!(
             end.iter().any(|e| matches!(
                 e,
-                Effect::EndBreak { rule_id } if rule_id == "eye"
+                Effect::EndBreak { rule_id, completed } if rule_id == "eye" && *completed
             )),
-            "expected EndBreak for 'eye', got {end:?}"
+            "expected a completed EndBreak for 'eye', got {end:?}"
         );
         assert_eq!(engine.state(), RunState::Running);
     }
@@ -606,9 +614,10 @@ mod tests {
 
         let e = engine.skip();
         assert!(
-            e.iter()
-                .any(|x| matches!(x, Effect::EndBreak { rule_id } if rule_id == "eye")),
-            "skip should emit EndBreak, got {e:?}"
+            e.iter().any(
+                |x| matches!(x, Effect::EndBreak { rule_id, completed } if rule_id == "eye" && !*completed)
+            ),
+            "skip should emit a non-completed EndBreak, got {e:?}"
         );
         assert_eq!(engine.state(), RunState::Running);
     }
@@ -1053,6 +1062,56 @@ mod tests {
             e.iter()
                 .any(|x| matches!(x, Effect::RuleReset { rule_id } if rule_id == "eye")),
             "firing 'long' should reset the shorter-interval 'eye', got {e:?}"
+        );
+    }
+
+    #[test]
+    fn firing_the_shorter_rule_does_not_reset_a_longer_rule() {
+        // User report: when the 30-min "eye" break finishes, does the 45-min "sit" break
+        // also reset to 45? It must NOT — fire_break only resets the firing rule and rules
+        // with a SHORTER interval, never a longer one.
+        let rules = vec![
+            rule("eye", 30, 5, Enforcement::Soft), // shorter -> fires first
+            rule("sit", 45, 10, Enforcement::Strict), // longer
+        ];
+        let mut engine = Engine::new(rules, Settings::default());
+        engine.start();
+
+        let remaining = |e: &Engine, name: &str| {
+            e.status()
+                .all
+                .iter()
+                .find(|b| b.rule_name == name)
+                .map(|b| b.remaining_secs)
+        };
+
+        // 30s of active work: "eye" reaches its interval and fires.
+        let mut eye_fired = false;
+        for _ in 0..30 {
+            let fx = engine.tick(secs(1), secs(0));
+            eye_fired |= fx
+                .iter()
+                .any(|e| matches!(e, Effect::StartBreak { rule_id, .. } if rule_id == "eye"));
+        }
+        assert!(eye_fired, "eye should fire at its 30s interval");
+
+        // At that moment "sit" had 30s of work -> 15s remaining, and must NOT be reset to 45.
+        assert_eq!(remaining(&engine, "eye"), Some(30), "the firing rule resets to full");
+        assert_eq!(
+            remaining(&engine, "sit"),
+            Some(15),
+            "the longer 'sit' rule must keep its progress (45 - 30), not reset to 45"
+        );
+
+        // Play out eye's 5s break; work is frozen during the break, so "sit" is still 15.
+        for _ in 0..5 {
+            engine.tick(secs(1), secs(0));
+        }
+        assert_eq!(engine.state(), RunState::Running);
+        assert_eq!(
+            remaining(&engine, "sit"),
+            Some(15),
+            "'sit' is still not reset after the eye break ends"
         );
     }
 

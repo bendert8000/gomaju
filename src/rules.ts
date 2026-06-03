@@ -91,6 +91,7 @@ function card(rule: RuleDto, index: number): HTMLElement {
       <span class="rule-card__body">
         <span class="rule-card__name"></span>
         <span class="rule-card__meta"></span>
+        <span class="rule-card__note"></span>
       </span>
       <span class="rule-card__badge"></span>
     </button>
@@ -108,6 +109,9 @@ function card(rule: RuleDto, index: number): HTMLElement {
     `${humanEvery(rule.interval_secs)} · ${humanBreak(rule.break_secs)}`;
   (item.querySelector(".rule-card__badge") as HTMLElement).textContent =
     rule.enforcement === "strict" ? t("card.strict") : t("card.soft");
+  const noteEl = item.querySelector(".rule-card__note") as HTMLElement;
+  noteEl.textContent = rule.note ?? "";
+  noteEl.hidden = !rule.note; // collapse when there's no note
 
   (item.querySelector(".rule-card") as HTMLButtonElement).addEventListener("click", () =>
     toggleOn(item),

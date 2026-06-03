@@ -3,13 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>restee</title>
+    <title>Restee</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body class="overlay">
     <main class="overlay__content">
       <div class="overlay__name" id="break-name">Time for a break</div>
+      <div class="overlay__note" id="break-note" hidden></div>
       <div class="overlay__timer" id="break-timer">--:--</div>
+      <div class="overlay__progress" id="break-progress" hidden>
+        <span class="overlay__progress-fill" id="break-progress-fill"></span>
+        <span class="overlay__progress-text" id="break-progress-text">--:--</span>
+      </div>
       <div class="overlay__hint" id="break-hint"></div>
       <button id="skip-btn" class="overlay__skip" hidden>
         <span class="overlay__skip-fill" id="skip-fill"></span>

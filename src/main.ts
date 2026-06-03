@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, t } from "./i18n";
-import { renderStatusBanner, type StatusDto } from "./status";
 import { collectRules, defaultRule, renderRules, ruleRow, type RuleDto } from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 
@@ -8,6 +7,7 @@ import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 
 type IdlePolicy = "pause" | "credit";
 type EscapeMode = "friction" | "easy" | "no_easy_escape";
+type BreakDisplay = "countdown" | "progress_bar";
 
 interface SettingsDto {
   idle_policy: IdlePolicy;
@@ -17,6 +17,7 @@ interface SettingsDto {
   warn_seconds: number;
   sound: boolean;
   notifications: boolean;
+  break_display: BreakDisplay;
 }
 
 interface HotkeysDto {
@@ -64,6 +65,7 @@ function render(cfg: ConfigFile): void {
   renderRules($("rules"), cfg.rules);
   sel("idle-policy").value = cfg.settings.idle_policy;
   sel("escape-mode").value = cfg.settings.escape_mode;
+  sel("break-display").value = cfg.settings.break_display;
   inp("warn-seconds").value = String(cfg.settings.warn_seconds);
   inp("away-threshold").value = String(cfg.settings.away_threshold_secs);
   inp("sound").checked = cfg.settings.sound;
@@ -87,6 +89,7 @@ function collectConfig(): ConfigFile {
       ...current.settings,
       idle_policy: sel("idle-policy").value as IdlePolicy,
       escape_mode: sel("escape-mode").value as EscapeMode,
+      break_display: sel("break-display").value as BreakDisplay,
       warn_seconds: readNonNegative("warn-seconds", current.settings.warn_seconds),
       away_threshold_secs:
         Number(inp("away-threshold").value) || current.settings.away_threshold_secs,
@@ -149,21 +152,6 @@ async function save(): Promise<boolean> {
   }
 }
 
-// --- Live status banner (time to next break) ---
-
-function renderStatus(s: StatusDto): void {
-  renderStatusBanner(s, $("status-text"));
-  $("status-banner").dataset.state = s.state;
-}
-
-async function refreshStatus(): Promise<void> {
-  try {
-    renderStatus(await invoke<StatusDto>("cmd_get_status"));
-  } catch {
-    /* non-fatal */
-  }
-}
-
 async function init(): Promise<void> {
   document.title = t("title.settings");
   applyI18n(document.body);
@@ -186,10 +174,6 @@ async function init(): Promise<void> {
   } catch {
     /* non-fatal */
   }
-
-  // Live "time to next break" banner — poll while the settings window is open.
-  await refreshStatus();
-  window.setInterval(refreshStatus, 1000);
 
   $("add-rule").addEventListener("click", () => {
     $("rules").appendChild(ruleRow(defaultRule()));

@@ -50,6 +50,21 @@ pub fn play_chime() {
     });
 }
 
+/// Play a short, gentle "break over" cue: a brief descending two-note (the inverse of the
+/// rising start chime) so it reads as "done — resume". Same low amplitude as the chime.
+pub fn play_break_over() {
+    play("break-over chime", |sink| {
+        let note = |freq: f32, ms: u64| {
+            SineWave::new(freq)
+                .take_duration(Duration::from_millis(ms))
+                .amplify(0.18)
+                .fade_in(Duration::from_millis(30))
+        };
+        sink.append(note(987.77, 140)); // B5
+        sink.append(note(659.25, 200)); // E5 (descending -> resolved)
+    });
+}
+
 /// Play a distinct, attention-grabbing alarm tone: louder than the chime (0.35 vs 0.18),
 /// a two-tone beep repeated a few times — but strictly bounded (~3.5s, no infinite loop),
 /// since a runaway alarm in a break app is worse than a missed one. Used by the alarm
