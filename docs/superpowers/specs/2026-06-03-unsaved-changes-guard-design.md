@@ -67,19 +67,24 @@ export function confirmUnsaved(): Promise<CloseChoice>;
   (`blankToNull`, `Number(...) || fallback`, `clampInt`, rule defaults) cannot produce
   false positives.
 
-**Settings focus-refresh edge case.** `main.ts` already re-pulls the rules grid from disk on
-window focus (`refreshRulesFromDisk`) so edits made in the Break-rules window show up.
-After that re-render, **re-baseline only if the form was not already dirty**:
+**Settings focus-refresh edge case (also fixes an existing data-loss bug — Codex P1).**
+`main.ts` re-pulls the rules grid from disk on every window focus (`refreshRulesFromDisk`) so
+edits made in the Break-rules window show up — but today it does so **unconditionally**,
+silently discarding any unsaved rule edits in Settings. The focus handler becomes **async**
+and **skips the refresh whenever the form is dirty**, then re-baselines only after a clean
+refresh has completed (awaited):
 
 ```
-on focus:
-  wasDirty = isDirty()
-  refreshRulesFromDisk()          // updates `current`, re-renders rules grid
-  if (!wasDirty) baseline = JSON.stringify(collect())   // stay "clean" w.r.t. new disk state
+on focus (async):
+  if (isDirty()) return;                  // preserve unsaved edits; don't clobber the grid
+  await refreshRulesFromDisk();           // updates `current`, re-renders rules grid
+  baseline = JSON.stringify(collect());   // stay "clean" w.r.t. the new disk state
 ```
 
-This keeps a rule toggled in the other window from masquerading as an unsaved edit, while
-genuine in-progress edits remain flagged.
+This guarantees focus never discards unsaved edits, and a rule toggled in the other window
+(while Settings is clean) is still picked up without masquerading as an unsaved edit. Skipping
+the refresh while dirty can leave an other-window rule toggle unreflected until the next save —
+the same "concurrent multi-window edit" caveat already documented in CLAUDE.md, and acceptable.
 
 ### 3. Shared guard installer — `src/unsaved-guard.ts`
 
@@ -90,8 +95,8 @@ interface GuardHooks {
   close: () => void;             // perform the actual window close
 }
 export function installUnsavedGuard(hooks: GuardHooks): {
-  markSaved: () => void;         // re-baseline after a save / load
-  refreshBaselineIfClean: () => void; // for the focus-refresh case
+  isDirty: () => boolean;   // used by the Settings focus handler (skip refresh while dirty)
+  markSaved: () => void;    // re-baseline after a save, or after a clean focus-refresh
 };
 ```
 
@@ -107,21 +112,28 @@ switch (await confirmUnsaved()) {
 }
 ```
 
-Wiring:
-- In-app **Close** button → `requestClose()` (replaces the direct `invoke("cmd_close_*")`).
-- **Window X / Alt+F4** → `getCurrentWindow().onCloseRequested((e) => { e.preventDefault(); requestClose(); })`.
-- `close()` calls the existing `cmd_close_settings` / `cmd_close_alarms` command, guarded by
-  a module-level `closing` flag so the resulting `close-requested` re-entry passes through
-  without re-prompting:
+Wiring — a single **in-flight guard** so rapid X/Close can't stack modals or double-save
+(Codex P2):
 
 ```
-let closing = false;
-onCloseRequested((e) => { if (closing) return; e.preventDefault(); requestClose(); });
-function close() { closing = true; invoke("cmd_close_*"); }
+let inFlight = false;
+async function guardedClose() {
+  if (inFlight) return;                  // coalesce duplicate close requests
+  inFlight = true;
+  try { await requestClose(); } finally { inFlight = false; }
+}
+// In-app Close button:
+closeBtn.addEventListener("click", guardedClose);
+// OS X / Alt+F4: ALWAYS preventDefault, then drive closing ourselves:
+getCurrentWindow().onCloseRequested((e) => { e.preventDefault(); void guardedClose(); });
 ```
 
-Reusing `cmd_close_*` (rather than `destroy()`) keeps the alarms capability minimal: only an
-event-listen permission is added, not a window-close/destroy permission.
+`close()` invokes the existing `cmd_close_settings` / `cmd_close_alarms`. **Those commands are
+changed to call Rust `window.destroy()` instead of `window.close()`** (see §4), so the
+guard-approved programmatic close does NOT re-emit `close-requested` — eliminating re-entrancy
+(no `closing` flag) and needing no JS window-destroy permission, since `destroy()` runs in
+Rust, which is not capability-gated. (Codex P1: the original `window.close()` + flag
+pass-through is fragile and would have needed `core:window:allow-destroy`.)
 
 ### 4. Small refactors
 
@@ -134,13 +146,21 @@ event-listen permission is added, not a window-close/destroy permission.
 
 After a successful save, call `markSaved()` to re-baseline.
 
+**Rust close helpers → `destroy()` (Codex P1).** `settings_window::close` and
+`alarms_window::close` currently call `window.close()` (which emits `close-requested`). Change
+both to `window.destroy()` so the guard-approved programmatic close bypasses the JS
+`onCloseRequested` handler entirely — no re-entrancy and no extra capability. The Break-rules
+window's `close()` is left as-is (no guard there).
+
 ### 5. Capabilities
 
-`capabilities/alarms.json` currently has `"permissions": []`. Add the minimal permission
-needed for `onCloseRequested` (close-event listening). Settings already has `core:default`,
-which covers it. **Exact permission identifier to be confirmed against the Tauri v2 schema
-during implementation** (candidate: `core:event:default` or `core:event:allow-listen`);
-verify the window still closes via `cmd_close_alarms` afterward.
+`capabilities/alarms.json` has `"permissions": []`. `onCloseRequested` registers an event
+listener (`plugin:event|listen`), so add **`core:event:allow-listen`** to the alarms
+capability (use `core:event:default` instead if the returned unlisten is ever called — it
+bundles listen + unlisten). Settings' `core:default` already covers event listen. **No**
+window-event-specific or `core:window:allow-destroy` permission is needed, because the close
+itself runs in Rust via `destroy()` (§4), not through a JS window API. (Verified against the
+Tauri v2 core-permissions reference during Codex review.)
 
 ### 6. i18n keys (en / zh-Hant)
 
@@ -167,9 +187,19 @@ verify the window still closes via `cmd_close_alarms` afterward.
 
 - **Save fails** (exception): error shown, window stays open, dirty preserved.
 - **Save partial** (hotkey error): persisted → treated as saved → closes.
-- **Rapid double close** (X then X): `closing` flag / modal-open guard prevents a second modal.
-- **Modal already open**: ignore further close requests until it resolves.
+- **Rapid double close** (X then X): the `inFlight` guard (§3) coalesces — only one modal.
+- **Modal already open**: further close requests are ignored until it resolves.
 - **Other-window rule toggle** while Settings open + clean: re-baselined on focus, no false prompt.
+- **Alarms hidden fields** (fields for a non-selected repeat mode) are canonicalized away by
+  `collectAlarms()` and aren't user-editable while hidden, so they can't produce a missed
+  dirty edit — accepted (Codex P2).
+- **Dirty Settings save vs a concurrent other-window rule toggle:** because focus skips the
+  rules refresh while dirty (to protect the active window's edits), a later **Save** writes the
+  Settings grid's rules and can revert a rule toggled in the Break-rules window meanwhile.
+  **Explicitly accepted** — this is the existing "concurrent multi-window edit" caveat in
+  CLAUDE.md. The guard prevents silent loss of the *active* window's edits; it does not merge
+  edits across windows. (Codex second-pass blocker, resolved by dropping the over-promise
+  rather than adding cross-window merge logic — the resolution Codex itself sanctioned.)
 
 ## Testing / verification
 
@@ -183,14 +213,32 @@ Engine logic is unchanged, so no `restee-core` tests. Manual verification via
 5. Modal **Save** → window closes; reopen → edit persisted.
 6. Edit, **Save** in modal with a deliberately bad hotkey (Settings) → persists + closes, warning was shown.
 7. Settings: edit a hotkey, toggle a rule in the Break-rules window, refocus Settings, Close
-   → modal still appears (hotkey edit), and Saving does not clobber the toggle.
+   → modal still appears and the hotkey edit is **preserved** (focus did not discard it).
+   Choosing **Save** here writes the Settings grid's (stale) rules and may revert that
+   concurrent other-window toggle — the accepted multi-window caveat (see Edge cases).
 
 ## Files touched
 
 - `src/confirm-save.ts` (new) — modal.
 - `src/unsaved-guard.ts` (new) — shared guard installer.
-- `src/main.ts` — `save()` returns bool; install guard; focus re-baseline; Close button routes through guard.
-- `src/alarms.ts` — `save()` returns bool; install guard; Close button routes through guard.
+- `src/main.ts` — `save()` returns bool; install guard; async focus handler that skips refresh when dirty + re-baselines when clean; Close button + window X route through the guard.
+- `src/alarms.ts` — `save()` returns bool; install guard; Close button + window X route through the guard.
 - `src/styles.css` — modal styles.
 - `src/i18n.ts` — new `confirm.*` keys.
-- `src-tauri/capabilities/alarms.json` — add close-event listen permission.
+- `src-tauri/src/settings_window.rs`, `src-tauri/src/alarms_window.rs` — `close()` uses `window.destroy()` instead of `window.close()`.
+- `src-tauri/capabilities/alarms.json` — add `core:event:allow-listen`.
+
+## Codex review (2026-06-03)
+
+Independent read-only review (gpt-5.5, high reasoning) folded in:
+- **P1 (capability):** resolved §5 — `core:event:allow-listen` on alarms.
+- **P1 (close re-entrancy):** resolved §3/§4 — Rust `destroy()` instead of JS `close()` + flag.
+- **P1 (focus discards rule edits):** resolved §2 — async focus handler skips refresh while dirty.
+- **P2 (await refresh before baseline; in-flight guard):** resolved §2 / §3.
+- **P2 (alarms hidden fields):** accepted (canonicalized + not user-editable).
+- **P3 (saved config + failed hotkey = close):** confirmed sound.
+
+Second pass (blocker-only) flagged that test 7 over-promised "Save doesn't clobber the toggle"
+while §2 skips refresh-while-dirty. **Resolved** by dropping that guarantee (test 7 + Edge
+cases now state the accepted multi-window caveat); no merge machinery added — the resolution
+Codex offered.
