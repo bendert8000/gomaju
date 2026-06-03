@@ -173,38 +173,15 @@ impl Default for SettingsDto {
     }
 }
 
+/// The starter config a fresh install is seeded with, kept as editable TOML (the same
+/// format as the on-disk file) so the default breaks/alarms can be tuned without touching
+/// code. Embedded at compile time via `include_str!`, so the binary stays self-contained.
+pub const DEFAULT_CONFIG_TOML: &str = include_str!("../default_config.toml");
+
 impl Default for ConfigFile {
     fn default() -> Self {
-        Self {
-            version: CONFIG_VERSION,
-            locale: default_locale(),
-            autostart: false,
-            settings: SettingsDto::default(),
-            hotkeys: HotkeysDto::default(),
-            rules: vec![
-                RuleDto {
-                    id: "eye-rest".into(),
-                    name: "Eye rest".into(),
-                    interval_secs: 30 * 60,
-                    break_secs: 60,
-                    enforcement: EnforcementDto::Soft,
-                    enabled: true,
-                    repeat: true,
-                    note: String::new(),
-                },
-                RuleDto {
-                    id: "long-break".into(),
-                    name: "Long break".into(),
-                    interval_secs: 45 * 60,
-                    break_secs: 10 * 60,
-                    enforcement: EnforcementDto::Strict,
-                    enabled: true,
-                    repeat: true,
-                    note: String::new(),
-                },
-            ],
-            alarms: vec![],
-        }
+        toml::from_str(DEFAULT_CONFIG_TOML)
+            .expect("embedded default_config.toml must parse into ConfigFile")
     }
 }
 
@@ -415,6 +392,22 @@ mod tests {
     }
 
     #[test]
+    fn embedded_default_config_parses_and_is_clean() {
+        // Panics here if `default_config.toml` is malformed for ConfigFile.
+        let mut cfg = ConfigFile::default();
+        assert_eq!(cfg.rules.len(), 2);
+        assert_eq!(cfg.alarms.len(), 4);
+        // The shipped default must already be valid — sanitize should change nothing.
+        assert!(!cfg.sanitize());
+    }
+
+    #[test]
+    fn default_settings_match_settingsdto_default() {
+        // Guard against the embedded TOML's [settings] drifting from SettingsDto::default().
+        assert_eq!(ConfigFile::default().settings, SettingsDto::default());
+    }
+
+    #[test]
     fn round_trips_through_toml() {
         let cfg = ConfigFile::default();
         let text = toml::to_string_pretty(&cfg).unwrap();
@@ -456,6 +449,10 @@ mod tests {
     #[test]
     fn rule_note_round_trips_and_omits_when_empty() {
         let mut cfg = ConfigFile::default();
+        // The default rules now ship with notes; clear them to test the empty-omission path.
+        for r in &mut cfg.rules {
+            r.note = String::new();
+        }
         // Empty notes are omitted from the serialized TOML.
         assert!(!toml::to_string_pretty(&cfg).unwrap().contains("note ="));
         // A set note round-trips.

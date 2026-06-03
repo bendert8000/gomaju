@@ -122,9 +122,11 @@ const MESSAGES: Record<string, Entry> = {
   "alarms.repeat_once": { en: "Once", "zh-Hant": "一次" },
   "alarms.repeat_daily": { en: "Daily", "zh-Hant": "每日" },
   "alarms.repeat_weekly": { en: "Weekly", "zh-Hant": "每週" },
+  "alarms.repeat_biweekly": { en: "Bi-weekly", "zh-Hant": "每兩週" },
   "alarms.repeat_monthly": { en: "Monthly", "zh-Hant": "每月" },
   "alarms.repeat_yearly": { en: "Yearly", "zh-Hant": "每年" },
   "alarms.day": { en: "Day", "zh-Hant": "日" },
+  "alarms.start": { en: "Starts", "zh-Hant": "開始" },
   "alarms.in": { en: "in {dur}", "zh-Hant": "{dur} 後" },
   "alarms.default_name": { en: "Alarm", "zh-Hant": "鬧鐘" },
   "alarms.new_name": { en: "New alarm", "zh-Hant": "新鬧鐘" },
@@ -156,10 +158,6 @@ const MESSAGES: Record<string, Entry> = {
   "overlay.emergency": {
     en: "Hold Esc to exit in an emergency",
     "zh-Hant": "緊急情況請按住 Esc 退出",
-  },
-  "overlay.soft_hint": {
-    en: "Look ~20 feet away and relax your eyes.",
-    "zh-Hant": "看向約 6 公尺外，放鬆雙眼。",
   },
   "overlay.hold_to_skip": { en: "Hold to skip", "zh-Hant": "按住以略過" },
   "overlay.keep_holding": { en: "Keep holding…", "zh-Hant": "繼續按住…" },

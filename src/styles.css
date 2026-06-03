@@ -28,8 +28,8 @@ body {
 }
 
 .overlay--soft {
-  /* Calm, near-opaque so it reads as "ease off" rather than a hard block. */
-  background: radial-gradient(circle at 50% 40%, #1f2a3a 0%, #0f1620 70%);
+  /* Calm dark green, near-opaque so it reads as "ease off" rather than a hard block. */
+  background: radial-gradient(circle at 50% 40%, #16331f 0%, #0a1a10 70%);
 }
 
 .overlay--strict {
@@ -115,6 +115,10 @@ body {
   font-size: clamp(0.95rem, 2vw, 1.25rem);
   opacity: 0.7;
   max-width: 36rem;
+}
+/* Soft breaks set no hint, so collapse the empty element rather than leave a gap. */
+.overlay__hint:empty {
+  display: none;
 }
 
 .overlay__skip {
@@ -449,6 +453,7 @@ input[type="checkbox"] {
 /* --- Alarms window --- */
 
 .alarm-item {
+  --on: #5fd29a; /* enabled-halo green; matches the Breaks window's status color */
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
@@ -456,6 +461,26 @@ input[type="checkbox"] {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  transition:
+    opacity 0.2s,
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+/* Enabled alarms get a soft halo; disabled ones read dimmer and brighten on hover so they
+   stay editable (mirrors the Breaks window's on/off cards). `data-on` tracks the On checkbox. */
+.alarm-item[data-on="true"] {
+  border-color: color-mix(in srgb, var(--on) 50%, transparent);
+  background: color-mix(in srgb, var(--on) 7%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--on) 35%, transparent),
+    0 8px 26px -16px color-mix(in srgb, var(--on) 55%, transparent);
+}
+.alarm-item[data-on="false"] {
+  opacity: 0.62;
+}
+.alarm-item[data-on="false"]:hover {
+  opacity: 0.82;
 }
 .alarm-line {
   display: flex;
@@ -485,7 +510,8 @@ input[type="checkbox"] {
 .alarm-detail.show {
   display: inline-flex;
 }
-.alarm-detail-weekly.show {
+.alarm-detail-weekly.show,
+.alarm-detail-biweekly.show {
   flex-wrap: wrap;
 }
 .wd-label {

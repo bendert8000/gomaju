@@ -7,17 +7,17 @@ let guard!: UnsavedGuard;
 
 // --- Types mirroring restee_core::alarm DTOs ---
 
-type Repeat = "once" | "daily" | "weekly" | "monthly" | "yearly";
+type Repeat = "once" | "daily" | "weekly" | "biweekly" | "monthly" | "yearly";
 
 interface AlarmDto {
   id: string;
   name: string;
   time: string; // "HH:MM" (24h)
   repeat: Repeat;
-  weekdays: number[]; // 0=Mon … 6=Sun (Weekly)
+  weekdays: number[]; // 0=Mon … 6=Sun (Weekly / Biweekly)
   day_of_month: number; // 1..31 (Monthly / Yearly)
   month: number; // 1..12 (Yearly)
-  date: string | null; // "YYYY-MM-DD" (Once)
+  date: string | null; // "YYYY-MM-DD" (Once: fire date; Biweekly: start week)
   enabled: boolean;
 }
 
@@ -27,9 +27,23 @@ const q = <T extends HTMLElement>(root: HTMLElement, selector: string): T =>
 
 const WEEKDAYS = Array.from({ length: 7 }, (_, i) => t(`weekday.${i}`));
 
+// The 7 day-of-week checkboxes, shared by the Weekly and Bi-weekly detail rows. Constant
+// (labels are fixed per locale), built once. collectAlarms() scopes by detail container.
+const WEEKDAY_CHECKBOXES = WEEKDAYS.map(
+  (w, i) => `<label class="wd-label"><input class="wd" type="checkbox" value="${i}" />${w}</label>`,
+).join("");
+
 function clampInt(value: string, lo: number, hi: number, fallback: number): number {
   const n = Math.round(Number(value));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+}
+
+// Today as a LOCAL "YYYY-MM-DD" (NOT toISOString(), which is UTC and can be a day off vs
+// the host's Local::now() scheduling). Used to prefill a new bi-weekly alarm's start date.
+function todayLocal(): string {
+  const d = new Date();
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 // --- Alarm rows ---
@@ -38,6 +52,7 @@ function alarmRow(a: AlarmDto): HTMLElement {
   const row = document.createElement("div");
   row.className = "alarm-item";
   row.dataset.id = a.id;
+  row.dataset.on = String(a.enabled); // drives the dimmed-when-disabled styling
   // Static scaffolding only (constant labels/indices). User-supplied values are never
   // interpolated here — they are set via DOM setters below, so there's no XSS surface.
   row.innerHTML = `
@@ -52,13 +67,13 @@ function alarmRow(a: AlarmDto): HTMLElement {
         <option value="once">${t("alarms.repeat_once")}</option>
         <option value="daily">${t("alarms.repeat_daily")}</option>
         <option value="weekly">${t("alarms.repeat_weekly")}</option>
+        <option value="biweekly">${t("alarms.repeat_biweekly")}</option>
         <option value="monthly">${t("alarms.repeat_monthly")}</option>
         <option value="yearly">${t("alarms.repeat_yearly")}</option>
       </select>
       <span class="alarm-detail alarm-detail-once"><input class="alarm-date" type="date" /></span>
-      <span class="alarm-detail alarm-detail-weekly">${WEEKDAYS.map(
-        (w, i) => `<label class="wd-label"><input class="wd" type="checkbox" value="${i}" />${w}</label>`,
-      ).join("")}</span>
+      <span class="alarm-detail alarm-detail-weekly">${WEEKDAY_CHECKBOXES}</span>
+      <span class="alarm-detail alarm-detail-biweekly">${t("alarms.start")} <input class="alarm-biweekly-start" type="date" />${WEEKDAY_CHECKBOXES}</span>
       <span class="alarm-detail alarm-detail-monthly">${t("alarms.day")} <input class="alarm-dom" type="number" min="1" max="31" /></span>
       <span class="alarm-detail alarm-detail-yearly">
         <select class="alarm-month">${Array.from(
@@ -76,6 +91,8 @@ function alarmRow(a: AlarmDto): HTMLElement {
   q<HTMLInputElement>(row, ".alarm-enabled").checked = a.enabled;
   q<HTMLSelectElement>(row, ".alarm-repeat").value = a.repeat;
   q<HTMLInputElement>(row, ".alarm-date").value = a.date ?? "";
+  q<HTMLInputElement>(row, ".alarm-biweekly-start").value = a.date ?? "";
+  // Sets both the weekly and biweekly `.wd` sets identically; only the active kind is read back.
   for (const cb of row.querySelectorAll<HTMLInputElement>(".wd")) {
     cb.checked = a.weekdays.includes(Number(cb.value));
   }
@@ -89,9 +106,21 @@ function alarmRow(a: AlarmDto): HTMLElement {
     for (const el of row.querySelectorAll<HTMLElement>(".alarm-detail")) {
       el.classList.toggle("show", el.classList.contains(`alarm-detail-${r}`));
     }
+    // Prefill a fresh bi-weekly alarm's start date with today (local) so it isn't
+    // immediately disabled by the sanitizer for lacking an anchor.
+    if (r === "biweekly") {
+      const start = q<HTMLInputElement>(row, ".alarm-biweekly-start");
+      if (!start.value) start.value = todayLocal();
+    }
   };
   repeatSel.addEventListener("change", updateDetail);
   updateDetail();
+
+  // Keep the dimmed-when-disabled styling in sync as the user toggles On.
+  const enabledBox = q<HTMLInputElement>(row, ".alarm-enabled");
+  enabledBox.addEventListener("change", () => {
+    row.dataset.on = String(enabledBox.checked);
+  });
 
   q(row, ".alarm-remove").addEventListener("click", () => row.remove());
   return row;
@@ -114,9 +143,15 @@ function collectAlarms(): AlarmDto[] {
     let month = 0;
     let date: string | null = null;
     if (repeat === "weekly") {
-      weekdays = Array.from(row.querySelectorAll<HTMLInputElement>(".wd"))
+      // Scope to the weekly detail: the biweekly detail also has `.wd` boxes.
+      weekdays = Array.from(row.querySelectorAll<HTMLInputElement>(".alarm-detail-weekly .wd"))
         .filter((c) => c.checked)
         .map((c) => Number(c.value));
+    } else if (repeat === "biweekly") {
+      weekdays = Array.from(row.querySelectorAll<HTMLInputElement>(".alarm-detail-biweekly .wd"))
+        .filter((c) => c.checked)
+        .map((c) => Number(c.value));
+      date = q<HTMLInputElement>(row, ".alarm-biweekly-start").value || null;
     } else if (repeat === "monthly") {
       day_of_month = clampInt(q<HTMLInputElement>(row, ".alarm-dom").value, 1, 31, 1);
     } else if (repeat === "yearly") {

@@ -238,4 +238,25 @@ mod tests {
         let when = next_fire(&a, local(2026, 6, 2, 7, 0)).unwrap();
         assert_eq!(parts(when), (2026, 12, 25, 8, 30));
     }
+
+    #[test]
+    fn biweekly_skips_the_off_week() {
+        // Start week = Mon 2026-06-08; from Tue Jun 9 the next Monday (Jun 15) is an OFF
+        // week, so the next fire is the following on-week Monday, Jun 22.
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0]; // Mon
+        a.date = Some("2026-06-08".into());
+        let when = next_fire(&a, local(2026, 6, 9, 9, 0)).unwrap();
+        assert_eq!(parts(when), (2026, 6, 22, 8, 30));
+    }
+
+    #[test]
+    fn biweekly_does_not_fire_before_its_start_week() {
+        // From Mon Jun 1 (before the start) the first fire is the start Monday, Jun 8.
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0]; // Mon
+        a.date = Some("2026-06-08".into());
+        let when = next_fire(&a, local(2026, 6, 1, 7, 0)).unwrap();
+        assert_eq!(parts(when), (2026, 6, 8, 8, 30));
+    }
 }

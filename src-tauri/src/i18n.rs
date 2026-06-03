@@ -34,7 +34,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.pause" => pick(locale, "Pause", "暫停"),
         "tray.reset" => pick(locale, "Reset break timer", "重設休息計時器"),
         "tray.break_now" => pick(locale, "Break now", "立即休息"),
-        "tray.rules" => pick(locale, "Break rules…", "休息規則…"),
+        "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
         "tray.language" => pick(locale, "Language", "語言"),

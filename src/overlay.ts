@@ -95,7 +95,6 @@ if (info.kind === "soft" || info.escape_mode === "easy") {
   skipBtn.hidden = false;
   skipLabel.textContent = t("overlay.skip");
   skipBtn.addEventListener("click", skip);
-  if (info.kind === "soft") hintEl.textContent = t("overlay.soft_hint");
 } else if (info.escape_mode === "friction") {
   skipBtn.hidden = false;
   skipLabel.textContent = t("overlay.hold_to_skip");
