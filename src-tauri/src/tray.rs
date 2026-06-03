@@ -147,6 +147,8 @@ pub fn refresh(app: &AppHandle, state: RunState, running_secs: u64, breaks: Vec<
     let paused = state == RunState::Paused;
     let start_text = if started {
         i18n::tr(&locale, "tray.start_running").replace("{dur}", &i18n::human_dur(&locale, running_secs))
+    } else if paused {
+        i18n::tr(&locale, "tray.resume").to_string()
     } else {
         i18n::tr(&locale, "tray.start").to_string()
     };

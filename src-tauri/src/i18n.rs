@@ -30,8 +30,9 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
     match key {
         // Tray menu
         "tray.start" => pick(locale, "Start", "開始"),
+        "tray.resume" => pick(locale, "Resume", "繼續"),
         "tray.pause" => pick(locale, "Pause", "暫停"),
-        "tray.reset" => pick(locale, "Reset timer", "重設計時器"),
+        "tray.reset" => pick(locale, "Reset break timer", "重設休息計時器"),
         "tray.break_now" => pick(locale, "Break now", "立即休息"),
         "tray.skip" => pick(locale, "Skip break", "略過休息"),
         "tray.rules" => pick(locale, "Break rules…", "休息規則…"),
@@ -40,18 +41,18 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.language" => pick(locale, "Language", "語言"),
         "tray.quit" => pick(locale, "Quit restee", "結束 restee"),
         "tray.tooltip" => pick(locale, "restee — break reminder", "restee — 休息提醒"),
-        // Tray status lines ({dur} = a human_dur string)
-        "tray.start_running" => pick(locale, "Running · {dur}", "執行中 · {dur}"),
+        // Tray status lines
+        "tray.start_running" => pick(locale, "Running", "執行中"),
         "tray.placeholder" => pick(locale, "Next break in …", "下次休息還有…"),
         "status.on_break" => pick(locale, "On a break now", "休息中"),
         "status.no_breaks" => pick(locale, "No breaks enabled", "未啟用任何休息"),
 
         // Reset dialogs
-        "dialog.reset_timer_title" => pick(locale, "Reset timer", "重設計時器"),
+        "dialog.reset_timer_title" => pick(locale, "Reset break timer", "重設休息計時器"),
         "dialog.reset_timer_msg" => pick(
             locale,
-            "Restart the countdown to your next break? The current timer will be cleared.",
-            "要重新開始到下次休息的倒數嗎？目前的計時將被清除。",
+            "Restart all break countdowns? Every break timer is cleared and starts again from its full interval.",
+            "要重新開始所有休息的倒數嗎？每個休息計時都會清除，並從完整間隔重新計算。",
         ),
         "dialog.reset_break_title" => pick(locale, "Reset break", "重設休息"),
         "dialog.reset_break_msg" => pick(

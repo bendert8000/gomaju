@@ -27,10 +27,6 @@ const MESSAGES: Record<string, Entry> = {
   "settings.idle_title": { en: "Idle detection backend", "zh-Hant": "閒置偵測後端" },
   "settings.idle_badge": { en: "idle: {status}", "zh-Hant": "閒置偵測：{status}" },
   "settings.rules_heading": { en: "Rules", "zh-Hant": "規則" },
-  "settings.rules_desc": {
-    en: "Take a break after some active work. Soft = gentle, skippable. Strict = covers the screen.",
-    "zh-Hant": "在一段專注工作後休息。柔性＝溫和、可略過；強制＝覆蓋整個螢幕。",
-  },
   "settings.col_name": { en: "Name", "zh-Hant": "名稱" },
   "settings.col_every": { en: "Every (min)", "zh-Hant": "間隔（分鐘）" },
   "settings.col_break": { en: "Break (sec)", "zh-Hant": "休息（秒）" },
@@ -79,10 +75,6 @@ const MESSAGES: Record<string, Entry> = {
 
   // --- Today's breaks (rules) window + cards ---
   "rules.heading": { en: "Today's breaks", "zh-Hant": "今日休息" },
-  "rules.intro": {
-    en: "Tap a card to switch a break on or off for today. To change names or timings, edit the details in Settings.",
-    "zh-Hant": "點一下卡片即可開啟或關閉今天的休息。若要修改名稱或時間，請在設定中編輯。",
-  },
   "rules.edit_in_settings": { en: "Edit in Settings…", "zh-Hant": "在設定中編輯…" },
   "rules.empty": {
     en: "No break rules yet — add some in Settings.",
@@ -92,8 +84,11 @@ const MESSAGES: Record<string, Entry> = {
   "card.on": { en: "ON", "zh-Hant": "開" },
   "card.off": { en: "OFF", "zh-Hant": "關" },
   "card.reset": { en: "Reset", "zh-Hant": "重設" },
-  "card.repeat": { en: "⟳ Repeat", "zh-Hant": "⟳ 重複" },
-  "card.once": { en: "1× Once", "zh-Hant": "1× 一次" },
+  "card.repeat": { en: "Repeat", "zh-Hant": "重複" },
+  "card.repeat_title": {
+    en: "Repeats on its schedule — turn off to fire once, then auto-disable",
+    "zh-Hant": "依排程重複 — 關閉則只執行一次後自動停用",
+  },
   "card.soft": { en: "Soft", "zh-Hant": "柔性" },
   "card.strict": { en: "Strict", "zh-Hant": "強制" },
   "card.every": { en: "every {n} min", "zh-Hant": "每 {n} 分鐘" },

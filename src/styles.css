@@ -668,37 +668,45 @@ input[type="checkbox"] {
   opacity: 0.82;
 }
 
-/* Repeat segmented control */
+/* Repeat toggle (radio-style) */
 .rule-repeat {
   display: inline-flex;
+  align-items: center;
   align-self: flex-start;
   margin-left: 0.25rem;
-  padding: 2px;
-  gap: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-}
-.seg {
+  gap: 0.4rem;
   font: inherit;
   font-size: 0.74rem;
   border: none;
   background: transparent;
   color: #e9edf2;
-  opacity: 0.55;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
+  opacity: 0.6;
+  padding: 0.2rem 0.4rem;
   cursor: pointer;
   transition:
-    background 0.15s,
     opacity 0.15s,
     color 0.15s;
 }
-.seg:hover {
-  opacity: 0.85;
+.rule-repeat:hover {
+  opacity: 0.9;
 }
-.rule-item[data-repeat="true"] .seg[data-val="repeat"],
-.rule-item[data-repeat="false"] .seg[data-val="once"] {
+.rule-repeat__dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: none;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+/* selected = repeating */
+.rule-item[data-repeat="true"] .rule-repeat {
   opacity: 1;
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.rule-item[data-repeat="true"] .rule-repeat__dot {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 42%, transparent 46%);
 }

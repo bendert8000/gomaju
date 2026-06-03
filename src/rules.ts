@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, t } from "./i18n";
 import { fmtMMSS } from "./util";
 import type { RuleDto } from "./rule-editor";
-import { renderStatusBanner, type StatusDto } from "./status";
+import { type StatusDto } from "./status";
 
 // "Quick select today's breaks" dashboard: each rule is a big tappable card. Details are
 // read-only (edit them in Settings); only On/Off (tap the card) and Repeat/Once (segmented
@@ -40,13 +40,9 @@ function applyOn(item: HTMLElement, on: boolean): void {
 }
 function applyRepeat(item: HTMLElement, repeat: boolean): void {
   item.dataset.repeat = String(repeat);
-  (item.querySelector('.seg[data-val="repeat"]') as HTMLElement).setAttribute(
+  (item.querySelector(".rule-repeat") as HTMLElement).setAttribute(
     "aria-pressed",
     String(repeat),
-  );
-  (item.querySelector('.seg[data-val="once"]') as HTMLElement).setAttribute(
-    "aria-pressed",
-    String(!repeat),
   );
 }
 
@@ -102,10 +98,10 @@ function card(rule: RuleDto, index: number): HTMLElement {
       <span class="rule-card__countdown"></span>
       <button class="rule-card__reset" type="button">${t("card.reset")}</button>
     </div>
-    <div class="rule-repeat" role="group" aria-label="Repeat mode">
-      <button class="seg" type="button" data-val="repeat" aria-pressed="${rule.repeat}">${t("card.repeat")}</button>
-      <button class="seg" type="button" data-val="once" aria-pressed="${!rule.repeat}">${t("card.once")}</button>
-    </div>
+    <button class="rule-repeat" type="button" aria-pressed="${rule.repeat}" title="${t("card.repeat_title")}">
+      <span class="rule-repeat__dot" aria-hidden="true"></span>
+      <span class="rule-repeat__label">${t("card.repeat")}</span>
+    </button>
   `;
   (item.querySelector(".rule-card__name") as HTMLElement).textContent = rule.name;
   (item.querySelector(".rule-card__meta") as HTMLElement).textContent =
@@ -122,12 +118,11 @@ function card(rule: RuleDto, index: number): HTMLElement {
       console.error("restee: reset failed", err),
     );
   });
-  for (const seg of item.querySelectorAll<HTMLButtonElement>(".seg")) {
-    seg.addEventListener("click", (e) => {
-      e.stopPropagation();
-      setRepeat(item, seg.dataset.val === "repeat");
-    });
-  }
+  const repeatBtn = item.querySelector(".rule-repeat") as HTMLButtonElement;
+  repeatBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setRepeat(item, item.dataset.repeat !== "true");
+  });
   return item;
 }
 
@@ -148,8 +143,7 @@ async function load(): Promise<void> {
   render(await invoke<RuleDto[]>("cmd_get_rules"));
 }
 
-// Live status — banner lists all enabled breaks (shared phrasing with Settings), and
-// each enabled card gets its own countdown.
+// Live status — each enabled card gets its own countdown.
 async function refreshStatus(): Promise<void> {
   let s: StatusDto;
   try {
@@ -157,8 +151,6 @@ async function refreshStatus(): Promise<void> {
   } catch {
     return; // non-fatal
   }
-  renderStatusBanner(s, $("status-text"));
-  $("status-banner").dataset.state = s.state;
 
   // Per-card countdowns: only while actually running, and only on cards shown ON (so a
   // stale poll can't contradict an optimistic OFF toggle made before the engine reconfigures).
