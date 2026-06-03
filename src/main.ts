@@ -1,12 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, t } from "./i18n";
-import { renderStatusBanner, type StatusDto } from "./status";
 import { collectRules, defaultRule, renderRules, ruleRow, type RuleDto } from "./rule-editor";
+import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 
 // --- Types mirroring the Rust config DTOs ---
 
 type IdlePolicy = "pause" | "credit";
 type EscapeMode = "friction" | "easy" | "no_easy_escape";
+type BreakDisplay = "countdown" | "progress_bar";
 
 interface SettingsDto {
   idle_policy: IdlePolicy;
@@ -16,6 +17,7 @@ interface SettingsDto {
   warn_seconds: number;
   sound: boolean;
   notifications: boolean;
+  break_display: BreakDisplay;
 }
 
 interface HotkeysDto {
@@ -54,6 +56,8 @@ function readNonNegative(id: string, fallback: number): number {
 }
 
 let current: ConfigFile;
+// Assigned in init() once the form is first rendered; referenced only afterwards.
+let guard!: UnsavedGuard;
 
 // --- Form <-> config ---
 
@@ -61,6 +65,7 @@ function render(cfg: ConfigFile): void {
   renderRules($("rules"), cfg.rules);
   sel("idle-policy").value = cfg.settings.idle_policy;
   sel("escape-mode").value = cfg.settings.escape_mode;
+  sel("break-display").value = cfg.settings.break_display;
   inp("warn-seconds").value = String(cfg.settings.warn_seconds);
   inp("away-threshold").value = String(cfg.settings.away_threshold_secs);
   inp("sound").checked = cfg.settings.sound;
@@ -84,6 +89,7 @@ function collectConfig(): ConfigFile {
       ...current.settings,
       idle_policy: sel("idle-policy").value as IdlePolicy,
       escape_mode: sel("escape-mode").value as EscapeMode,
+      break_display: sel("break-display").value as BreakDisplay,
       warn_seconds: readNonNegative("warn-seconds", current.settings.warn_seconds),
       away_threshold_secs:
         Number(inp("away-threshold").value) || current.settings.away_threshold_secs,
@@ -113,7 +119,16 @@ async function refreshRulesFromDisk(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+// On focus, pick up rules edited in the standalone Break-rules window — but ONLY when this form
+// has no unsaved edits, so the refresh never silently discards in-progress work. After a clean
+// refresh, re-baseline so the freshly-pulled disk state doesn't read as a pending change.
+async function onFocusRefresh(): Promise<void> {
+  if (guard.isDirty()) return;
+  await refreshRulesFromDisk();
+  guard.markSaved();
+}
+
+async function save(): Promise<boolean> {
   const msg = $("save-msg");
   try {
     const outcome = await invoke<SaveOutcome>("cmd_save_config", { config: collectConfig() });
@@ -128,24 +143,12 @@ async function save(): Promise<void> {
       msg.textContent = t("common.saved");
       msg.className = "ok";
     }
+    guard.markSaved(); // config persisted (even with hotkey warnings) -> no longer dirty
+    return true;
   } catch (err) {
     msg.textContent = t("settings.save_fail", { err: String(err) });
     msg.className = "warn";
-  }
-}
-
-// --- Live status banner (time to next break) ---
-
-function renderStatus(s: StatusDto): void {
-  renderStatusBanner(s, $("status-text"));
-  $("status-banner").dataset.state = s.state;
-}
-
-async function refreshStatus(): Promise<void> {
-  try {
-    renderStatus(await invoke<StatusDto>("cmd_get_status"));
-  } catch {
-    /* non-fatal */
+    return false;
   }
 }
 
@@ -155,6 +158,13 @@ async function init(): Promise<void> {
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
   current = await invoke<ConfigFile>("cmd_get_config");
   render(current);
+  // Guard against closing with unsaved edits (Close button + OS window X). Installed after the
+  // first render so the dirty baseline matches the loaded config.
+  guard = installUnsavedGuard({
+    collect: collectConfig,
+    save,
+    close: () => void invoke("cmd_close_settings"),
+  });
 
   try {
     const status = await invoke<string>("cmd_get_idle_status");
@@ -165,19 +175,15 @@ async function init(): Promise<void> {
     /* non-fatal */
   }
 
-  // Live "time to next break" banner — poll while the settings window is open.
-  await refreshStatus();
-  window.setInterval(refreshStatus, 1000);
-
   $("add-rule").addEventListener("click", () => {
     $("rules").appendChild(ruleRow(defaultRule()));
   });
   // Keep the rules grid in sync with edits made in the standalone Break-rules window.
   window.addEventListener("focus", () => {
-    refreshRulesFromDisk();
+    void onFocusRefresh();
   });
-  $("save-btn").addEventListener("click", save);
-  $("close-btn").addEventListener("click", () => invoke("cmd_close_settings"));
+  $("save-btn").addEventListener("click", () => void save());
+  $("close-btn").addEventListener("click", () => void guard.requestClose());
 }
 
 window.addEventListener("DOMContentLoaded", () => {

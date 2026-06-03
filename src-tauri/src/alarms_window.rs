@@ -4,10 +4,12 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 /// IPC gate can't drift from the real label.
 pub const ALARMS_LABEL: &str = "alarms";
 
-/// Close the alarms window if it is open.
+/// Close the alarms window if it is open. Uses `destroy()` (not `close()`) so it does NOT
+/// re-emit `close-requested`: the frontend's unsaved-changes guard already ran and approved the
+/// close, and re-emitting would re-enter that guard. See `src/unsaved-guard.ts`.
 pub fn close(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(ALARMS_LABEL) {
-        let _ = window.close();
+        let _ = window.destroy();
     }
 }
 

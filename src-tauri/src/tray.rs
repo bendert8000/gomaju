@@ -30,12 +30,20 @@ fn build_menu(
     paused: bool,
     start_text: &str,
     lines: &[String],
+    alarm_lines: &[String],
 ) -> tauri::Result<Menu<tauri::Wry>> {
     let status_items: Vec<MenuItem<tauri::Wry>> = lines
         .iter()
         .enumerate()
         .map(|(i, line)| MenuItem::with_id(app, format!("status-{i}"), line, false, None::<&str>))
         .collect::<tauri::Result<Vec<_>>>()?;
+    // Today's upcoming alarms — disabled info lines shown in their own section below the breaks.
+    let alarm_items: Vec<MenuItem<tauri::Wry>> = alarm_lines
+        .iter()
+        .enumerate()
+        .map(|(i, line)| MenuItem::with_id(app, format!("alarm-line-{i}"), line, false, None::<&str>))
+        .collect::<tauri::Result<Vec<_>>>()?;
+    let sep_alarms = PredefinedMenuItem::separator(app)?;
 
     let sep0 = PredefinedMenuItem::separator(app)?;
     // CheckMenuItems render a native check before the text to mark the active state.
@@ -45,7 +53,6 @@ fn build_menu(
     let reset = MenuItem::with_id(app, "reset", i18n::tr(locale, "tray.reset"), true, None::<&str>)?;
     let break_now =
         MenuItem::with_id(app, "break_now", i18n::tr(locale, "tray.break_now"), true, None::<&str>)?;
-    let skip = MenuItem::with_id(app, "skip", i18n::tr(locale, "tray.skip"), true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let rules = MenuItem::with_id(app, "rules", i18n::tr(locale, "tray.rules"), true, None::<&str>)?;
     let alarms = MenuItem::with_id(app, "alarms", i18n::tr(locale, "tray.alarms"), true, None::<&str>)?;
@@ -62,9 +69,17 @@ fn build_menu(
     let sep2 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", i18n::tr(locale, "tray.quit"), true, None::<&str>)?;
 
-    let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> = Vec::with_capacity(status_items.len() + 13);
+    let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> =
+        Vec::with_capacity(status_items.len() + alarm_items.len() + 13);
     for it in &status_items {
         items.push(it);
+    }
+    // Divider + today's upcoming alarms, only when there are any.
+    if !alarm_items.is_empty() {
+        items.push(&sep_alarms as &dyn IsMenuItem<tauri::Wry>);
+        for it in &alarm_items {
+            items.push(it);
+        }
     }
     for it in [
         &sep0 as &dyn IsMenuItem<tauri::Wry>,
@@ -72,7 +87,6 @@ fn build_menu(
         &pause,
         &reset,
         &break_now,
-        &skip,
         &sep1,
         &rules,
         &alarms,
@@ -94,7 +108,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     // carry stable ids so `on_menu_event` routes across later rebuilds.
     let locale = i18n::current_locale(app);
     let placeholder = [i18n::tr(&locale, "tray.placeholder").to_string()];
-    let menu = build_menu(app, &locale, true, false, i18n::tr(&locale, "tray.start"), &placeholder)?;
+    let menu = build_menu(app, &locale, true, false, i18n::tr(&locale, "tray.start"), &placeholder, &[])?;
 
     let icon = app
         .default_window_icon()
@@ -113,7 +127,6 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "pause" => runtime::action_pause(app, state.inner()),
                 "reset" => runtime::confirm_then_reset(app),
                 "break_now" => runtime::action_break_now(app, state.inner()),
-                "skip" => runtime::action_skip(app, state.inner()),
                 "rules" => crate::rules_window::open(app),
                 "settings" => crate::settings_window::open(app),
                 "alarms" => crate::alarms_window::open(app),
@@ -137,7 +150,13 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 /// Reflect run state in the tray: the Start check + elapsed text, the Pause check, and
 /// one info line per enabled break (soonest first). Cheap to call every tick — it only
 /// rebuilds the OS menu when a rendered line actually changes.
-pub fn refresh(app: &AppHandle, state: RunState, running_secs: u64, breaks: Vec<(String, u64)>) {
+pub fn refresh(
+    app: &AppHandle,
+    state: RunState,
+    running_secs: u64,
+    breaks: Vec<(String, u64)>,
+    alarms: Vec<(String, String)>,
+) {
     let Some(menu) = app.try_state::<TrayMenu>() else {
         return;
     };
@@ -147,14 +166,24 @@ pub fn refresh(app: &AppHandle, state: RunState, running_secs: u64, breaks: Vec<
     let paused = state == RunState::Paused;
     let start_text = if started {
         i18n::tr(&locale, "tray.start_running").replace("{dur}", &i18n::human_dur(&locale, running_secs))
+    } else if paused {
+        i18n::tr(&locale, "tray.resume").to_string()
     } else {
         i18n::tr(&locale, "tray.start").to_string()
     };
     let lines = status_lines(&locale, state, &breaks);
+    let alarm_lines: Vec<String> = alarms
+        .iter()
+        .map(|(name, time)| format!("⏰ {name} · {time}"))
+        .collect();
 
-    // Key from the exact rendered strings (+ locale), so it can't desync from `human_dur`
-    // bucketing and any change to the checks / "Running · Xm" / a break line / language rebuilds.
-    let key = format!("{locale}|{started}|{paused}|{start_text}|{}", lines.join("\u{1f}"));
+    // Key from the exact rendered strings (+ locale), so the menu rebuilds only when a
+    // rendered line actually changes (break countdowns, today's alarms, checks, or language).
+    let key = format!(
+        "{locale}|{started}|{paused}|{start_text}|{}|{}",
+        lines.join("\u{1f}"),
+        alarm_lines.join("\u{1f}")
+    );
     {
         let mut cache = menu.cache.lock().unwrap();
         if *cache == key {
@@ -167,7 +196,7 @@ pub fn refresh(app: &AppHandle, state: RunState, running_secs: u64, breaks: Vec<
     // and building off-thread to set on-thread is unsafe on some platforms.
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        match build_menu(&handle, &locale, started, paused, &start_text, &lines) {
+        match build_menu(&handle, &locale, started, paused, &start_text, &lines, &alarm_lines) {
             Ok(menu) => match handle.tray_by_id(TRAY_ID) {
                 Some(tray) => {
                     if let Err(e) = tray.set_menu(Some(menu)) {
@@ -194,7 +223,7 @@ fn status_lines(locale: &str, state: RunState, breaks: &[(String, u64)]) -> Vec<
     }
     breaks
         .iter()
-        .map(|(name, secs)| format!("{name} · {}", i18n::human_dur(locale, *secs)))
+        .map(|(name, secs)| format!("☕ {name} · {}", i18n::human_dur(locale, *secs)))
         .collect()
 }
 

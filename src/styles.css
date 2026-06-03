@@ -28,8 +28,8 @@ body {
 }
 
 .overlay--soft {
-  /* Calm, near-opaque so it reads as "ease off" rather than a hard block. */
-  background: radial-gradient(circle at 50% 40%, #1f2a3a 0%, #0f1620 70%);
+  /* Calm dark green, near-opaque so it reads as "ease off" rather than a hard block. */
+  background: radial-gradient(circle at 50% 40%, #16331f 0%, #0a1a10 70%);
 }
 
 .overlay--strict {
@@ -53,6 +53,16 @@ body {
   opacity: 0.95;
 }
 
+/* Optional per-rule note, read-only, shown smaller right under the break name. */
+.overlay__note {
+  margin-top: -0.75rem; /* sit close under the name (the flex column gap is 1.25rem) */
+  font-size: clamp(0.9rem, 2vw, 1.4rem);
+  font-weight: 400;
+  opacity: 0.78;
+  max-width: 40rem;
+  white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
+}
+
 .overlay__timer {
   font-size: clamp(4rem, 16vw, 11rem);
   font-weight: 200;
@@ -61,10 +71,54 @@ body {
   animation: restee-breathe 4s ease-in-out infinite;
 }
 
+/* Progress-bar break display (alternative to the big timer). The fill drains
+   full -> empty over the break; the countdown text sits inside it. */
+.overlay__progress {
+  position: relative;
+  width: min(60vw, 675px);
+  height: clamp(2.6rem, 6.75vw, 4.5rem);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* `display: flex` above would otherwise override the `hidden` attribute. */
+.overlay__progress[hidden] {
+  display: none;
+}
+.overlay__progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%; /* base = full; JS drains it. Matching the first paint avoids a startup animation. */
+  z-index: 0;
+  background: rgba(120, 170, 255, 0.45); /* soft (blue) */
+  transition: width 1s linear;
+}
+.overlay--strict .overlay__progress-fill {
+  background: rgba(255, 140, 106, 0.45); /* strict (orange) */
+}
+.overlay__progress-text {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(1.25rem, 3.5vw, 2.25rem);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
 .overlay__hint {
   font-size: clamp(0.95rem, 2vw, 1.25rem);
   opacity: 0.7;
   max-width: 36rem;
+}
+/* Soft breaks set no hint, so collapse the empty element rather than leave a gap. */
+.overlay__hint:empty {
+  display: none;
 }
 
 .overlay__skip {
@@ -261,58 +315,6 @@ body {
   gap: 1rem;
 }
 
-.status-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.7rem 0.6rem 1rem;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
-  background: rgba(106, 166, 255, 0.12);
-  border: 1px solid rgba(106, 166, 255, 0.28);
-}
-/* Each enabled break is its own row: label on the left, its Reset button on the right. */
-#status-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.status-row--note {
-  opacity: 0.7;
-}
-.status-row__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.status-row__reset {
-  flex: none;
-  padding: 0.12rem 0.5rem;
-  font-size: 0.76rem;
-}
-
-.btn-sm {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.82rem;
-}
-.status-banner[data-state="paused"] {
-  background: rgba(240, 163, 106, 0.12);
-  border-color: rgba(240, 163, 106, 0.3);
-}
-.status-banner[data-state="in_break"] {
-  background: rgba(95, 210, 154, 0.12);
-  border-color: rgba(95, 210, 154, 0.3);
-}
 
 .card {
   background: rgba(255, 255, 255, 0.03);
@@ -353,7 +355,8 @@ code {
 }
 
 input,
-select {
+select,
+textarea {
   background: #0b0f16;
   color: #e9edf2;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -385,6 +388,21 @@ input[type="checkbox"] {
 }
 .rule-row input[type="number"] {
   width: 100%;
+}
+/* On / Repeat are checkbox columns — center the checkbox under its centered header so the
+   two columns line up evenly (their tracks differ in width: 2rem vs 3.5rem). */
+.rules-head .col-center,
+.rule-row .rule-enabled,
+.rule-row .rule-repeat {
+  justify-self: center;
+}
+/* Per-rule note: a full-width line beneath the rule's controls (it wraps to the grid's
+   next implicit row, spanning every column). */
+.rule-note {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 2.4rem;
+  resize: vertical; /* multi-line note; user can drag taller */
 }
 
 .settings-footer {
@@ -435,6 +453,7 @@ input[type="checkbox"] {
 /* --- Alarms window --- */
 
 .alarm-item {
+  --on: #5fd29a; /* enabled-halo green; matches the Breaks window's status color */
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
@@ -442,6 +461,26 @@ input[type="checkbox"] {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  transition:
+    opacity 0.2s,
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+/* Enabled alarms get a soft halo; disabled ones read dimmer and brighten on hover so they
+   stay editable (mirrors the Breaks window's on/off cards). `data-on` tracks the On checkbox. */
+.alarm-item[data-on="true"] {
+  border-color: color-mix(in srgb, var(--on) 50%, transparent);
+  background: color-mix(in srgb, var(--on) 7%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--on) 35%, transparent),
+    0 8px 26px -16px color-mix(in srgb, var(--on) 55%, transparent);
+}
+.alarm-item[data-on="false"] {
+  opacity: 0.62;
+}
+.alarm-item[data-on="false"]:hover {
+  opacity: 0.82;
 }
 .alarm-line {
   display: flex;
@@ -471,7 +510,8 @@ input[type="checkbox"] {
 .alarm-detail.show {
   display: inline-flex;
 }
-.alarm-detail-weekly.show {
+.alarm-detail-weekly.show,
+.alarm-detail-biweekly.show {
   flex-wrap: wrap;
 }
 .wd-label {
@@ -487,6 +527,10 @@ input[type="checkbox"] {
 .alarm-next {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+}
+/* Date suffix after the countdown is dimmer than the lead-in countdown. */
+.alarm-next__at {
+  opacity: 0.55;
 }
 .alarm-next:empty {
   display: none;
@@ -588,6 +632,13 @@ input[type="checkbox"] {
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }
+.rule-card__note {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: 0.1rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
+}
 .rule-card__countdown {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
@@ -668,37 +719,81 @@ input[type="checkbox"] {
   opacity: 0.82;
 }
 
-/* Repeat segmented control */
-.rule-repeat {
+/* Repeat toggle (radio-style) — scoped to the dashboard card so it never leaks onto the
+   Settings grid's plain `.rule-repeat` checkbox (same class name, different control). */
+.rule-item .rule-repeat {
   display: inline-flex;
+  align-items: center;
   align-self: flex-start;
   margin-left: 0.25rem;
-  padding: 2px;
-  gap: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-}
-.seg {
+  gap: 0.4rem;
   font: inherit;
   font-size: 0.74rem;
   border: none;
   background: transparent;
   color: #e9edf2;
-  opacity: 0.55;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
+  opacity: 0.6;
+  padding: 0.2rem 0.4rem;
   cursor: pointer;
   transition:
-    background 0.15s,
     opacity 0.15s,
     color 0.15s;
 }
-.seg:hover {
-  opacity: 0.85;
+.rule-item .rule-repeat:hover {
+  opacity: 0.9;
 }
-.rule-item[data-repeat="true"] .seg[data-val="repeat"],
-.rule-item[data-repeat="false"] .seg[data-val="once"] {
+.rule-item .rule-repeat__dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: none;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+/* selected = repeating */
+.rule-item[data-repeat="true"] .rule-repeat {
   opacity: 1;
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.rule-item[data-repeat="true"] .rule-repeat__dot {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 42%, transparent 46%);
+}
+
+/* --- Unsaved-changes confirm modal (Settings + Alarms) --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 10, 0.55);
+}
+.modal {
+  width: min(380px, calc(100vw - 3rem));
+  background: #161b24;
+  color: #eef2f7;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 1rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  animation: restee-fade-in 140ms ease;
+}
+.modal__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+.modal__msg {
+  margin: 0 0 1.25rem;
+  color: #c2cad6;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }

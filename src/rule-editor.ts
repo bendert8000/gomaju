@@ -13,6 +13,8 @@ export interface RuleDto {
   enforcement: Enforcement;
   enabled: boolean;
   repeat: boolean;
+  /** Optional note shown read-only under the break name on the overlay. */
+  note?: string;
 }
 
 const rowInput = (row: HTMLElement, cls: string): HTMLInputElement =>
@@ -30,6 +32,7 @@ export function defaultRule(): RuleDto {
     enforcement: "soft",
     enabled: true,
     repeat: true,
+    note: "",
   };
 }
 
@@ -50,6 +53,7 @@ export function ruleRow(rule: RuleDto): HTMLElement {
     <input class="rule-enabled" type="checkbox" />
     <input class="rule-repeat" type="checkbox" title="${t("editor.repeat_title")}" />
     <button class="rule-remove btn-ghost" type="button" title="${t("common.remove")}">✕</button>
+    <textarea class="rule-note" rows="2" placeholder="${t("editor.note_placeholder")}"></textarea>
   `;
   rowInput(row, ".rule-name").value = rule.name;
   rowInput(row, ".rule-interval").value = String(Math.round(rule.interval_secs / 60));
@@ -57,6 +61,7 @@ export function ruleRow(rule: RuleDto): HTMLElement {
   rowSelect(row, ".rule-enforcement").value = rule.enforcement;
   rowInput(row, ".rule-enabled").checked = rule.enabled;
   rowInput(row, ".rule-repeat").checked = rule.repeat;
+  (row.querySelector(".rule-note") as HTMLTextAreaElement).value = rule.note ?? "";
   row.querySelector(".rule-remove")!.addEventListener("click", () => row.remove());
   return row;
 }
@@ -81,6 +86,7 @@ export function collectRules(container: HTMLElement): RuleDto[] {
       enforcement: rowSelect(row, ".rule-enforcement").value as Enforcement,
       enabled: rowInput(row, ".rule-enabled").checked,
       repeat: rowInput(row, ".rule-repeat").checked,
+      note: (row.querySelector(".rule-note") as HTMLTextAreaElement).value.trim(),
     };
   });
 }

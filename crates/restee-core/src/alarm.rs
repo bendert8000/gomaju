@@ -7,11 +7,12 @@
 //!
 //! Field/kind matrix — only the fields listed for a `repeat` kind are meaningful;
 //! the rest are ignored (and left untouched by [`sanitize_alarms`]):
-//! - `Once`    -> `date` ("YYYY-MM-DD")
-//! - `Daily`   -> (none)
-//! - `Weekly`  -> `weekdays` (0=Mon … 6=Sun)
-//! - `Monthly` -> `day_of_month` (1..31; a value past the month length fires on its last day, so "31" means end-of-month)
-//! - `Yearly`  -> `month` (1..12) + `day_of_month` (Feb-29 fires Feb-28 in common years)
+//! - `Once`     -> `date` ("YYYY-MM-DD")
+//! - `Daily`    -> (none)
+//! - `Weekly`   -> `weekdays` (0=Mon … 6=Sun)
+//! - `Biweekly` -> `weekdays` (0=Mon … 6=Sun) + `date` (start week "YYYY-MM-DD"): fires the ticked days every OTHER Monday-aligned week, counting from the start week
+//! - `Monthly`  -> `day_of_month` (1..31; a value past the month length fires on its last day, so "31" means end-of-month)
+//! - `Yearly`   -> `month` (1..12) + `day_of_month` (Feb-29 fires Feb-28 in common years)
 
 use std::collections::HashSet;
 
@@ -23,6 +24,7 @@ pub enum RepeatDto {
     Once,
     Daily,
     Weekly,
+    Biweekly,
     Monthly,
     Yearly,
 }
@@ -34,7 +36,7 @@ pub struct AlarmDto {
     /// 24-hour "HH:MM".
     pub time: String,
     pub repeat: RepeatDto,
-    /// Weekly only: 0=Mon … 6=Sun.
+    /// Weekly / Biweekly only: 0=Mon … 6=Sun.
     #[serde(default)]
     pub weekdays: Vec<u8>,
     /// Monthly / Yearly only: 1..31.
@@ -43,7 +45,7 @@ pub struct AlarmDto {
     /// Yearly only: 1..12.
     #[serde(default)]
     pub month: u8,
-    /// Once only: "YYYY-MM-DD".
+    /// Once: the single fire date. Biweekly: the start ("anchor") week. "YYYY-MM-DD".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
     #[serde(default = "default_true")]
@@ -111,6 +113,27 @@ fn is_real_ymd(s: &str) -> bool {
     }
 }
 
+/// Days since 1970-01-01 (proleptic Gregorian). Pure integer math — no chrono — so the
+/// bi-weekly week-parity check stays unit-testable in isolation. `month` is 1..=12.
+/// (Howard Hinnant's `days_from_civil` algorithm.)
+fn days_from_civil(y: i32, m: u8, d: u8) -> i64 {
+    let m = m as i64;
+    let d = d as i64;
+    let y = (y as i64) - i64::from(m <= 2);
+    let era = (if y >= 0 { y } else { y - 399 }) / 400;
+    let yoe = y - era * 400; // [0, 399]
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    era * 146097 + doe - 719468
+}
+
+/// Monday-aligned absolute week index for a day-count (days since 1970-01-01). 1970-01-05
+/// (a Monday) has count 4, so Mondays satisfy `(count - 4) % 7 == 0`. `div_euclid` keeps the
+/// index correct for pre-1970 (negative) counts.
+fn monday_week(ord: i64) -> i64 {
+    (ord - 4).div_euclid(7)
+}
+
 /// Whether `a` should fire given the current local-time components. Pure and
 /// clock-free: the caller supplies the components (e.g. via `chrono::Local::now()`).
 #[allow(clippy::too_many_arguments)]
@@ -139,6 +162,22 @@ pub fn alarm_is_due(
         RepeatDto::Once => a.date.as_deref() == Some(ymd),
         RepeatDto::Daily => true,
         RepeatDto::Weekly => a.weekdays.contains(&weekday_mon0),
+        RepeatDto::Biweekly => {
+            // Same day-of-week selection as Weekly, but only on every other Monday-aligned
+            // week, counting from the start date's week. Never fires before the start date.
+            if !a.weekdays.contains(&weekday_mon0) {
+                return false;
+            }
+            let cur = match parse_ymd(ymd) {
+                Some((y, m, d)) => days_from_civil(y, m, d),
+                None => return false,
+            };
+            let anc = match a.date.as_deref().and_then(parse_ymd) {
+                Some((y, m, d)) => days_from_civil(y, m, d),
+                None => return false,
+            };
+            cur >= anc && (monday_week(cur) - monday_week(anc)).rem_euclid(2) == 0
+        }
         RepeatDto::Monthly => dom_matches(a.day_of_month),
         RepeatDto::Yearly => month == a.month && dom_matches(a.day_of_month),
     }
@@ -151,6 +190,16 @@ fn clamp(v: &mut u8, lo: u8, hi: u8, changed: &mut bool) {
         *v = c;
         *changed = true;
     }
+}
+
+/// Normalize a weekday list in place (drop out-of-range, sort, dedup). Returns whether it
+/// changed. Shared by the Weekly and Biweekly sanitize arms.
+fn normalize_weekdays(weekdays: &mut Vec<u8>) -> bool {
+    let before = weekdays.clone();
+    weekdays.retain(|d| *d <= 6);
+    weekdays.sort_unstable();
+    weekdays.dedup();
+    *weekdays != before
 }
 
 /// Validate/normalize alarms in place; returns true if anything changed (so the
@@ -201,15 +250,22 @@ pub fn sanitize_alarms(alarms: &mut [AlarmDto]) -> bool {
                 }
             }
             RepeatDto::Weekly => {
-                let before = a.weekdays.clone();
-                a.weekdays.retain(|d| *d <= 6);
-                a.weekdays.sort_unstable();
-                a.weekdays.dedup();
-                if a.weekdays != before {
+                if normalize_weekdays(&mut a.weekdays) {
                     changed = true;
                 }
                 if a.weekdays.is_empty() && a.enabled {
                     a.enabled = false; // nothing selected => never fires; disable explicitly
+                    changed = true;
+                }
+            }
+            RepeatDto::Biweekly => {
+                // Weekly-style weekday normalization plus an Once-style start-date check.
+                if normalize_weekdays(&mut a.weekdays) {
+                    changed = true;
+                }
+                let date_ok = a.date.as_deref().map(is_real_ymd).unwrap_or(false);
+                if (a.weekdays.is_empty() || !date_ok) && a.enabled {
+                    a.enabled = false; // needs days AND a real anchor date
                     changed = true;
                 }
             }
@@ -274,6 +330,103 @@ mod tests {
         assert!(alarm_is_due(&a, 8, 30, 0, 6, 15, 30, "2026-06-15")); // Mon
         assert!(alarm_is_due(&a, 8, 30, 4, 6, 19, 30, "2026-06-19")); // Fri
         assert!(!alarm_is_due(&a, 8, 30, 2, 6, 17, 30, "2026-06-17")); // Wed
+    }
+
+    // June 2026 Mondays: 1, 8, 15, 22, 29; Jul 6 is the next Monday (consecutive weeks).
+    #[test]
+    fn days_from_civil_and_monday_week_are_correct() {
+        assert_eq!(days_from_civil(1970, 1, 1), 0);
+        assert_eq!(days_from_civil(1970, 1, 5), 4); // a Monday -> monday_week 0
+        assert_eq!(monday_week(4), 0);
+        // Real Mondays satisfy (count - 4) % 7 == 0, including pre-1970 (negative) counts.
+        assert_eq!((days_from_civil(2026, 6, 15) - 4).rem_euclid(7), 0);
+        assert_eq!((days_from_civil(1969, 12, 29) - 4).rem_euclid(7), 0);
+        // Consecutive Mondays are consecutive week indices.
+        let w1 = monday_week(days_from_civil(2026, 6, 8));
+        let w2 = monday_week(days_from_civil(2026, 6, 15));
+        assert_eq!(w2, w1 + 1);
+        // Leap day: Feb spans 29 days in 2024 but 28 in 2023.
+        assert_eq!(days_from_civil(2024, 3, 1) - days_from_civil(2024, 2, 28), 2);
+        assert_eq!(days_from_civil(2023, 3, 1) - days_from_civil(2023, 2, 28), 1);
+    }
+
+    #[test]
+    fn biweekly_fires_on_week_and_skips_off_week() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0]; // Mon
+        a.date = Some("2026-06-08".into()); // start week = week of Mon Jun 8
+        // On-weeks: Jun 8, Jun 22, Jul 6 (every other Monday from the start).
+        assert!(alarm_is_due(&a, 8, 30, 0, 6, 8, 30, "2026-06-08"));
+        assert!(alarm_is_due(&a, 8, 30, 0, 6, 22, 30, "2026-06-22"));
+        assert!(alarm_is_due(&a, 8, 30, 0, 7, 6, 31, "2026-07-06"));
+        // Off-weeks: Jun 15, Jun 29.
+        assert!(!alarm_is_due(&a, 8, 30, 0, 6, 15, 30, "2026-06-15"));
+        assert!(!alarm_is_due(&a, 8, 30, 0, 6, 29, 30, "2026-06-29"));
+        // Wrong minute / non-ticked weekday still excluded.
+        assert!(!alarm_is_due(&a, 9, 30, 0, 6, 8, 30, "2026-06-08"));
+        assert!(!alarm_is_due(&a, 8, 30, 2, 6, 10, 30, "2026-06-10")); // Wed not ticked
+    }
+
+    #[test]
+    fn biweekly_supports_multiple_weekdays() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0, 2]; // Mon + Wed
+        a.date = Some("2026-06-08".into());
+        assert!(alarm_is_due(&a, 8, 30, 0, 6, 8, 30, "2026-06-08")); // Mon on-week
+        assert!(alarm_is_due(&a, 8, 30, 2, 6, 10, 30, "2026-06-10")); // Wed on-week
+        assert!(!alarm_is_due(&a, 8, 30, 2, 6, 17, 30, "2026-06-17")); // Wed off-week
+        assert!(alarm_is_due(&a, 8, 30, 0, 6, 22, 30, "2026-06-22")); // Mon next on-week
+    }
+
+    #[test]
+    fn biweekly_never_fires_before_start_date() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0]; // Mon
+        a.date = Some("2026-06-22".into());
+        // Jun 8 shares Jun 22's week-parity but precedes the start -> must NOT fire.
+        assert!(!alarm_is_due(&a, 8, 30, 0, 6, 8, 30, "2026-06-08"));
+        assert!(alarm_is_due(&a, 8, 30, 0, 6, 22, 30, "2026-06-22"));
+        assert!(alarm_is_due(&a, 8, 30, 0, 7, 6, 31, "2026-07-06"));
+    }
+
+    #[test]
+    fn biweekly_skips_ticked_day_before_anchor_in_first_week() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0]; // Mon
+        a.date = Some("2026-06-10".into()); // anchor is the Wed in the week of Mon Jun 8
+        // Mon Jun 8 is in the anchor's week but precedes the anchor date -> skipped.
+        assert!(!alarm_is_due(&a, 8, 30, 0, 6, 8, 30, "2026-06-08"));
+        // Next on-week Monday (Jun 22) fires; the off-week Monday (Jun 15) never does.
+        assert!(alarm_is_due(&a, 8, 30, 0, 6, 22, 30, "2026-06-22"));
+        assert!(!alarm_is_due(&a, 8, 30, 0, 6, 15, 30, "2026-06-15"));
+    }
+
+    #[test]
+    fn sanitize_disables_biweekly_without_date() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0];
+        let mut v = vec![a]; // date None
+        assert!(sanitize_alarms(&mut v));
+        assert!(!v[0].enabled);
+    }
+
+    #[test]
+    fn sanitize_disables_biweekly_with_no_days() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.date = Some("2026-06-08".into());
+        let mut v = vec![a]; // weekdays empty
+        assert!(sanitize_alarms(&mut v));
+        assert!(!v[0].enabled);
+    }
+
+    #[test]
+    fn sanitize_keeps_valid_biweekly_enabled() {
+        let mut a = alarm(RepeatDto::Biweekly, "08:30");
+        a.weekdays = vec![0];
+        a.date = Some("2026-06-08".into());
+        let mut v = vec![a];
+        sanitize_alarms(&mut v);
+        assert!(v[0].enabled);
     }
 
     #[test]

@@ -13,6 +13,10 @@ pub struct BreakInfo {
     pub duration_secs: u64,
     /// "friction" | "easy" | "no_easy_escape"
     pub escape_mode: String,
+    /// "countdown" | "progress_bar" — how the overlay renders the timer.
+    pub break_display: String,
+    /// Optional per-rule note shown read-only under the break name (empty = no note).
+    pub note: String,
 }
 
 /// Show the break: one fullscreen, always-on-top overlay per monitor.
@@ -67,7 +71,7 @@ fn build_one(
 ) {
     let label = format!("{OVERLAY_LABEL_PREFIX}{index}");
     let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("overlay.html".into()))
-        .title("restee")
+        .title("Restee")
         .decorations(false)
         .always_on_top(true)
         .visible_on_all_workspaces(true)

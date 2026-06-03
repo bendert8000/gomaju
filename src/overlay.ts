@@ -6,12 +6,15 @@ import { fmtMMSS, readInjected } from "./util";
 invoke("cmd_window_ready", { label: "overlay" }).catch(() => {});
 
 type Escape = "friction" | "easy" | "no_easy_escape";
+type BreakDisplay = "countdown" | "progress_bar";
 
 interface BreakInfo {
   kind: "soft" | "strict";
   name: string;
   duration_secs: number;
   escape_mode: Escape;
+  break_display: BreakDisplay;
+  note: string;
 }
 
 // Injected by the Rust side via an initialization script, so the overlay renders
@@ -21,6 +24,8 @@ const info = readInjected<BreakInfo>("__RESTEE_BREAK__", {
   name: "Break",
   duration_secs: 60,
   escape_mode: "easy",
+  break_display: "countdown",
+  note: "",
 });
 
 document.body.classList.add(info.kind === "strict" ? "overlay--strict" : "overlay--soft");
@@ -33,16 +38,44 @@ const skipLabel = document.getElementById("skip-label")!;
 const skipFill = document.getElementById("skip-fill") as HTMLElement;
 const emergencyLabel = document.getElementById("emergency-label")!;
 const emergencyFill = document.getElementById("emergency-fill") as HTMLElement;
+const progressEl = document.getElementById("break-progress") as HTMLElement;
+const progressFill = document.getElementById("break-progress-fill") as HTMLElement;
+const progressTextEl = document.getElementById("break-progress-text")!;
+const noteEl = document.getElementById("break-note")!;
 
 nameEl.textContent = info.name;
+// Optional per-rule note (read-only), shown under the name. Hidden when empty.
+if (info.note) {
+  noteEl.textContent = info.note;
+  noteEl.hidden = false;
+}
+
+// Display mode: the big countdown text (default) or a draining progress bar with the
+// countdown text inside it. Pick the element that shows the remaining time, and reveal the bar.
+const useBar = info.break_display === "progress_bar";
+const timeEl = useBar ? progressTextEl : timerEl;
+if (useBar) {
+  timerEl.hidden = true;
+  progressEl.hidden = false;
+}
+
+// Bar fill drains full -> empty as the break elapses (the inner text still counts down).
+const totalSecs = info.duration_secs || 1; // guard a degraded 0 fallback
+const setFill = (rem: number): void => {
+  if (useBar) {
+    progressFill.style.width = `${Math.min(100, Math.max(0, (rem / totalSecs) * 100))}%`;
+  }
+};
 
 // Local visual countdown. The engine is authoritative and closes the window at
 // the real end of the break.
 let remaining = info.duration_secs;
-timerEl.textContent = fmtMMSS(remaining);
+timeEl.textContent = fmtMMSS(remaining);
+setFill(remaining); // 100% — matches the CSS base so there's no startup animation
 const countdown = window.setInterval(() => {
   remaining = Math.max(0, remaining - 1);
-  timerEl.textContent = fmtMMSS(remaining);
+  timeEl.textContent = fmtMMSS(remaining);
+  setFill(remaining);
   if (remaining <= 0) window.clearInterval(countdown);
 }, 1000);
 
@@ -62,7 +95,6 @@ if (info.kind === "soft" || info.escape_mode === "easy") {
   skipBtn.hidden = false;
   skipLabel.textContent = t("overlay.skip");
   skipBtn.addEventListener("click", skip);
-  if (info.kind === "soft") hintEl.textContent = t("overlay.soft_hint");
 } else if (info.escape_mode === "friction") {
   skipBtn.hidden = false;
   skipLabel.textContent = t("overlay.hold_to_skip");

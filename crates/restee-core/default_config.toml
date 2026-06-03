@@ -1,0 +1,85 @@
+# Starter config a fresh install is seeded with (see config::ConfigFile::default, which
+# embeds this file via include_str!). Same format as the on-disk config.toml, so it can be
+# tuned without touching Rust. Keep it valid + sanitize-clean — tests enforce both.
+version = 1
+locale = "zh-Hant"
+autostart = false
+
+[settings]
+idle_policy = "pause"
+away_threshold_secs = 120
+gap_threshold_secs = 30
+escape_mode = "friction"
+warn_seconds = 30
+sound = true
+notifications = true
+break_display = "countdown"
+
+[hotkeys]
+
+[[rules]]
+id = "eye-rest"
+name = "眼睛休息喔!"
+interval_secs = 1800
+break_secs = 120
+enforcement = "soft"
+enabled = true
+repeat = true
+note = """
+- 視線離開螢幕，注視20呎（約6公尺）外景物20秒以上。（20-20-20法則）
+- 坐直，下巴微收，將頭部向兩側傾斜至微酸感，各15秒。
+- 雙肩向上聳起至耳際，停留3秒後瞬間放鬆下沉，x5次。"""
+
+[[rules]]
+id = "long-break"
+name = "坐久了起來動一動吧!"
+interval_secs = 3000
+break_secs = 600
+enforcement = "strict"
+enabled = true
+repeat = true
+note = """
+- 離開座位，步行3至5分鐘前往不同空間（如茶水間），轉換視覺對焦。
+- 飲用250至300毫升飲用水，促進代謝。
+- 站立單手扶牆，一腳向後勾起由同側手抓住腳踝，伸展大腿前側，各30秒。"""
+
+[[alarms]]
+id = "lunch"
+name = "Ready to eat lunch na"
+time = "11:30"
+repeat = "daily"
+weekdays = []
+day_of_month = 0
+month = 0
+enabled = true
+
+[[alarms]]
+id = "off-work"
+name = "Off work"
+time = "17:45"
+repeat = "weekly"
+weekdays = [0, 1, 2, 3, 4]
+day_of_month = 0
+month = 0
+enabled = true
+
+[[alarms]]
+id = "work-begins"
+name = "Work begins"
+time = "08:58"
+repeat = "weekly"
+weekdays = [0, 1, 2, 3, 4]
+day_of_month = 0
+month = 0
+enabled = true
+
+[[alarms]]
+id = "sat-work-begins"
+name = "Sat work begins"
+time = "08:58"
+repeat = "biweekly"
+weekdays = [5]
+day_of_month = 0
+month = 0
+date = "2026-01-01"
+enabled = true

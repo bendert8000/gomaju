@@ -52,9 +52,13 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 
 ## Alarms (clock alarms, separate from breaks)
 
-- Wall-clock alarms (name + time + recurrence Once/Daily/Weekly/Monthly/Yearly) live in
-  `config.toml` as `[[alarms]]`. They fire a notification + a distinct repeating tone
-  (`audio::play_alarm`) regardless of run state.
+- Wall-clock alarms (name + time + recurrence Once/Daily/Weekly/Bi-weekly/Monthly/Yearly)
+  live in `config.toml` as `[[alarms]]`. They fire a notification + a distinct repeating
+  tone (`audio::play_alarm`) regardless of run state.
+- **Bi-weekly** reuses Weekly's `weekdays` plus the `date` field as a start-week anchor:
+  fires the ticked days every *other* Monday-aligned week from that week, never before the
+  start date. Week-parity is pure integer math — `days_from_civil` + `monday_week` in
+  `alarm.rs` (chrono-free, unit-tested in isolation).
 - The engine stays clock-free: recurrence is a pure, tested matcher in
   `crates/restee-core/src/alarm.rs` (`alarm_is_due` + `sanitize_alarms`); the firing
   loop is `src-tauri/src/alarm.rs::spawn_scheduler` — a 1s thread **edge-triggered on the
@@ -68,7 +72,8 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 
 - Break rules live in **two** windows: **Settings** (`index.html` / `src/main.ts`, "Rules"
   card) is the full editor (shared `src/rule-editor.ts` grid). The **standalone Break-rules
-  window** (`rules.html` / `src/rules.ts`, label `rules`, tray "Break rules…") is a
+  window** (`rules.html` / `src/rules.ts`, label `rules`, tray "Breaks…"; window title is
+  still "Restee — Break rules") is a
   **quick-select dashboard**: big read-only cards where only On/Off (tap the card) and
   Repeat/Once (segmented control) are editable; each toggle auto-saves via
   `cmd_set_rule_flags` (merge-by-id, so it never clobbers Settings detail edits) and
@@ -91,10 +96,18 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 - Multi-window caveat: a true concurrent edit (both visible, save one then the other without
   refocusing) can still lose the earlier edit — acceptable for a single-user local app.
 
+## Config defaults
+
+The seed config a fresh install writes lives as editable TOML at
+`crates/restee-core/default_config.toml`, embedded via `include_str!` and parsed by
+`ConfigFile::default()` (tests assert it parses and is sanitize-clean). `config::load`
+generates `config.toml` from it on first run / corrupt-file recovery. Keep `CONFIG_VERSION`
+in sync with the file's `version`.
+
 ## Layout
 
 ```
-crates/restee-core/   # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps)
+crates/restee-core/   # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
 src/                  # frontend: settings (index.html/main.ts), rules.html, alarms.html, overlay.html, toast.html; shared rule-editor.ts
 src-tauri/            # Tauri app: tray, idle, overlays, hotkeys, autostart, audio, notifications, alarm scheduler, window modules
 ```

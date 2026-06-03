@@ -4,7 +4,7 @@
 //! locale (anything that isn't `"en"` falls back to Traditional Chinese, matching the
 //! config default). Strings that interpolate runtime values (`{name}`, `{dur}`) are stored
 //! as templates and the call site substitutes via [`str::replace`]. Window/notification
-//! brand text (`restee`) stays untranslated and is not in the catalog.
+//! brand text (`Restee`) stays untranslated and is not in the catalog.
 
 use tauri::{AppHandle, Manager};
 
@@ -30,28 +30,28 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
     match key {
         // Tray menu
         "tray.start" => pick(locale, "Start", "開始"),
+        "tray.resume" => pick(locale, "Resume", "繼續"),
         "tray.pause" => pick(locale, "Pause", "暫停"),
-        "tray.reset" => pick(locale, "Reset timer", "重設計時器"),
+        "tray.reset" => pick(locale, "Reset break timer", "重設休息計時器"),
         "tray.break_now" => pick(locale, "Break now", "立即休息"),
-        "tray.skip" => pick(locale, "Skip break", "略過休息"),
-        "tray.rules" => pick(locale, "Break rules…", "休息規則…"),
+        "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
         "tray.language" => pick(locale, "Language", "語言"),
-        "tray.quit" => pick(locale, "Quit restee", "結束 restee"),
-        "tray.tooltip" => pick(locale, "restee — break reminder", "restee — 休息提醒"),
-        // Tray status lines ({dur} = a human_dur string)
-        "tray.start_running" => pick(locale, "Running · {dur}", "執行中 · {dur}"),
+        "tray.quit" => pick(locale, "Quit Restee", "結束 Restee"),
+        "tray.tooltip" => pick(locale, "Restee — break reminder", "Restee — 休息提醒"),
+        // Tray status lines
+        "tray.start_running" => pick(locale, "Running", "執行中"),
         "tray.placeholder" => pick(locale, "Next break in …", "下次休息還有…"),
         "status.on_break" => pick(locale, "On a break now", "休息中"),
         "status.no_breaks" => pick(locale, "No breaks enabled", "未啟用任何休息"),
 
         // Reset dialogs
-        "dialog.reset_timer_title" => pick(locale, "Reset timer", "重設計時器"),
+        "dialog.reset_timer_title" => pick(locale, "Reset break timer", "重設休息計時器"),
         "dialog.reset_timer_msg" => pick(
             locale,
-            "Restart the countdown to your next break? The current timer will be cleared.",
-            "要重新開始到下次休息的倒數嗎？目前的計時將被清除。",
+            "Restart all break countdowns? Every break timer is cleared and starts again from its full interval.",
+            "要重新開始所有休息的倒數嗎？每個休息計時都會清除，並從完整間隔重新計算。",
         ),
         "dialog.reset_break_title" => pick(locale, "Reset break", "重設休息"),
         "dialog.reset_break_msg" => pick(
@@ -64,12 +64,12 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
 
         // Notifications ({name} = rule/alarm name)
         "notif.soft_break" => pick(locale, "{name} — time for a quick break", "{name} — 該休息一下了"),
-        "notif.startup" => pick(locale, "Restee is running now", "restee 已啟動"),
+        "notif.startup" => pick(locale, "Restee is running now", "Restee 已啟動"),
 
         // Native window titles
-        "title.settings" => pick(locale, "restee — Settings", "restee — 設定"),
-        "title.rules" => pick(locale, "restee — Break rules", "restee — 休息規則"),
-        "title.alarms" => pick(locale, "restee — Alarms", "restee — 鬧鐘"),
+        "title.settings" => pick(locale, "Restee — Settings", "Restee — 設定"),
+        "title.rules" => pick(locale, "Restee — Break rules", "Restee — 休息規則"),
+        "title.alarms" => pick(locale, "Restee — Alarms", "Restee — 鬧鐘"),
 
         _ => {
             // All keys should be in the catalog; surface a miss in dev rather than panic.

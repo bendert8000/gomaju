@@ -13,9 +13,9 @@ type Entry = { "zh-Hant": string; en: string };
 
 const MESSAGES: Record<string, Entry> = {
   // --- Document / window titles ---
-  "title.settings": { en: "restee — Settings", "zh-Hant": "restee — 設定" },
-  "title.rules": { en: "restee — Break rules", "zh-Hant": "restee — 休息規則" },
-  "title.alarms": { en: "restee — Alarms", "zh-Hant": "restee — 鬧鐘" },
+  "title.settings": { en: "Restee — Settings", "zh-Hant": "Restee — 設定" },
+  "title.rules": { en: "Restee — Break rules", "zh-Hant": "Restee — 休息規則" },
+  "title.alarms": { en: "Restee — Alarms", "zh-Hant": "Restee — 鬧鐘" },
 
   // --- Common ---
   "common.close": { en: "Close", "zh-Hant": "關閉" },
@@ -23,14 +23,19 @@ const MESSAGES: Record<string, Entry> = {
   "common.saved": { en: "Saved ✓", "zh-Hant": "已儲存 ✓" },
   "common.remove": { en: "Remove", "zh-Hant": "移除" },
 
+  // --- Unsaved-changes confirm modal (Settings + Alarms) ---
+  "confirm.unsaved_title": { en: "Save changes before closing?", "zh-Hant": "關閉前要儲存變更嗎？" },
+  "confirm.unsaved_msg": {
+    en: "Your changes will be lost if you don't save them.",
+    "zh-Hant": "若不儲存，您的變更將會遺失。",
+  },
+  "confirm.dont_save": { en: "Don't Save", "zh-Hant": "不儲存" },
+  "confirm.cancel": { en: "Cancel", "zh-Hant": "取消" },
+
   // --- Settings window ---
   "settings.idle_title": { en: "Idle detection backend", "zh-Hant": "閒置偵測後端" },
   "settings.idle_badge": { en: "idle: {status}", "zh-Hant": "閒置偵測：{status}" },
-  "settings.rules_heading": { en: "Rules", "zh-Hant": "規則" },
-  "settings.rules_desc": {
-    en: "Take a break after some active work. Soft = gentle, skippable. Strict = covers the screen.",
-    "zh-Hant": "在一段專注工作後休息。柔性＝溫和、可略過；強制＝覆蓋整個螢幕。",
-  },
+  "settings.rules_heading": { en: "Break rules", "zh-Hant": "休息規則" },
   "settings.col_name": { en: "Name", "zh-Hant": "名稱" },
   "settings.col_every": { en: "Every (min)", "zh-Hant": "間隔（分鐘）" },
   "settings.col_break": { en: "Break (sec)", "zh-Hant": "休息（秒）" },
@@ -38,7 +43,7 @@ const MESSAGES: Record<string, Entry> = {
   "settings.col_on": { en: "On", "zh-Hant": "啟用" },
   "settings.col_repeat": { en: "Repeat", "zh-Hant": "重複" },
   "settings.add_rule": { en: "+ Add rule", "zh-Hant": "＋ 新增規則" },
-  "settings.behavior_heading": { en: "Behavior", "zh-Hant": "行為" },
+  "settings.behavior_heading": { en: "Break behavior", "zh-Hant": "休息行為" },
   "settings.idle_label": { en: "When you go idle", "zh-Hant": "當你閒置時" },
   "settings.idle_pause": { en: "Pause counting", "zh-Hant": "暫停計時" },
   "settings.idle_credit": { en: "Count it as a break", "zh-Hant": "視為已休息" },
@@ -46,21 +51,24 @@ const MESSAGES: Record<string, Entry> = {
   "settings.escape_friction": { en: "Hold to skip", "zh-Hant": "按住以略過" },
   "settings.escape_easy": { en: "Easy skip button", "zh-Hant": "簡易略過按鈕" },
   "settings.escape_none": { en: "No easy escape", "zh-Hant": "無法輕易退出" },
+  "settings.break_display_label": { en: "Break screen display", "zh-Hant": "休息畫面顯示" },
+  "settings.break_display_countdown": { en: "Countdown text", "zh-Hant": "倒數文字" },
+  "settings.break_display_bar": { en: "Progress bar", "zh-Hant": "進度條" },
   "settings.warn_label": {
     en: "Warn before break (seconds, 0 = off)",
     "zh-Hant": "休息前提醒（秒，0 ＝ 關閉）",
   },
   "settings.idle_threshold_label": { en: "Idle threshold (seconds)", "zh-Hant": "閒置門檻（秒）" },
   "settings.sound_label": {
-    en: "Play a chime when a break starts",
-    "zh-Hant": "休息開始時播放提示音",
+    en: "Play a chime when a break starts or ends",
+    "zh-Hant": "休息開始或結束時播放提示音",
   },
   "settings.notif_label": {
     en: "Show a notification on soft breaks",
     "zh-Hant": "柔性休息時顯示通知",
   },
   "settings.autostart_label": { en: "Launch at login", "zh-Hant": "登入時啟動" },
-  "settings.hotkeys_heading": { en: "Global hotkeys", "zh-Hant": "全域快速鍵" },
+  "settings.hotkeys_heading": { en: "Break global hotkeys", "zh-Hant": "休息全域快速鍵" },
   "settings.hotkeys_optional": { en: "(optional)", "zh-Hant": "（選用）" },
   "settings.hotkeys_eg": { en: "e.g. ", "zh-Hant": "例如 " },
   "settings.hotkeys_unbind": {
@@ -79,10 +87,6 @@ const MESSAGES: Record<string, Entry> = {
 
   // --- Today's breaks (rules) window + cards ---
   "rules.heading": { en: "Today's breaks", "zh-Hant": "今日休息" },
-  "rules.intro": {
-    en: "Tap a card to switch a break on or off for today. To change names or timings, edit the details in Settings.",
-    "zh-Hant": "點一下卡片即可開啟或關閉今天的休息。若要修改名稱或時間，請在設定中編輯。",
-  },
   "rules.edit_in_settings": { en: "Edit in Settings…", "zh-Hant": "在設定中編輯…" },
   "rules.empty": {
     en: "No break rules yet — add some in Settings.",
@@ -92,8 +96,11 @@ const MESSAGES: Record<string, Entry> = {
   "card.on": { en: "ON", "zh-Hant": "開" },
   "card.off": { en: "OFF", "zh-Hant": "關" },
   "card.reset": { en: "Reset", "zh-Hant": "重設" },
-  "card.repeat": { en: "⟳ Repeat", "zh-Hant": "⟳ 重複" },
-  "card.once": { en: "1× Once", "zh-Hant": "1× 一次" },
+  "card.repeat": { en: "Repeat", "zh-Hant": "重複" },
+  "card.repeat_title": {
+    en: "Repeats on its schedule — turn off to fire once, then auto-disable",
+    "zh-Hant": "依排程重複 — 關閉則只執行一次後自動停用",
+  },
   "card.soft": { en: "Soft", "zh-Hant": "柔性" },
   "card.strict": { en: "Strict", "zh-Hant": "強制" },
   "card.every": { en: "every {n} min", "zh-Hant": "每 {n} 分鐘" },
@@ -101,23 +108,13 @@ const MESSAGES: Record<string, Entry> = {
   "card.break_sec": { en: "{n}s break", "zh-Hant": "休息 {n} 秒" },
   "card.next_in": { en: "next in {mmss}", "zh-Hant": "{mmss} 後" },
 
-  // --- Status banner (shared by Settings + Today's breaks) ---
-  "status.on_break": { en: "On a break now", "zh-Hant": "休息中" },
-  "status.no_rules": { en: "No enabled rules", "zh-Hant": "未啟用任何規則" },
-  "status.paused": { en: "Paused", "zh-Hant": "已暫停" },
-  "status.paused_no_rules": {
-    en: "Paused — no enabled rules",
-    "zh-Hant": "已暫停 — 未啟用任何規則",
-  },
-  "status.restart_title": { en: "Restart {name}", "zh-Hant": "重新開始 {name}" },
-
   // --- Alarms window ---
-  "alarms.heading": { en: "restee — Alarms", "zh-Hant": "restee — 鬧鐘" },
+  "alarms.heading": { en: "Restee — Alarms", "zh-Hant": "Restee — 鬧鐘" },
   "alarms.section_heading": { en: "Alarms", "zh-Hant": "鬧鐘" },
   "alarms.desc": {
-    en: "A notification and sound at a set clock time. Alarms fire even while the break timer is paused or a break is on screen. An alarm only fires if restee is running at that minute — there's no catch-up for times missed while it was closed.",
+    en: "A notification and sound at a set clock time. Alarms fire even while the break timer is paused or a break is on screen. An alarm only fires if Restee is running at that minute — there's no catch-up for times missed while it was closed.",
     "zh-Hant":
-      "在設定的時刻發出通知與聲音。即使休息計時已暫停或正在休息，鬧鐘仍會響起。鬧鐘僅在該分鐘 restee 正在執行時才會響 — 關閉期間錯過的時間不會補響。",
+      "在設定的時刻發出通知與聲音。即使休息計時已暫停或正在休息，鬧鐘仍會響起。鬧鐘僅在該分鐘 Restee 正在執行時才會響 — 關閉期間錯過的時間不會補響。",
   },
   "alarms.add": { en: "+ Add alarm", "zh-Hant": "＋ 新增鬧鐘" },
   "alarms.name_ph": { en: "Alarm name", "zh-Hant": "鬧鐘名稱" },
@@ -125,10 +122,12 @@ const MESSAGES: Record<string, Entry> = {
   "alarms.repeat_once": { en: "Once", "zh-Hant": "一次" },
   "alarms.repeat_daily": { en: "Daily", "zh-Hant": "每日" },
   "alarms.repeat_weekly": { en: "Weekly", "zh-Hant": "每週" },
+  "alarms.repeat_biweekly": { en: "Bi-weekly", "zh-Hant": "每兩週" },
   "alarms.repeat_monthly": { en: "Monthly", "zh-Hant": "每月" },
   "alarms.repeat_yearly": { en: "Yearly", "zh-Hant": "每年" },
   "alarms.day": { en: "Day", "zh-Hant": "日" },
-  "alarms.next": { en: "Next: {when}", "zh-Hant": "下次：{when}" },
+  "alarms.start": { en: "Starts", "zh-Hant": "開始" },
+  "alarms.in": { en: "in {dur}", "zh-Hant": "{dur} 後" },
   "alarms.default_name": { en: "Alarm", "zh-Hant": "鬧鐘" },
   "alarms.new_name": { en: "New alarm", "zh-Hant": "新鬧鐘" },
 
@@ -144,6 +143,10 @@ const MESSAGES: Record<string, Entry> = {
   // --- Rule editor (Settings rules grid) ---
   "editor.new_break": { en: "New break", "zh-Hant": "新休息" },
   "editor.fallback_break": { en: "Break", "zh-Hant": "休息" },
+  "editor.note_placeholder": {
+    en: "Optional note shown on the break screen",
+    "zh-Hant": "選填：顯示在休息畫面的備註",
+  },
   "editor.repeat_title": {
     en: "Repeat after each break — uncheck for a one-time break",
     "zh-Hant": "每次休息後重複 — 取消勾選則只休息一次",
@@ -155,10 +158,6 @@ const MESSAGES: Record<string, Entry> = {
   "overlay.emergency": {
     en: "Hold Esc to exit in an emergency",
     "zh-Hant": "緊急情況請按住 Esc 退出",
-  },
-  "overlay.soft_hint": {
-    en: "Look ~20 feet away and relax your eyes.",
-    "zh-Hant": "看向約 6 公尺外，放鬆雙眼。",
   },
   "overlay.hold_to_skip": { en: "Hold to skip", "zh-Hant": "按住以略過" },
   "overlay.keep_holding": { en: "Keep holding…", "zh-Hant": "繼續按住…" },

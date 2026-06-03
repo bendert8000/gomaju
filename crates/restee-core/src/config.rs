@@ -46,6 +46,25 @@ pub enum EscapeModeDto {
     NoEasyEscape,
 }
 
+/// How the break overlay shows the countdown: large text or a horizontal progress bar.
+/// Purely presentational — the engine never sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BreakDisplayDto {
+    Countdown,
+    ProgressBar,
+}
+
+impl BreakDisplayDto {
+    /// Stable string form passed to the overlay UI (matches the serde rename).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            BreakDisplayDto::Countdown => "countdown",
+            BreakDisplayDto::ProgressBar => "progress_bar",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuleDto {
     pub id: String,
@@ -59,6 +78,10 @@ pub struct RuleDto {
     /// this field existed keep their old behavior; `false` = a one-time break.
     #[serde(default = "default_true")]
     pub repeat: bool,
+    /// Optional note shown (read-only) under the break name on the overlay. Edited in
+    /// Settings. Omitted from the file when empty so older configs stay clean.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,10 +99,18 @@ pub struct SettingsDto {
     /// Show an OS notification when a soft break starts.
     #[serde(default = "default_true")]
     pub notifications: bool,
+    /// How the break overlay shows the countdown (text vs. progress bar). Defaults to the
+    /// text countdown so configs written before this field keep their original behavior.
+    #[serde(default = "default_break_display")]
+    pub break_display: BreakDisplayDto,
 }
 
 fn default_warn_seconds() -> u64 {
     30
+}
+
+fn default_break_display() -> BreakDisplayDto {
+    BreakDisplayDto::Countdown
 }
 
 /// Optional global-hotkey accelerators (e.g. "CommandOrControl+Alt+B"). `None`
@@ -137,40 +168,20 @@ impl Default for SettingsDto {
             warn_seconds: 30,
             sound: true,
             notifications: true,
+            break_display: BreakDisplayDto::Countdown,
         }
     }
 }
 
+/// The starter config a fresh install is seeded with, kept as editable TOML (the same
+/// format as the on-disk file) so the default breaks/alarms can be tuned without touching
+/// code. Embedded at compile time via `include_str!`, so the binary stays self-contained.
+pub const DEFAULT_CONFIG_TOML: &str = include_str!("../default_config.toml");
+
 impl Default for ConfigFile {
     fn default() -> Self {
-        Self {
-            version: CONFIG_VERSION,
-            locale: default_locale(),
-            autostart: false,
-            settings: SettingsDto::default(),
-            hotkeys: HotkeysDto::default(),
-            rules: vec![
-                RuleDto {
-                    id: "eye-rest".into(),
-                    name: "Eye rest".into(),
-                    interval_secs: 30 * 60,
-                    break_secs: 60,
-                    enforcement: EnforcementDto::Soft,
-                    enabled: true,
-                    repeat: true,
-                },
-                RuleDto {
-                    id: "long-break".into(),
-                    name: "Long break".into(),
-                    interval_secs: 45 * 60,
-                    break_secs: 10 * 60,
-                    enforcement: EnforcementDto::Strict,
-                    enabled: true,
-                    repeat: true,
-                },
-            ],
-            alarms: vec![],
-        }
+        toml::from_str(DEFAULT_CONFIG_TOML)
+            .expect("embedded default_config.toml must parse into ConfigFile")
     }
 }
 
@@ -381,6 +392,22 @@ mod tests {
     }
 
     #[test]
+    fn embedded_default_config_parses_and_is_clean() {
+        // Panics here if `default_config.toml` is malformed for ConfigFile.
+        let mut cfg = ConfigFile::default();
+        assert_eq!(cfg.rules.len(), 2);
+        assert_eq!(cfg.alarms.len(), 4);
+        // The shipped default must already be valid — sanitize should change nothing.
+        assert!(!cfg.sanitize());
+    }
+
+    #[test]
+    fn default_settings_match_settingsdto_default() {
+        // Guard against the embedded TOML's [settings] drifting from SettingsDto::default().
+        assert_eq!(ConfigFile::default().settings, SettingsDto::default());
+    }
+
+    #[test]
     fn round_trips_through_toml() {
         let cfg = ConfigFile::default();
         let text = toml::to_string_pretty(&cfg).unwrap();
@@ -400,6 +427,40 @@ mod tests {
         cfg.locale = "en".into();
         let parsed: ConfigFile = toml::from_str(&toml::to_string_pretty(&cfg).unwrap()).unwrap();
         assert_eq!(parsed.locale, "en");
+    }
+
+    #[test]
+    fn break_display_defaults_and_round_trips() {
+        // Default is the text countdown (so older configs/behaviour are unchanged).
+        assert_eq!(SettingsDto::default().break_display, BreakDisplayDto::Countdown);
+        // A config TOML without `break_display` (older file) deserializes to the default.
+        let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
+        let parsed: ConfigFile = toml::from_str(older).unwrap();
+        assert_eq!(parsed.settings.break_display, BreakDisplayDto::Countdown);
+        // ProgressBar round-trips through TOML and serializes with the snake_case rename.
+        let mut cfg = ConfigFile::default();
+        cfg.settings.break_display = BreakDisplayDto::ProgressBar;
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        assert!(text.contains("break_display = \"progress_bar\""));
+        let parsed: ConfigFile = toml::from_str(&text).unwrap();
+        assert_eq!(parsed.settings.break_display, BreakDisplayDto::ProgressBar);
+    }
+
+    #[test]
+    fn rule_note_round_trips_and_omits_when_empty() {
+        let mut cfg = ConfigFile::default();
+        // The default rules now ship with notes; clear them to test the empty-omission path.
+        for r in &mut cfg.rules {
+            r.note = String::new();
+        }
+        // Empty notes are omitted from the serialized TOML.
+        assert!(!toml::to_string_pretty(&cfg).unwrap().contains("note ="));
+        // A set note round-trips.
+        cfg.rules[0].note = "Look 20ft away".into();
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        assert!(text.contains("note = \"Look 20ft away\""));
+        let parsed: ConfigFile = toml::from_str(&text).unwrap();
+        assert_eq!(parsed.rules[0].note, "Look 20ft away");
     }
 
     #[test]

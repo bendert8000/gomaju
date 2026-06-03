@@ -4,30 +4,25 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>restee — Settings</title>
+    <title>Restee — Settings</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body class="settings-page">
     <header class="settings-header">
-      <h1>restee</h1>
+      <h1 data-i18n="title.settings">Restee — Settings</h1>
       <span id="idle-status" class="badge" data-i18n-title="settings.idle_title"></span>
     </header>
 
     <main class="settings-main">
-      <div class="status-banner" id="status-banner">
-        <span id="status-text">…</span>
-      </div>
-
       <section class="card">
-        <h2 data-i18n="settings.rules_heading">Rules</h2>
-        <p class="muted" data-i18n="settings.rules_desc">Take a break after some active work. Soft = gentle, skippable. Strict = covers the screen.</p>
+        <h2 data-i18n="settings.rules_heading">Break rules</h2>
         <div class="rules-head">
           <span data-i18n="settings.col_name">Name</span>
           <span data-i18n="settings.col_every">Every (min)</span>
           <span data-i18n="settings.col_break">Break (sec)</span>
           <span data-i18n="settings.col_type">Type</span>
-          <span data-i18n="settings.col_on">On</span>
-          <span data-i18n="settings.col_repeat">Repeat</span>
+          <span class="col-center" data-i18n="settings.col_on">On</span>
+          <span class="col-center" data-i18n="settings.col_repeat">Repeat</span>
           <span></span>
         </div>
         <div id="rules"></div>
@@ -35,7 +30,7 @@
       </section>
 
       <section class="card">
-        <h2 data-i18n="settings.behavior_heading">Behavior</h2>
+        <h2 data-i18n="settings.behavior_heading">Break behavior</h2>
         <label class="field">
           <span data-i18n="settings.idle_label">When you go idle</span>
           <select id="idle-policy">
@@ -52,6 +47,13 @@
           </select>
         </label>
         <label class="field">
+          <span data-i18n="settings.break_display_label">Break screen display</span>
+          <select id="break-display">
+            <option value="countdown" data-i18n="settings.break_display_countdown">Countdown text</option>
+            <option value="progress_bar" data-i18n="settings.break_display_bar">Progress bar</option>
+          </select>
+        </label>
+        <label class="field">
           <span data-i18n="settings.warn_label">Warn before break (seconds, 0 = off)</span>
           <input id="warn-seconds" type="number" min="0" />
         </label>
@@ -61,7 +63,7 @@
         </label>
         <label class="field field--checkbox">
           <input id="sound" type="checkbox" />
-          <span data-i18n="settings.sound_label">Play a chime when a break starts</span>
+          <span data-i18n="settings.sound_label">Play a chime when a break starts or ends</span>
         </label>
         <label class="field field--checkbox">
           <input id="notifications" type="checkbox" />
@@ -74,7 +76,7 @@
       </section>
 
       <section class="card">
-        <h2><span data-i18n="settings.hotkeys_heading">Global hotkeys</span> <span class="muted" data-i18n="settings.hotkeys_optional">(optional)</span></h2>
+        <h2><span data-i18n="settings.hotkeys_heading">Break global hotkeys</span> <span class="muted" data-i18n="settings.hotkeys_optional">(optional)</span></h2>
         <p class="muted"><span data-i18n="settings.hotkeys_eg">e.g. </span><code>CommandOrControl+Alt+B</code><span data-i18n="settings.hotkeys_unbind">. Leave blank to unbind.</span></p>
         <label class="field"><span data-i18n="settings.hk_toggle">Start / pause</span><input id="hk-toggle" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>
         <label class="field"><span data-i18n="settings.hk_break">Break now</span><input id="hk-break" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>

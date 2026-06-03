@@ -73,6 +73,27 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 escape_mode,
             } => {
                 toast::close(app); // the countdown is over; replace it with the break
+
+                // Read presentation settings from the cached config before building the
+                // overlay (the display mode is purely presentational — the engine never sees it).
+                let (sound, notify, locale, break_display, note) = {
+                    let state = app.state::<AppState>();
+                    let cfg = state.config.lock().unwrap();
+                    let note = cfg
+                        .rules
+                        .iter()
+                        .find(|r| r.id == *rule_id)
+                        .map(|r| r.note.clone())
+                        .unwrap_or_default();
+                    (
+                        cfg.settings.sound,
+                        cfg.settings.notifications,
+                        cfg.locale.clone(),
+                        cfg.settings.break_display.as_str().to_string(),
+                        note,
+                    )
+                };
+
                 overlay::show_break(
                     app,
                     BreakInfo {
@@ -80,19 +101,12 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                         name: name.clone(),
                         duration_secs: duration.as_secs(),
                         escape_mode: escape_mode.as_str().into(),
+                        break_display,
+                        note,
                     },
                 );
                 let _ = app.emit("break-start", rule_id.clone());
 
-                let (sound, notify, locale) = {
-                    let state = app.state::<AppState>();
-                    let cfg = state.config.lock().unwrap();
-                    (
-                        cfg.settings.sound,
-                        cfg.settings.notifications,
-                        cfg.locale.clone(),
-                    )
-                };
                 if sound {
                     crate::audio::play_chime();
                 }
@@ -115,9 +129,21 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                     },
                 );
             }
-            Effect::EndBreak { .. } => {
+            Effect::EndBreak { completed, .. } => {
                 overlay::close_all(app);
                 let _ = app.emit("break-end", ());
+                // A short cue when a break runs its full course (not on a manual skip), if the
+                // user enabled break sounds — signals "you're done, back to work".
+                if *completed {
+                    let sound = {
+                        let state = app.state::<AppState>();
+                        let cfg = state.config.lock().unwrap();
+                        cfg.settings.sound
+                    };
+                    if sound {
+                        crate::audio::play_break_over();
+                    }
+                }
             }
             Effect::StateChanged(state) => {
                 let _ = app.emit("state-changed", state.as_str());
@@ -303,14 +329,41 @@ pub fn refresh_tray(app: &AppHandle, state: RunState) {
         .into_iter()
         .map(|n| (n.rule_name, n.remaining_secs))
         .collect();
-    crate::tray::refresh(app, state, running_secs, breaks);
+    crate::tray::refresh(app, state, running_secs, breaks, todays_upcoming_alarms(&st));
+}
+
+/// Enabled alarms whose next fire is still ahead **today**, as `(name, "HH:MM")` soonest
+/// first. Reuses the tested `alarm::next_fire` and keeps only fires landing on today's date.
+fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String)> {
+    use chrono::{Local, Timelike};
+    let now = Local::now();
+    let today = now.date_naive();
+    let mut list: Vec<(u32, String, String)> = st
+        .config
+        .lock()
+        .unwrap()
+        .alarms
+        .iter()
+        .filter_map(|a| {
+            let when = crate::alarm::next_fire(a, now)?;
+            (when.date_naive() == today).then(|| {
+                (
+                    when.hour() * 60 + when.minute(),
+                    a.name.clone(),
+                    when.format("%H:%M").to_string(),
+                )
+            })
+        })
+        .collect();
+    list.sort_by_key(|(mins, _, _)| *mins);
+    list.into_iter().map(|(_, name, time)| (name, time)).collect()
 }
 
 /// Show an OS notification titled "restee" with `body`. Best-effort: on Windows the
 /// toast renders reliably only once the app is installed (has an app identity).
 pub fn show_notification(app: &AppHandle, body: &str) {
     use tauri_plugin_notification::NotificationExt;
-    match app.notification().builder().title("restee").body(body).show() {
+    match app.notification().builder().title("Restee").body(body).show() {
         Ok(_) => eprintln!("restee: notification shown ({body})"),
         Err(e) => eprintln!("restee: notification failed ({e})"),
     }
