@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, t } from "./i18n";
 import { renderStatusBanner, type StatusDto } from "./status";
 import { collectRules, defaultRule, renderRules, ruleRow, type RuleDto } from "./rule-editor";
+import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 
 // --- Types mirroring the Rust config DTOs ---
 
@@ -54,6 +55,8 @@ function readNonNegative(id: string, fallback: number): number {
 }
 
 let current: ConfigFile;
+// Assigned in init() once the form is first rendered; referenced only afterwards.
+let guard!: UnsavedGuard;
 
 // --- Form <-> config ---
 
@@ -113,7 +116,16 @@ async function refreshRulesFromDisk(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+// On focus, pick up rules edited in the standalone Break-rules window — but ONLY when this form
+// has no unsaved edits, so the refresh never silently discards in-progress work. After a clean
+// refresh, re-baseline so the freshly-pulled disk state doesn't read as a pending change.
+async function onFocusRefresh(): Promise<void> {
+  if (guard.isDirty()) return;
+  await refreshRulesFromDisk();
+  guard.markSaved();
+}
+
+async function save(): Promise<boolean> {
   const msg = $("save-msg");
   try {
     const outcome = await invoke<SaveOutcome>("cmd_save_config", { config: collectConfig() });
@@ -128,9 +140,12 @@ async function save(): Promise<void> {
       msg.textContent = t("common.saved");
       msg.className = "ok";
     }
+    guard.markSaved(); // config persisted (even with hotkey warnings) -> no longer dirty
+    return true;
   } catch (err) {
     msg.textContent = t("settings.save_fail", { err: String(err) });
     msg.className = "warn";
+    return false;
   }
 }
 
@@ -155,6 +170,13 @@ async function init(): Promise<void> {
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
   current = await invoke<ConfigFile>("cmd_get_config");
   render(current);
+  // Guard against closing with unsaved edits (Close button + OS window X). Installed after the
+  // first render so the dirty baseline matches the loaded config.
+  guard = installUnsavedGuard({
+    collect: collectConfig,
+    save,
+    close: () => void invoke("cmd_close_settings"),
+  });
 
   try {
     const status = await invoke<string>("cmd_get_idle_status");
@@ -174,10 +196,10 @@ async function init(): Promise<void> {
   });
   // Keep the rules grid in sync with edits made in the standalone Break-rules window.
   window.addEventListener("focus", () => {
-    refreshRulesFromDisk();
+    void onFocusRefresh();
   });
-  $("save-btn").addEventListener("click", save);
-  $("close-btn").addEventListener("click", () => invoke("cmd_close_settings"));
+  $("save-btn").addEventListener("click", () => void save());
+  $("close-btn").addEventListener("click", () => void guard.requestClose());
 }
 
 window.addEventListener("DOMContentLoaded", () => {

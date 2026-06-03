@@ -710,3 +710,38 @@ input[type="checkbox"] {
   border-color: var(--accent);
   background: radial-gradient(circle, var(--accent) 0 42%, transparent 46%);
 }
+
+/* --- Unsaved-changes confirm modal (Settings + Alarms) --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 10, 0.55);
+}
+.modal {
+  width: min(380px, calc(100vw - 3rem));
+  background: #161b24;
+  color: #eef2f7;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 1rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  animation: restee-fade-in 140ms ease;
+}
+.modal__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+.modal__msg {
+  margin: 0 0 1.25rem;
+  color: #c2cad6;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

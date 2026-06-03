@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, LOCALE, t } from "./i18n";
+import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+
+// Assigned in init() once the alarms are first rendered; referenced only afterwards.
+let guard!: UnsavedGuard;
 
 // --- Types mirroring restee_core::alarm DTOs ---
 
@@ -168,7 +172,7 @@ async function refreshFires(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+async function save(): Promise<boolean> {
   const msg = $("save-msg");
   try {
     // Backend sanitizes (disables empty-weekly / dateless-once alarms, dedups ids, …)
@@ -178,9 +182,12 @@ async function save(): Promise<void> {
     await refreshFires();
     msg.textContent = t("common.saved");
     msg.className = "ok";
+    guard.markSaved(); // persisted (normalized) -> no longer dirty
+    return true;
   } catch (err) {
     msg.textContent = t("settings.save_fail", { err: String(err) });
     msg.className = "warn";
+    return false;
   }
 }
 
@@ -190,6 +197,13 @@ async function init(): Promise<void> {
   invoke("cmd_window_ready", { label: "alarms" }).catch(() => {});
   renderAlarms(await invoke<AlarmDto[]>("cmd_get_alarms"));
   await refreshFires();
+  // Guard against closing with unsaved edits (Close button + OS window X). Installed after the
+  // first render so the dirty baseline matches the loaded alarms.
+  guard = installUnsavedGuard({
+    collect: collectAlarms,
+    save,
+    close: () => void invoke("cmd_close_alarms"),
+  });
   // Keep the labels current (e.g. a once-alarm that fired + auto-disabled) without
   // re-rendering rows, which would discard any in-progress edits.
   window.addEventListener("focus", () => {
@@ -211,8 +225,8 @@ async function init(): Promise<void> {
       }),
     );
   });
-  $("save-btn").addEventListener("click", save);
-  $("close-btn").addEventListener("click", () => invoke("cmd_close_alarms"));
+  $("save-btn").addEventListener("click", () => void save());
+  $("close-btn").addEventListener("click", () => void guard.requestClose());
 }
 
 window.addEventListener("DOMContentLoaded", () => {

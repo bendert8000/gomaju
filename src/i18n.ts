@@ -23,6 +23,15 @@ const MESSAGES: Record<string, Entry> = {
   "common.saved": { en: "Saved ✓", "zh-Hant": "已儲存 ✓" },
   "common.remove": { en: "Remove", "zh-Hant": "移除" },
 
+  // --- Unsaved-changes confirm modal (Settings + Alarms) ---
+  "confirm.unsaved_title": { en: "Save changes before closing?", "zh-Hant": "關閉前要儲存變更嗎？" },
+  "confirm.unsaved_msg": {
+    en: "Your changes will be lost if you don't save them.",
+    "zh-Hant": "若不儲存，您的變更將會遺失。",
+  },
+  "confirm.dont_save": { en: "Don't Save", "zh-Hant": "不儲存" },
+  "confirm.cancel": { en: "Cancel", "zh-Hant": "取消" },
+
   // --- Settings window ---
   "settings.idle_title": { en: "Idle detection backend", "zh-Hant": "閒置偵測後端" },
   "settings.idle_badge": { en: "idle: {status}", "zh-Hant": "閒置偵測：{status}" },
