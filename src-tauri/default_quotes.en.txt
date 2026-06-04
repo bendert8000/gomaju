@@ -1,0 +1,13 @@
+# Quotes shown on the break screen — edit this file freely (one quote per line).
+# Blank lines and lines starting with '#' are ignored. Seeded once on first run;
+# Restee never overwrites it, and re-reads it on every break.
+Rest is not idleness, and to lie sometimes on the grass is by no means a waste of time.
+Almost everything will work again if you unplug it for a few minutes — including you.
+Take care of your body. It's the only place you have to live.
+Your eyes deserve a horizon now and then.
+The time to relax is when you don't have time for it.
+Breathe. The rest can wait a moment.
+A short pause now saves a long ache later.
+Stand up, stretch, and let your mind wander.
+Sometimes the most productive thing you can do is rest.
+Look up. Look far. Let your eyes loosen.

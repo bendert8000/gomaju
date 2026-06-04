@@ -14,6 +14,7 @@ warn_seconds = 30
 sound = true
 notifications = true
 break_display = "countdown"
+show_quotes = true
 
 [hotkeys]
 

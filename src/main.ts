@@ -1,7 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
-import { applyI18n, t } from "./i18n";
-import { collectRules, defaultRule, renderRules, ruleRow, type RuleDto } from "./rule-editor";
+import { applyI18n, LOCALE, t } from "./i18n";
+import {
+  collectRules,
+  defaultRule,
+  renderRules,
+  ruleRow,
+  type ChimeOption,
+  type RuleDto,
+} from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+import { collectQuotes, quoteRow, renderQuotes } from "./quotes-editor";
+import { confirmQuotesConflict } from "./confirm-save";
 
 // --- Types mirroring the Rust config DTOs ---
 
@@ -18,6 +27,7 @@ interface SettingsDto {
   sound: boolean;
   notifications: boolean;
   break_display: BreakDisplay;
+  show_quotes: boolean;
 }
 
 interface HotkeysDto {
@@ -58,17 +68,81 @@ function readNonNegative(id: string, fallback: number): number {
 let current: ConfigFile;
 // Assigned in init() once the form is first rendered; referenced only afterwards.
 let guard!: UnsavedGuard;
+// Saved chimes (from chimes.toml, separate from config), for the per-rule chime pickers.
+// Refreshed on load + on focus so chimes created in the Chimes window show up here.
+let chimes: ChimeOption[] = [];
+// Break quotes are per-locale (`quotes.<locale>.txt`, separate from config.toml). The editor shows
+// one locale's rows at a time (`activeQuoteLocale`); the other locales' edits live in
+// `quotesByLocale`. `quotesBaselineByLocale` is each set as last synced from disk (after load, a
+// clean focus-refresh, or a successful save) — `saveQuotes()` compares disk against it per locale
+// to catch an external edit before overwriting.
+const QUOTE_LOCALES = ["en", "zh-Hant"] as const;
+type QuoteLocale = (typeof QUOTE_LOCALES)[number];
+const emptySets = (): Record<QuoteLocale, string[]> => ({ en: [], "zh-Hant": [] });
+let quotesByLocale: Record<QuoteLocale, string[]> = emptySets();
+let quotesBaselineByLocale: Record<QuoteLocale, string[]> = emptySets();
+let activeQuoteLocale: QuoteLocale = LOCALE === "en" ? "en" : "zh-Hant";
+
+async function loadChimes(): Promise<void> {
+  try {
+    chimes = await invoke<ChimeOption[]>("cmd_get_chimes");
+  } catch {
+    chimes = []; // non-fatal: the picker just shows "Default"
+  }
+}
+
+// Pull every locale's quotes from disk into the per-locale map + baseline (does not touch the DOM).
+async function loadAllQuotes(): Promise<void> {
+  for (const loc of QUOTE_LOCALES) {
+    let list: string[];
+    try {
+      list = await invoke<string[]>("cmd_get_quotes", { locale: loc });
+    } catch {
+      list = []; // non-fatal: that locale just shows no rows
+    }
+    quotesByLocale[loc] = list;
+    quotesBaselineByLocale[loc] = list;
+  }
+}
+
+// The full per-locale quote state for dirty-tracking: the stored map, but with the visible locale
+// taken live from the DOM (its rows are the source of truth while it's shown).
+function quotesSnapshot(): Record<QuoteLocale, string[]> {
+  const snap = emptySets();
+  for (const loc of QUOTE_LOCALES) {
+    snap[loc] = loc === activeQuoteLocale ? collectQuotes($("quotes")) : quotesByLocale[loc];
+  }
+  return snap;
+}
+
+// Highlight the active locale button in the toggle.
+function updateLocaleToggleUI(): void {
+  document.querySelectorAll<HTMLElement>(".quote-locale-btn").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.locale === activeQuoteLocale);
+  });
+}
+
+// Switch which locale's rows are shown: capture the current rows back into the map first, so edits
+// to the locale being left are not lost.
+function switchQuoteLocale(loc: QuoteLocale): void {
+  if (loc === activeQuoteLocale) return;
+  quotesByLocale[activeQuoteLocale] = collectQuotes($("quotes"));
+  activeQuoteLocale = loc;
+  renderQuotes($("quotes"), quotesByLocale[loc]);
+  updateLocaleToggleUI();
+}
 
 // --- Form <-> config ---
 
 function render(cfg: ConfigFile): void {
-  renderRules($("rules"), cfg.rules);
+  renderRules($("rules"), cfg.rules, chimes);
   sel("idle-policy").value = cfg.settings.idle_policy;
   sel("escape-mode").value = cfg.settings.escape_mode;
   sel("break-display").value = cfg.settings.break_display;
   inp("warn-seconds").value = String(cfg.settings.warn_seconds);
   inp("away-threshold").value = String(cfg.settings.away_threshold_secs);
   inp("sound").checked = cfg.settings.sound;
+  inp("show-quotes").checked = cfg.settings.show_quotes;
   inp("notifications").checked = cfg.settings.notifications;
   inp("autostart").checked = cfg.autostart;
   inp("hk-toggle").value = cfg.hotkeys.toggle ?? "";
@@ -94,6 +168,7 @@ function collectConfig(): ConfigFile {
       away_threshold_secs:
         Number(inp("away-threshold").value) || current.settings.away_threshold_secs,
       sound: inp("sound").checked,
+      show_quotes: inp("show-quotes").checked,
       notifications: inp("notifications").checked,
     },
     hotkeys: {
@@ -113,7 +188,8 @@ async function refreshRulesFromDisk(): Promise<void> {
   try {
     const fresh = await invoke<ConfigFile>("cmd_get_config");
     current = fresh;
-    renderRules($("rules"), fresh.rules);
+    await loadChimes();
+    renderRules($("rules"), fresh.rules, chimes);
   } catch {
     /* non-fatal */
   }
@@ -125,12 +201,58 @@ async function refreshRulesFromDisk(): Promise<void> {
 async function onFocusRefresh(): Promise<void> {
   if (guard.isDirty()) return;
   await refreshRulesFromDisk();
+  // Also re-sync every locale's quotes from disk, so an external `quotes.<locale>.txt` edit made
+  // while this (clean) window was backgrounded is shown and re-baselined — otherwise markSaved()
+  // below would lock in the stale quote rows and a later save would silently overwrite that edit.
+  await loadAllQuotes();
+  renderQuotes($("quotes"), quotesByLocale[activeQuoteLocale]);
   guard.markSaved();
+}
+
+// Persist every locale's quote rows, guarding against an edit made to any `quotes.<locale>.txt`
+// outside Restee since this editor last synced. The visible locale's rows are captured first. Each
+// locale's disk is compared to its baseline; if any diverged, the user gets one prompt: overwrite
+// (our lists win) or keep-disk (adopt the on-disk version for the *conflicted* locales, discarding
+// those local edits — no write). Non-conflicted locales are written normally. A real read/write
+// failure throws and is handled by save()'s catch. Leaves the map/baseline and the visible rows
+// consistent with disk.
+async function saveQuotes(): Promise<void> {
+  quotesByLocale[activeQuoteLocale] = collectQuotes($("quotes"));
+
+  const disk = emptySets();
+  const conflicted: QuoteLocale[] = [];
+  for (const loc of QUOTE_LOCALES) {
+    disk[loc] = await invoke<string[]>("cmd_get_quotes", { locale: loc });
+    if (JSON.stringify(disk[loc]) !== JSON.stringify(quotesBaselineByLocale[loc])) {
+      conflicted.push(loc);
+    }
+  }
+  const keepDisk = conflicted.length > 0 && (await confirmQuotesConflict()) === "keep_disk";
+
+  for (const loc of QUOTE_LOCALES) {
+    if (keepDisk && conflicted.includes(loc)) {
+      quotesByLocale[loc] = disk[loc]; // keep the on-disk version; write nothing
+      quotesBaselineByLocale[loc] = disk[loc];
+      continue;
+    }
+    const saved = await invoke<string[]>("cmd_save_quotes", {
+      locale: loc,
+      quotes: quotesByLocale[loc],
+    });
+    quotesByLocale[loc] = saved;
+    quotesBaselineByLocale[loc] = saved;
+  }
+  // Reflect sanitization / any adopted disk version in the visible locale's rows.
+  renderQuotes($("quotes"), quotesByLocale[activeQuoteLocale]);
 }
 
 async function save(): Promise<boolean> {
   const msg = $("save-msg");
   try {
+    // Quotes first: a plain quotes.txt write with no live side-effects, and the one that can
+    // prompt (conflict guard). Then config, which reconfigures engine/hotkeys/autostart. Only
+    // mark the form saved if BOTH succeed — any throw leaves the window dirty for a retry.
+    await saveQuotes();
     const outcome = await invoke<SaveOutcome>("cmd_save_config", { config: collectConfig() });
     current = outcome.config;
     render(current); // reflect any clamping the backend applied
@@ -157,11 +279,17 @@ async function init(): Promise<void> {
   applyI18n(document.body);
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
   current = await invoke<ConfigFile>("cmd_get_config");
+  await loadChimes();
   render(current);
+  // Break quotes live in per-locale files (separate from config); load every locale and render the
+  // active one's rows before installing the guard so the dirty baseline includes all quote sets.
+  await loadAllQuotes();
+  renderQuotes($("quotes"), quotesByLocale[activeQuoteLocale]);
+  updateLocaleToggleUI();
   // Guard against closing with unsaved edits (Close button + OS window X). Installed after the
-  // first render so the dirty baseline matches the loaded config.
+  // first render so the dirty baseline matches the loaded config + quotes.
   guard = installUnsavedGuard({
-    collect: collectConfig,
+    collect: () => ({ config: collectConfig(), quotes: quotesSnapshot() }),
     save,
     close: () => void invoke("cmd_close_settings"),
   });
@@ -176,7 +304,13 @@ async function init(): Promise<void> {
   }
 
   $("add-rule").addEventListener("click", () => {
-    $("rules").appendChild(ruleRow(defaultRule()));
+    $("rules").appendChild(ruleRow(defaultRule(), chimes));
+  });
+  $("add-quote").addEventListener("click", () => {
+    $("quotes").appendChild(quoteRow(""));
+  });
+  document.querySelectorAll<HTMLElement>(".quote-locale-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchQuoteLocale(btn.dataset.locale as QuoteLocale));
   });
   // Keep the rules grid in sync with edits made in the standalone Break-rules window.
   window.addEventListener("focus", () => {

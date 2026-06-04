@@ -82,6 +82,13 @@ pub struct RuleDto {
     /// Settings. Omitted from the file when empty so older configs stay clean.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// Optional id of a saved chime to play when this break starts (empty = the default tone).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub chime_id: String,
+    /// Optional id of a saved chime to play when this break ends/completes (empty = the default
+    /// break-over tone). Only plays on a completed break, not a skip.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub end_chime_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +110,10 @@ pub struct SettingsDto {
     /// text countdown so configs written before this field keep their original behavior.
     #[serde(default = "default_break_display")]
     pub break_display: BreakDisplayDto,
+    /// Show an inspirational quote (from the user-editable `quotes.txt`) on the break overlay.
+    /// Defaults to on; older configs without the field default in as `true`.
+    #[serde(default = "default_true")]
+    pub show_quotes: bool,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -144,6 +155,9 @@ pub struct ConfigFile {
     // stray `alarms = []` that TOML would attach to the final `[[rules]]` table.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub alarms: Vec<AlarmDto>,
+    // Saved chimes used to live here; they now have their own `chimes.toml` (see crate::chime).
+    // Rules/alarms still reference a chime by `chime_id`; an unknown id falls back to the default
+    // tone at playback, so the chime list doesn't need to live in this file.
 }
 
 fn default_true() -> bool {
@@ -169,6 +183,7 @@ impl Default for SettingsDto {
             sound: true,
             notifications: true,
             break_display: BreakDisplayDto::Countdown,
+            show_quotes: true,
         }
     }
 }
@@ -447,6 +462,22 @@ mod tests {
     }
 
     #[test]
+    fn show_quotes_defaults_true_and_round_trips() {
+        assert!(SettingsDto::default().show_quotes);
+        // An older config TOML without `show_quotes` deserializes to the default (true).
+        let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
+        let parsed: ConfigFile = toml::from_str(older).unwrap();
+        assert!(parsed.settings.show_quotes);
+        // Explicit `false` round-trips through TOML.
+        let mut cfg = ConfigFile::default();
+        cfg.settings.show_quotes = false;
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        assert!(text.contains("show_quotes = false"));
+        let parsed: ConfigFile = toml::from_str(&text).unwrap();
+        assert!(!parsed.settings.show_quotes);
+    }
+
+    #[test]
     fn rule_note_round_trips_and_omits_when_empty() {
         let mut cfg = ConfigFile::default();
         // The default rules now ship with notes; clear them to test the empty-omission path.
@@ -477,6 +508,25 @@ mod tests {
     }
 
     #[test]
+    fn rule_and_alarm_chime_ids_round_trip() {
+        // chime_id refs stay in config.toml (the chime *definitions* moved to chimes.toml).
+        let mut cfg = ConfigFile::default();
+        cfg.rules[0].chime_id = "gentle-bell".into();
+        cfg.rules[0].end_chime_id = "soft-close".into();
+        cfg.alarms[0].chime_id = "soft-ping".into();
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        assert!(text.contains("chime_id = \"gentle-bell\""));
+        assert!(text.contains("end_chime_id = \"soft-close\""));
+        let parsed: ConfigFile = toml::from_str(&text).unwrap();
+        assert_eq!(parsed.rules[0].chime_id, "gentle-bell");
+        assert_eq!(parsed.rules[0].end_chime_id, "soft-close");
+        assert_eq!(parsed.alarms[0].chime_id, "soft-ping");
+        // An unknown id is left as-is (playback falls back to the default tone).
+        let mut p = parsed;
+        assert!(!p.sanitize());
+    }
+
+    #[test]
     fn round_trips_with_alarms_after_rules() {
         use crate::alarm::{AlarmDto, RepeatDto};
         let cfg = ConfigFile {
@@ -491,6 +541,7 @@ mod tests {
                     month: 0,
                     date: None,
                     enabled: true,
+                    chime_id: String::new(),
                 },
                 AlarmDto {
                     id: "a2".into(),
@@ -502,6 +553,7 @@ mod tests {
                     month: 1,
                     date: None,
                     enabled: true,
+                    chime_id: String::new(),
                 },
             ],
             ..ConfigFile::default()

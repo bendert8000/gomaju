@@ -437,8 +437,9 @@ impl Engine {
         self.best_enabled_by_priority(|_| true)
     }
 
-    /// Start the break for `idx`. Resets the firing rule and every rule with a
-    /// shorter interval, so a longer break restarts the shorter cycles.
+    /// Start the break for `idx`. Resets the firing rule, every rule with a shorter interval
+    /// (so a longer break restarts the shorter cycles), and every rule that is itself currently
+    /// due — a "collapsed" co-due break is covered by this one, so it must not fire right after.
     fn fire_break(&mut self, idx: usize) -> Vec<Effect> {
         let rule = self.rules[idx].rule.clone();
         let fired_interval = rule.interval;
@@ -446,7 +447,13 @@ impl Engine {
         self.warned = None;
 
         for rs in &mut self.rules {
-            if rs.rule.id == rule.id || rs.rule.interval < fired_interval {
+            // Reset the firing rule, every rule with a shorter interval (a longer break restarts
+            // the shorter cycles), and every rule that is itself currently due — a "collapsed"
+            // co-due break is covered by this one and must not fire back-to-back right after.
+            if rs.rule.id == rule.id
+                || rs.rule.interval < fired_interval
+                || (rs.rule.enabled && rs.work >= rs.rule.interval)
+            {
                 rs.work = Duration::ZERO;
                 rs.credited = false;
                 effects.push(Effect::RuleReset {
@@ -1068,8 +1075,9 @@ mod tests {
     #[test]
     fn firing_the_shorter_rule_does_not_reset_a_longer_rule() {
         // User report: when the 30-min "eye" break finishes, does the 45-min "sit" break
-        // also reset to 45? It must NOT — fire_break only resets the firing rule and rules
-        // with a SHORTER interval, never a longer one.
+        // also reset to 45? It must NOT — fire_break resets the firing rule, rules with a
+        // SHORTER interval, and any rule that is itself due; a longer rule that isn't due
+        // (here "sit" is at 30/45) keeps its progress.
         let rules = vec![
             rule("eye", 30, 5, Enforcement::Soft), // shorter -> fires first
             rule("sit", 45, 10, Enforcement::Strict), // longer
@@ -1113,6 +1121,168 @@ mod tests {
             Some(15),
             "'sit' is still not reset after the eye break ends"
         );
+    }
+
+    #[test]
+    fn co_due_collapse_resets_the_losing_rule() {
+        // Two rules with the SAME interval both come due on one tick ("collapse"). The strict
+        // 20-unit break wins; the soft rule must be reset (covered), not left armed to fire a
+        // back-to-back break the instant the strict break ends.
+        let rules = vec![
+            rule("eye", 3, 2, Enforcement::Soft),
+            rule("posture", 3, 20, Enforcement::Strict),
+        ];
+        let mut engine = Engine::new(rules, Settings::default());
+        engine.start();
+        engine.tick(secs(1), secs(0));
+        engine.tick(secs(1), secs(0));
+        let fire = engine.tick(secs(1), secs(0)); // both reach interval 3
+
+        // (a) the strict rule fires, (b) the co-due soft rule is reset on the same tick.
+        assert_eq!(started_rule(&fire).as_deref(), Some("posture"));
+        assert!(
+            fire.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
+            "the co-due soft rule should be reset when the strict break fires, got {fire:?}"
+        );
+
+        // (c) play out the 20-unit strict break; on the tick right after it ends the soft rule
+        // (now reset) must NOT fire — without the fix it would still be armed and refire.
+        let mut after_end = None;
+        for _ in 0..21 {
+            let fx = engine.tick(secs(1), secs(0));
+            if fx.iter().any(|e| matches!(e, Effect::EndBreak { .. })) {
+                after_end = Some(engine.tick(secs(1), secs(0)));
+                break;
+            }
+        }
+        let after = after_end.expect("the strict break should have ended");
+        assert!(
+            !after.iter().any(|e| matches!(e, Effect::StartBreak { .. })),
+            "the covered soft rule must not fire on the tick after the break ends, got {after:?}"
+        );
+    }
+
+    #[test]
+    fn co_due_collapse_resets_a_longer_interval_loser() {
+        // A strict short-interval rule and a soft long-interval rule align on a tick. The strict
+        // rule wins; the LONGER-interval soft rule must still be reset — something the old
+        // "shorter interval only" reset never did (this isolates the new co-due clause).
+        let rules = vec![
+            rule("blink", 30, 5, Enforcement::Strict), // shorter interval, wins on priority
+            rule("walk", 60, 5, Enforcement::Soft),    // longer interval, the co-due loser
+        ];
+        let mut engine = Engine::new(rules, Settings::default());
+        engine.start();
+
+        let remaining = |e: &Engine, name: &str| {
+            e.status()
+                .all
+                .iter()
+                .find(|b| b.rule_name == name)
+                .map(|b| b.remaining_secs)
+        };
+
+        // t=30: "blink" fires alone ("walk" at 30/60, not due) and resets only itself.
+        for _ in 0..30 {
+            engine.tick(secs(1), secs(0));
+        }
+        // Play out blink's 5s break (work frozen), so "walk" keeps its 30/60 progress.
+        for _ in 0..5 {
+            engine.tick(secs(1), secs(0));
+        }
+        assert_eq!(remaining(&engine, "walk"), Some(30), "walk keeps its 30/60 progress");
+
+        // 30 more units: re-armed "blink" (interval 30) and "walk" (now 60/60) come due together.
+        let mut collide = None;
+        for _ in 0..30 {
+            let fx = engine.tick(secs(1), secs(0));
+            if fx.iter().any(|e| matches!(e, Effect::StartBreak { .. })) {
+                collide = Some(fx);
+                break;
+            }
+        }
+        let fx = collide.expect("blink and walk should come due together");
+        assert_eq!(started_rule(&fx).as_deref(), Some("blink"), "strict blink wins the collision");
+        assert!(
+            fx.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "walk")),
+            "the LONGER-interval co-due 'walk' must be reset, got {fx:?}"
+        );
+    }
+
+    #[test]
+    fn break_now_resets_a_coincidentally_due_longer_rule() {
+        // A reconfigure leaves two rules due at once, the coincidentally-due one ("eye") having a
+        // LONGER interval than the strict rule break_now will fire. break_now fires the strict rule
+        // and, via the new co-due clause (not the shorter-interval clause), resets the longer rule.
+        let mut engine = Engine::new(
+            vec![
+                rule("manual", 100, 5, Enforcement::Strict),
+                rule("eye", 100, 2, Enforcement::Soft),
+            ],
+            Settings::default(),
+        );
+        engine.start();
+        for _ in 0..60 {
+            engine.tick(secs(1), secs(0)); // both banked to work = 60, neither due (interval 100)
+        }
+        // Shorten both intervals below the banked work so both are now due; "eye" (50) is LONGER
+        // than the strict "manual" (5) that break_now will fire.
+        engine.reconfigure(
+            vec![
+                rule("manual", 5, 5, Enforcement::Strict),
+                rule("eye", 50, 2, Enforcement::Soft),
+            ],
+            Settings::default(),
+        );
+
+        let fire = engine.break_now();
+        assert_eq!(started_rule(&fire).as_deref(), Some("manual"));
+        assert!(
+            fire.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
+            "break_now should reset the coincidentally-due longer 'eye' rule, got {fire:?}"
+        );
+    }
+
+    #[test]
+    fn co_due_once_loser_is_rearmed_not_consumed() {
+        // Two "once" rules come due on the same tick. The strict one fires and is consumed
+        // (RuleDisabled); the soft loser is reset/re-armed — it emits RuleReset, must NOT emit
+        // RuleDisabled, and stays enabled so it gets its turn on the next cycle.
+        let rules = vec![
+            once_rule("eye", 3, 2, Enforcement::Soft),
+            once_rule("posture", 3, 5, Enforcement::Strict),
+        ];
+        let mut engine = Engine::new(rules, Settings::default());
+        engine.start();
+        engine.tick(secs(1), secs(0));
+        engine.tick(secs(1), secs(0));
+        let fire = engine.tick(secs(1), secs(0)); // both due at interval 3
+
+        assert_eq!(started_rule(&fire).as_deref(), Some("posture"));
+        // Winner consumed:
+        assert!(
+            fire.iter().any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "posture")),
+            "the firing once rule should be disabled, got {fire:?}"
+        );
+        // Loser reset but NOT consumed:
+        assert!(
+            fire.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
+            "the co-due once loser should be reset, got {fire:?}"
+        );
+        assert!(
+            !fire.iter().any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "eye")),
+            "the co-due once loser must NOT be disabled, got {fire:?}"
+        );
+
+        // It stays enabled: after the winner's break ends, "eye" still fires on its next cycle.
+        let mut eye_refired = false;
+        for _ in 0..20 {
+            let fx = engine.tick(secs(1), secs(0));
+            eye_refired |= fx
+                .iter()
+                .any(|e| matches!(e, Effect::StartBreak { rule_id, .. } if rule_id == "eye"));
+        }
+        assert!(eye_refired, "the re-armed once 'eye' rule should fire on its next cycle");
     }
 
     #[test]

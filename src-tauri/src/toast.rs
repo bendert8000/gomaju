@@ -12,8 +12,8 @@ pub struct WarningInfo {
     pub lead_secs: u64,
 }
 
-/// Show the pre-break countdown toast (top-right of the primary monitor). It does
-/// NOT take focus, so it won't interrupt what the user is typing.
+/// Show the pre-break countdown toast (bottom-right of the primary monitor, just above the
+/// system tray). It does NOT take focus, so it won't interrupt what the user is typing.
 pub fn show(app: &AppHandle, info: WarningInfo) {
     close(app);
     let app = app.clone();
@@ -52,22 +52,23 @@ fn build_toast(app: &AppHandle, info: &WarningInfo) {
         .build()
     {
         Ok(window) => {
-            position_top_right(app, &window);
+            position_bottom_right(app, &window);
             let _ = window.show();
         }
         Err(e) => eprintln!("restee: failed to create warning toast: {e}"),
     }
 }
 
-fn position_top_right(app: &AppHandle, window: &WebviewWindow) {
+fn position_bottom_right(app: &AppHandle, window: &WebviewWindow) {
     let Some(monitor) = app.primary_monitor().ok().flatten() else {
         return;
     };
-    let mon_pos = monitor.position();
-    let mon_size = monitor.size();
+    // Use the work area (excludes the taskbar) so the toast sits just above the system tray
+    // rather than underneath the taskbar. `work_area()` is available in Tauri 2.11+.
+    let work = monitor.work_area();
     let outer = window.outer_size().unwrap_or_default();
     let margin = (16.0 * monitor.scale_factor()).round() as i32;
-    let x = mon_pos.x + mon_size.width as i32 - outer.width as i32 - margin;
-    let y = mon_pos.y + margin;
+    let x = work.position.x + work.size.width as i32 - outer.width as i32 - margin;
+    let y = work.position.y + work.size.height as i32 - outer.height as i32 - margin;
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }

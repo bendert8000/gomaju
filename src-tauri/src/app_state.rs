@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use restee_core::chime::ChimeDto;
 use restee_core::{config::ConfigFile, Engine};
 
 use crate::idle::IdleStatus;
@@ -13,6 +14,11 @@ pub struct AppState {
     pub engine: Mutex<Engine>,
     pub config: Mutex<ConfigFile>,
     pub config_path: PathBuf,
+    /// Saved chimes, loaded from `chimes.toml` (separate from `config.toml`). The chimes window
+    /// edits this; playback + the rule/alarm pickers read it. `chimes_path` is the toml's path; its
+    /// parent folder also holds imported sound files.
+    pub chimes: Mutex<Vec<ChimeDto>>,
+    pub chimes_path: PathBuf,
     /// Health of the idle backend, decided once at startup.
     pub idle_status: IdleStatus,
     /// When the timer last (re)entered Running; `None` while paused/stopped. Used to

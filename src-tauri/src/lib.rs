@@ -1,6 +1,7 @@
 mod alarm;
 mod alarms_window;
 mod app_state;
+mod chimes_window;
 mod audio;
 mod autostart;
 mod commands;
@@ -8,6 +9,7 @@ mod hotkeys;
 mod i18n;
 mod idle;
 mod overlay;
+mod quotes;
 mod runtime;
 mod breaks_window;
 mod settings_window;
@@ -60,6 +62,26 @@ pub fn run() {
                 );
             }
 
+            // Seed the user-editable break-quotes file next to config.toml (first run only).
+            if let Some(dir) = config_path.parent() {
+                quotes::seed_if_missing(dir);
+            }
+
+            // Load saved chimes from their own file (chimes/chimes.toml), kept separate from
+            // config.toml. This also creates the chimes folder (which holds imported sounds) and
+            // seeds the default presets on first run.
+            let chimes_path: PathBuf = config_path
+                .parent()
+                .map(|dir| dir.join("chimes").join("chimes.toml"))
+                .unwrap_or_else(|| PathBuf::from("chimes/chimes.toml"));
+            let chimes = match restee_core::chime::load_chimes(&chimes_path) {
+                Ok(file) => file.chimes,
+                Err(e) => {
+                    eprintln!("restee: could not load chimes.toml ({e}); starting with none");
+                    Vec::new()
+                }
+            };
+
             let cfg = outcome.config;
             let autostart_wanted = cfg.autostart;
             let hotkeys_cfg = cfg.hotkeys.clone();
@@ -78,6 +100,8 @@ pub fn run() {
                 engine: Mutex::new(engine),
                 config: Mutex::new(cfg),
                 config_path,
+                chimes: Mutex::new(chimes),
+                chimes_path,
                 idle_status,
                 // The engine starts Running, so the clock is already ticking.
                 running_since: Mutex::new(Some(std::time::Instant::now())),
@@ -144,6 +168,8 @@ pub fn run() {
             commands::cmd_get_status,
             commands::cmd_save_config,
             commands::cmd_close_settings,
+            commands::cmd_get_quotes,
+            commands::cmd_save_quotes,
             commands::cmd_window_ready,
             commands::cmd_get_alarms,
             commands::cmd_get_alarm_fires,
@@ -153,6 +179,13 @@ pub fn run() {
             commands::cmd_set_rule_flags,
             commands::cmd_close_breaks,
             commands::cmd_open_settings,
+            commands::cmd_get_chimes,
+            commands::cmd_save_chimes,
+            commands::cmd_preview_chime,
+            commands::cmd_stop_preview,
+            commands::cmd_import_chime_file,
+            commands::cmd_close_chimes,
+            commands::cmd_open_chimes_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the restee application")

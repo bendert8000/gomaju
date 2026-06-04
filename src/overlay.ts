@@ -15,6 +15,7 @@ interface BreakInfo {
   escape_mode: Escape;
   break_display: BreakDisplay;
   note: string;
+  quote: string;
 }
 
 // Injected by the Rust side via an initialization script, so the overlay renders
@@ -26,6 +27,7 @@ const info = readInjected<BreakInfo>("__RESTEE_BREAK__", {
   escape_mode: "easy",
   break_display: "countdown",
   note: "",
+  quote: "",
 });
 
 document.body.classList.add(info.kind === "strict" ? "overlay--strict" : "overlay--soft");
@@ -42,12 +44,18 @@ const progressEl = document.getElementById("break-progress") as HTMLElement;
 const progressFill = document.getElementById("break-progress-fill") as HTMLElement;
 const progressTextEl = document.getElementById("break-progress-text")!;
 const noteEl = document.getElementById("break-note")!;
+const quoteEl = document.getElementById("break-quote")!;
 
 nameEl.textContent = info.name;
 // Optional per-rule note (read-only), shown under the name. Hidden when empty.
 if (info.note) {
   noteEl.textContent = info.note;
   noteEl.hidden = false;
+}
+// Optional inspirational quote (from the user's quotes.txt), shown under the note. Hidden when empty.
+if (info.quote) {
+  quoteEl.textContent = info.quote;
+  quoteEl.hidden = false;
 }
 
 // Display mode: the big countdown text (default) or a draining progress bar with the

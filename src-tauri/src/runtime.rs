@@ -76,21 +76,42 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
 
                 // Read presentation settings from the cached config before building the
                 // overlay (the display mode is purely presentational — the engine never sees it).
-                let (sound, notify, locale, break_display, note) = {
+                let (notify, locale, break_display, note, quote) = {
                     let state = app.state::<AppState>();
                     let cfg = state.config.lock().unwrap();
-                    let note = cfg
-                        .rules
-                        .iter()
-                        .find(|r| r.id == *rule_id)
-                        .map(|r| r.note.clone())
-                        .unwrap_or_default();
+                    let rule = cfg.rules.iter().find(|r| r.id == *rule_id);
+                    let note = rule.map(|r| r.note.clone()).unwrap_or_default();
+                    // Inspirational quote from the active locale's quotes file (next to
+                    // config.toml), picked per break when enabled. Best-effort: no/empty file ->
+                    // empty string (no cross-locale fallback).
+                    let quote = if cfg.settings.show_quotes {
+                        state
+                            .config_path
+                            .parent()
+                            .and_then(|dir| crate::quotes::pick(dir, &cfg.locale))
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                    // Break-start cue: the rule's assigned chime, or the built-in default. Played
+                    // from inside the lock — the audio fns spawn a thread and return immediately,
+                    // so the config lock is held only for the spawn, not for playback.
+                    if cfg.settings.sound {
+                        let chime_id = rule.map(|r| r.chime_id.as_str()).unwrap_or("");
+                        let dir = state
+                            .config_path
+                            .parent()
+                            .map(|p| p.join("chimes"))
+                            .unwrap_or_default();
+                        let chimes = state.chimes.lock().unwrap();
+                        crate::audio::play_break_chime(chime_id, &chimes, &dir);
+                    }
                     (
-                        cfg.settings.sound,
                         cfg.settings.notifications,
                         cfg.locale.clone(),
                         cfg.settings.break_display.as_str().to_string(),
                         note,
+                        quote,
                     )
                 };
 
@@ -103,13 +124,11 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                         escape_mode: escape_mode.as_str().into(),
                         break_display,
                         note,
+                        quote,
                     },
                 );
                 let _ = app.emit("break-start", rule_id.clone());
 
-                if sound {
-                    crate::audio::play_chime();
-                }
                 // Notifications augment soft breaks; strict breaks already take
                 // over the whole screen, so a toast would be redundant.
                 if notify && *enforcement == Enforcement::Soft {
@@ -129,19 +148,32 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                     },
                 );
             }
-            Effect::EndBreak { completed, .. } => {
+            Effect::EndBreak { rule_id, completed } => {
                 overlay::close_all(app);
                 let _ = app.emit("break-end", ());
                 // A short cue when a break runs its full course (not on a manual skip), if the
-                // user enabled break sounds — signals "you're done, back to work".
+                // user enabled break sounds — signals "you're done, back to work". Uses the rule's
+                // assigned end chime, falling back to the default break-over tone.
                 if *completed {
-                    let sound = {
-                        let state = app.state::<AppState>();
+                    let state = app.state::<AppState>();
+                    let (sound, end_chime_id) = {
                         let cfg = state.config.lock().unwrap();
-                        cfg.settings.sound
+                        let end = cfg
+                            .rules
+                            .iter()
+                            .find(|r| r.id == *rule_id)
+                            .map(|r| r.end_chime_id.clone())
+                            .unwrap_or_default();
+                        (cfg.settings.sound, end)
                     };
                     if sound {
-                        crate::audio::play_break_over();
+                        let dir = state
+                            .config_path
+                            .parent()
+                            .map(|p| p.join("chimes"))
+                            .unwrap_or_default();
+                        let chimes = state.chimes.lock().unwrap();
+                        crate::audio::play_break_over_chime(&end_chime_id, &chimes, &dir);
                     }
                 }
             }

@@ -17,6 +17,8 @@ pub struct BreakInfo {
     pub break_display: String,
     /// Optional per-rule note shown read-only under the break name (empty = no note).
     pub note: String,
+    /// Optional inspirational quote shown under the note (empty = no quote).
+    pub quote: String,
 }
 
 /// Show the break: one fullscreen, always-on-top overlay per monitor.

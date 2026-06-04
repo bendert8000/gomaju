@@ -100,29 +100,40 @@ pub fn spawn_scheduler(app: AppHandle) {
             let ymd = now.format("%Y-%m-%d").to_string();
 
             // Snapshot under lock, then release it before running side effects.
-            let alarms: Vec<AlarmDto> = {
+            let (alarms, chimes): (Vec<AlarmDto>, Vec<restee_core::chime::ChimeDto>) = {
                 let st = app.state::<AppState>();
-                let cfg = st.config.lock().unwrap();
-                cfg.alarms.clone()
+                let alarms = st.config.lock().unwrap().alarms.clone();
+                let chimes = st.chimes.lock().unwrap().clone();
+                (alarms, chimes)
             };
 
             // Notify per alarm (names are distinct + informative), but play the tone at
             // most once per minute so several alarms at the same time don't overlap into
-            // a cacophony of audio streams.
-            let mut any_fired = false;
+            // a cacophony of audio streams. When several fire together, the first one's chime
+            // wins (its assigned chime, or the default alarm tone if it has none).
+            let mut fired_chime: Option<String> = None;
             for a in &alarms {
                 if !alarm_is_due(a, hh, mm, weekday_mon0, month, day, dim, &ymd) {
                     continue;
                 }
                 eprintln!("restee: alarm fired ({})", a.name);
                 runtime::show_notification(&app, &a.name);
-                any_fired = true;
+                if fired_chime.is_none() {
+                    fired_chime = Some(a.chime_id.clone());
+                }
                 if a.repeat == RepeatDto::Once {
                     disable_once(&app, &a.id);
                 }
             }
-            if any_fired {
-                audio::play_alarm();
+            if let Some(chime_id) = fired_chime {
+                let dir = {
+                    let st = app.state::<AppState>();
+                    st.config_path
+                        .parent()
+                        .map(|p| p.join("chimes"))
+                        .unwrap_or_default()
+                };
+                audio::play_alarm_chime(&chime_id, &chimes, &dir);
             }
         }
     });
@@ -182,6 +193,7 @@ mod tests {
             month: 0,
             date: None,
             enabled: true,
+            chime_id: String::new(),
         }
     }
 

@@ -1,9 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, LOCALE, t } from "./i18n";
+import { fillChimeSelect, type ChimeOption } from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 
 // Assigned in init() once the alarms are first rendered; referenced only afterwards.
 let guard!: UnsavedGuard;
+// Saved chimes (for each alarm's chime picker), loaded once in init().
+let chimes: ChimeOption[] = [];
 
 // --- Types mirroring restee_core::alarm DTOs ---
 
@@ -19,6 +22,7 @@ interface AlarmDto {
   month: number; // 1..12 (Yearly)
   date: string | null; // "YYYY-MM-DD" (Once: fire date; Biweekly: start week)
   enabled: boolean;
+  chime_id: string; // id of a saved chime to play (empty = default alarm tone)
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -83,10 +87,14 @@ function alarmRow(a: AlarmDto): HTMLElement {
         ${t("alarms.day")} <input class="alarm-doy" type="number" min="1" max="31" />
       </span>
     </div>
+    <div class="alarm-line alarm-chime-row">
+      <label>${t("chime.label")} <select class="alarm-chime"></select></label>
+    </div>
     <div class="alarm-next"></div>
   `;
 
   q<HTMLInputElement>(row, ".alarm-name").value = a.name;
+  fillChimeSelect(q<HTMLSelectElement>(row, ".alarm-chime"), chimes, a.chime_id ?? "");
   q<HTMLInputElement>(row, ".alarm-time").value = a.time || "08:00";
   q<HTMLInputElement>(row, ".alarm-enabled").checked = a.enabled;
   q<HTMLSelectElement>(row, ".alarm-repeat").value = a.repeat;
@@ -170,6 +178,7 @@ function collectAlarms(): AlarmDto[] {
       month,
       date,
       enabled: q<HTMLInputElement>(row, ".alarm-enabled").checked,
+      chime_id: q<HTMLSelectElement>(row, ".alarm-chime").value,
     };
   });
 }
@@ -255,6 +264,12 @@ async function init(): Promise<void> {
   document.title = t("title.alarms");
   applyI18n(document.body);
   invoke("cmd_window_ready", { label: "alarms" }).catch(() => {});
+  // Load saved chimes first so each alarm row's chime picker can be populated.
+  try {
+    chimes = await invoke<ChimeOption[]>("cmd_get_chimes");
+  } catch {
+    chimes = []; // non-fatal: picker just shows "Default"
+  }
   renderAlarms(await invoke<AlarmDto[]>("cmd_get_alarms"));
   await refreshFires();
   // Guard against closing with unsaved edits (Close button + OS window X). Installed after the
@@ -285,6 +300,7 @@ async function init(): Promise<void> {
         month: 1,
         date: null,
         enabled: true,
+        chime_id: "",
       }),
     );
   });

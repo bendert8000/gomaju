@@ -11,6 +11,12 @@ restee uses least-privilege capabilities, scoped by window label:
   it only invokes app-defined commands, which aren't capability-gated. The alarm commands
   (`cmd_get_alarms` / `cmd_save_alarms` / `cmd_close_alarms`) are restricted to this window
   by the `require_alarms()` caller-check in `src/commands.rs`.
+- **`chimes.json`** — the `chimes` (chime editor) window. **Empty** permission set: it only
+  invokes app commands. The write commands (`cmd_save_chimes` / `cmd_import_chime_file` /
+  `cmd_preview_chime` / `cmd_close_chimes`) are restricted to this window by `require_chimes()`;
+  the read command `cmd_get_chimes` is allowed from settings/alarms/chimes (the chime picker).
+  The native file picker for imports runs in **Rust** (tauri-plugin-dialog), so no dialog JS
+  permission is needed.
 - **`overlay.json`** — break overlays (`overlay-*`) and the countdown `warning-toast`.
   **Empty** permission set: no core API access. They can still invoke app-defined
   commands (e.g. `cmd_skip`, `cmd_window_ready`) because app commands are not gated by

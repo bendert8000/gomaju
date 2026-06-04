@@ -63,6 +63,21 @@ body {
   white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
 }
 
+/* Optional inspirational quote (from the user's quotes.txt), under the note. Italic + dimmer
+   than the note so it reads as an ambient flourish, on both soft and strict screens. */
+.overlay__quote {
+  margin-top: -0.5rem;
+  font-size: clamp(0.85rem, 1.8vw, 1.25rem);
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.62;
+  max-width: 36rem;
+  text-wrap: balance;
+}
+.overlay__quote:empty {
+  display: none;
+}
+
 .overlay__timer {
   font-size: clamp(4rem, 16vw, 11rem);
   font-weight: 200;
@@ -403,6 +418,228 @@ input[type="checkbox"] {
   width: 100%;
   min-height: 2.4rem;
   resize: vertical; /* multi-line note; user can drag taller */
+}
+
+/* Chime picker on a rule row: a full-width line under the note. */
+.rule-chime-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.rule-chime-row select {
+  max-width: 14rem;
+}
+/* Chime picker on an alarm row. */
+.alarm-chime-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+/* --- Quotes editor (Settings "Quotes" card) --- */
+/* Language switch: one set of rows is edited at a time (the active locale). */
+.quote-locale-toggle {
+  display: inline-flex;
+  margin: 0.5rem 0 0.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.quote-locale-btn {
+  font: inherit;
+  background: transparent;
+  color: #e9edf2;
+  border: 0;
+  padding: 0.3rem 0.85rem;
+  cursor: pointer;
+}
+.quote-locale-btn + .quote-locale-btn {
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+}
+.quote-locale-btn.is-active {
+  background: #3b82f6;
+  color: #fff;
+}
+#quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0.5rem;
+}
+.quote-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.quote-row .quote-text {
+  flex: 1;
+  min-width: 0; /* let the input shrink instead of overflowing the row */
+}
+.quote-row .quote-remove {
+  padding: 0.3rem 0.6rem;
+  line-height: 1;
+}
+
+/* --- Chimes editor (chimes.html / src/chimes.ts) --- */
+.chime-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.chime-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.chime-name {
+  flex: 1;
+  min-width: 7rem;
+}
+.chime-kind {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.chime-kind button.active {
+  background: rgba(120, 170, 255, 0.25);
+}
+.chime-tones,
+.chime-file {
+  display: none;
+}
+.chime-tones.show {
+  display: block;
+}
+.chime-file.show {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.chime-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
+}
+.chime-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.chime-volume {
+  width: 3.5rem;
+}
+/* Whole-chime volume: its own always-visible row (applies to tones and imported files). */
+.chime-volume-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.55rem;
+  font-size: 0.85rem;
+}
+/* Music-note symbols (incl. the astral-plane half note 𝅗𝅥) need a font that has them. */
+.chime-length {
+  font-family: "Segoe UI Symbol", "Noto Music", "Noto Sans Symbols 2", system-ui, sans-serif;
+  font-size: 0.95rem;
+}
+.note-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+.note-btn {
+  min-width: 2.6rem;
+}
+.note-btn.note-rest {
+  opacity: 0.7;
+}
+/* Preview button while its chime is playing (toggled to "⏸ Pause"). */
+.chime-preview.playing {
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.55);
+}
+.melody-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.melody-label {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+.melody-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 12rem;
+  min-height: 1.8rem;
+  padding: 0.25rem;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+}
+.melody-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between; /* label left, ✕ right — wider chips show the duration as a gap */
+  gap: 0.25rem;
+  padding: 0.1rem 0.2rem 0.1rem 0.45rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-family: "Segoe UI Symbol", "Noto Music", "Noto Sans Symbols 2", system-ui, sans-serif;
+  background: rgba(120, 170, 255, 0.18);
+  border-radius: 999px;
+  cursor: grab; /* draggable to reorder within the melody */
+}
+.melody-chip.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+/* Per-length badge color (longest -> shortest: pink, orange, yellow, green, blue), so the
+   melody's rhythm reads by hue as well as width. */
+.melody-chip[data-len="whole"] {
+  background: rgba(255, 105, 170, 0.4); /* pink */
+}
+.melody-chip[data-len="half"] {
+  background: rgba(255, 150, 60, 0.42); /* orange */
+}
+.melody-chip[data-len="quarter"] {
+  background: rgba(240, 205, 70, 0.42); /* yellow */
+}
+.melody-chip[data-len="eighth"] {
+  background: rgba(110, 215, 120, 0.4); /* green */
+}
+.melody-chip[data-len="sixteenth"] {
+  background: rgba(95, 165, 255, 0.42); /* blue */
+}
+.melody-chip-x {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 0.7rem;
+  padding: 0 0.15rem;
+}
+.melody-chip-x:hover {
+  opacity: 1;
+}
+.chime-file-name {
+  font-size: 0.85rem;
+  opacity: 0.75;
 }
 
 .settings-footer {
