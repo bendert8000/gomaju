@@ -6,12 +6,14 @@ import { fmtMMSS, readInjected } from "./util";
 invoke("cmd_window_ready", { label: "toast" }).catch(() => {});
 
 interface WarningInfo {
+  rule_id: string;
   kind: "soft" | "strict";
   name: string;
   lead_secs: number;
 }
 
 const info = readInjected<WarningInfo>("__RESTEE_WARNING__", {
+  rule_id: "",
   kind: "soft",
   name: "Break",
   lead_secs: 30,
@@ -22,8 +24,16 @@ document.body.classList.add(info.kind === "strict" ? "toast--strict" : "toast--s
 const titleEl = document.getElementById("toast-title")!;
 const subEl = document.getElementById("toast-sub")!;
 const barEl = document.getElementById("toast-bar") as HTMLElement;
+const delayEl = document.getElementById("toast-delay") as HTMLButtonElement;
 
 titleEl.textContent = t("toast.title", { name: info.name });
+delayEl.textContent = t("toast.delay");
+// Snooze: push this break back 1 minute. The backend closes the toast (cancelled-warning effect).
+delayEl.addEventListener("click", () => {
+  invoke("cmd_delay_break", { ruleId: info.rule_id, secs: 60 }).catch((err) =>
+    console.error("restee: delay break failed", err),
+  );
+});
 
 const total = Math.max(1, info.lead_secs);
 let remaining = info.lead_secs;

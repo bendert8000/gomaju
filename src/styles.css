@@ -63,10 +63,10 @@ body {
   white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
 }
 
-/* Optional inspirational quote (from the user's quotes.txt), under the note. Italic + dimmer
-   than the note so it reads as an ambient flourish, on both soft and strict screens. */
+/* Optional inspirational quote (from the user's quotes.txt), shown above the break name.
+   Italic + dimmer than the note so it reads as an ambient flourish, on both soft and strict
+   screens. Sits at the top of the column with the normal flex gap below it to the name. */
 .overlay__quote {
-  margin-top: -0.5rem;
   font-size: clamp(0.85rem, 1.8vw, 1.25rem);
   font-style: italic;
   font-weight: 400;
@@ -266,6 +266,32 @@ body {
   font-size: 0.8rem;
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
+}
+/* Text column grows so the snooze button sits at the right; long names truncate, not overflow. */
+.toast__text {
+  flex: 1;
+  min-width: 0;
+}
+.toast__title,
+.toast__sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toast__delay {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.78rem;
+  color: #eef2f7;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  padding: 0.35rem 0.6rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.toast__delay:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 .toast__bar {
   height: 4px;

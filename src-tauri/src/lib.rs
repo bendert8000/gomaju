@@ -163,6 +163,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::cmd_skip,
             commands::cmd_reset_timer,
+            commands::cmd_delay_break,
             commands::cmd_get_config,
             commands::cmd_get_idle_status,
             commands::cmd_get_status,

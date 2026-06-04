@@ -65,6 +65,11 @@ fn require_chimes(window: &WebviewWindow) -> Result<(), String> {
     gate(is_chimes(window.label()), "chimes")
 }
 
+/// Reject the snooze command invoked from any window other than the pre-break warning toast.
+fn require_toast(window: &WebviewWindow) -> Result<(), String> {
+    gate(window.label() == crate::toast::TOAST_LABEL, "toast")
+}
+
 /// Push a config's rules+settings into the live engine and apply any resulting effects.
 /// Shared by `cmd_save_config` and `cmd_set_rule_flags`; deliberately narrow — it does NOT
 /// touch hotkeys or autostart (those stay in `cmd_save_config`).
@@ -93,6 +98,26 @@ pub fn cmd_reset_timer(
         "settings/rules",
     )?;
     runtime::confirm_then_reset_one(&app, rule_id);
+    Ok(())
+}
+
+/// Snooze the imminent break (the pre-break toast's "Delay 1 min"): push `rule_id`'s break back by
+/// `secs` and close the warning toast (via the cancelled-warning effect). Toast-only.
+#[tauri::command]
+pub fn cmd_delay_break(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+    rule_id: String,
+    secs: u64,
+) -> Result<(), String> {
+    require_toast(&window)?;
+    let fx = state
+        .engine
+        .lock()
+        .unwrap()
+        .delay_break(&rule_id, std::time::Duration::from_secs(secs));
+    runtime::apply_effects(&app, &fx);
     Ok(())
 }
 

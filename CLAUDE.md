@@ -161,7 +161,11 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
   Overwrite/Keep-disk (`confirmQuotesConflict`) before writing. `onFocusRefresh` re-syncs all
   locales (like rules) when the window is clean.
 - The pre-break countdown toast (`toast.html`) is positioned **bottom-right** near the tray via
-  `Monitor::work_area()` (`toast.rs::position_bottom_right`), so it clears the taskbar.
+  `Monitor::work_area()` (`toast.rs::position_bottom_right`), so it clears the taskbar. It carries a
+  **Delay 1 min** snooze button: `toast.ts` → `cmd_delay_break(rule_id, 60)` (toast-window-gated) →
+  `Engine::delay_break` subtracts 60s from that rule's accumulated `work` (pushing the break back)
+  and emits `BreakWarningCancelled`, which closes the toast (the warning re-fires when the break is
+  imminent again). The warning toast's injected `WarningInfo` now includes the `rule_id`.
 
 ## Config defaults
 

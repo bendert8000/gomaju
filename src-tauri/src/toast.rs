@@ -1,11 +1,15 @@
 use serde::Serialize;
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-const TOAST_LABEL: &str = "warning-toast";
+/// Label of the pre-break countdown toast. `commands::require_toast` imports it so the IPC gate
+/// (for the "Delay 1 min" snooze) can't drift from the real label.
+pub const TOAST_LABEL: &str = "warning-toast";
 
 /// Info injected into the pre-break countdown toast before its page loads.
 #[derive(Debug, Clone, Serialize)]
 pub struct WarningInfo {
+    /// Rule whose break is imminent — sent back by the toast's "Delay 1 min" snooze.
+    pub rule_id: String,
     /// "soft" | "strict"
     pub kind: String,
     pub name: String,
@@ -46,7 +50,7 @@ fn build_toast(app: &AppHandle, info: &WarningInfo) {
         .skip_taskbar(true)
         .resizable(false)
         .focused(false) // never steal focus from the user's work
-        .inner_size(320.0, 96.0)
+        .inner_size(370.0, 96.0)
         .visible(false)
         .initialization_script(&init)
         .build()

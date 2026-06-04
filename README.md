@@ -37,17 +37,27 @@ Built with **Tauri v2** (Rust core + TypeScript/HTML/CSS UI): tiny binaries, low
 - **Two enforcement tiers** — *soft* (calm, skippable full-screen overlay + chime + optional
   notification) and *strict* (opaque cover on **all monitors**). Strict breaks honor a
   configurable escape: **hold-to-skip**, **easy** one-click skip, or **no easy escape**.
+- **Custom chimes** — craft your own break and alarm sounds in the **Chimes** window
+  (*Chimes…* in the tray): **compose a melody** from musical notes (Do-Re-Mi in C / G / F major,
+  with octave and note length) or **import an audio file** (wav / mp3 / ogg / flac), with one
+  volume for the whole chime. Preview as you go (▶ Preview ⇄ ⏸ Pause; each note also sounds as
+  you add it) and drag notes to reorder. Then each break rule can pick a **start** and an **end**
+  chime, and each alarm its own — leave it unset to use the built-in default tones. Saved presets
+  live in their own `chimes.toml`.
 - **Heads-up warning** — an optional, non-focus-stealing countdown toast a few seconds before
   a break starts (configurable; `0` = off).
 - **Activity-aware** — auto-pauses while you're idle. The default *pause* policy just freezes
   the countdown; the *credit* policy instead **credits** time away as a completed break so it
   doesn't nag the moment you return.
 - **Your choice of break display** — a large `MM:SS` countdown, or a draining progress bar.
+- **Break quotes** — optionally show an inspirational quote on the break screen, picked at
+  random each break and **localized** (separate Traditional Chinese / English lists). Edit them,
+  and toggle them on/off, in the **Settings → Quotes** card.
 - **Safety floor** — strict breaks always auto-release at the end, and a hidden hold-Esc
   emergency exit means you can never be truly locked out.
 - **Tray-resident** — no main window. *Start / Pause*, *Reset break timer*, *Break now*,
-  *Breaks…*, *Alarms…*, *Settings…*, *Language*, *Quit* — all from the tray icon, which also
-  shows a live per-rule countdown. Optional global hotkeys for toggle / break-now / skip.
+  *Breaks…*, *Alarms…*, *Chimes…*, *Settings…*, *Language*, *Quit* — all from the tray icon, which
+  also shows a live per-rule countdown. Optional global hotkeys for toggle / break-now / skip.
 - **Localized** — ships **Traditional Chinese (default)** and **English**, switched from the
   tray's *Language* menu.
 - **Launch at login**, single-instance, self-healing TOML config.
@@ -141,12 +151,20 @@ in-app via **Settings / Breaks… / Alarms…**, or by hand. A corrupt file is b
 (`config.toml.bak`) and defaults are restored. The shipped defaults are the embedded
 [`crates/restee-core/default_config.toml`](crates/restee-core/default_config.toml).
 
+Two things live in their own files **next to** `config.toml` (seeded on first run, edited live):
+
+- **Saved chimes** — `chimes/chimes.toml` (alongside any imported audio files), edited in the
+  **Chimes…** window. A rule/alarm references a chime by id from `config.toml`.
+- **Break quotes** — `quotes.<locale>.txt` (`quotes.en.txt` / `quotes.zh-Hant.txt`), edited in
+  the **Settings → Quotes** card; the break screen draws from the active language's list.
+
 ## Project layout
 
 ```
 crates/restee-core/  # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
 src/                 # frontend (Vite, vanilla TS): index.html (Settings), breaks.html (Break-rules dashboard),
-                     #   alarms.html (Alarms), overlay.html (break screen), toast.html (pre-break toast); shared rule-editor.ts
+                     #   alarms.html (Alarms), chimes.html (Chimes editor), overlay.html (break screen), toast.html
+                     #   (pre-break toast); shared rule-editor.ts / notes.ts / quotes-editor.ts
 src-tauri/           # Tauri host: tray, idle, overlays, hotkeys, autostart, audio, notifications, alarm scheduler
 ```
 

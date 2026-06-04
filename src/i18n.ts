@@ -229,6 +229,7 @@ const MESSAGES: Record<string, Entry> = {
   "toast.title": { en: "{name} soon", "zh-Hant": "{name} 即將開始" },
   "toast.starting_in": { en: "starting in {mmss}", "zh-Hant": "{mmss} 後開始" },
   "toast.starting_soon": { en: "starting soon…", "zh-Hant": "即將開始…" },
+  "toast.delay": { en: "Delay 1 min", "zh-Hant": "延後 1 分鐘" },
 };
 
 /** Translate `key` for the current window locale, substituting `{param}` placeholders. */

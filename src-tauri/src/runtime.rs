@@ -48,14 +48,15 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
     for effect in effects {
         match effect {
             Effect::BreakWarning {
+                rule_id,
                 name,
                 enforcement,
                 lead_secs,
-                ..
             } => {
                 toast::show(
                     app,
                     WarningInfo {
+                        rule_id: rule_id.clone(),
                         kind: enforcement.as_str().into(),
                         name: name.clone(),
                         lead_secs: *lead_secs,

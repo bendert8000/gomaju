@@ -264,6 +264,22 @@ impl Engine {
         effects
     }
 
+    /// Push a single rule's pending break back by `by` (subtract from accumulated work, bounded
+    /// at zero) — the pre-break warning's "delay 1 minute" snooze. Cancels a pending warning for
+    /// this rule (it re-fires once the break is imminent again). No-op if the id isn't found.
+    pub fn delay_break(&mut self, rule_id: &str, by: Duration) -> Vec<Effect> {
+        let Some(rs) = self.rules.iter_mut().find(|rs| rs.rule.id == rule_id) else {
+            return vec![];
+        };
+        rs.work = rs.work.saturating_sub(by);
+        let mut effects = Vec::new();
+        if self.warned.as_deref() == Some(rule_id) {
+            self.warned = None;
+            effects.push(Effect::BreakWarningCancelled);
+        }
+        effects
+    }
+
     /// Immediately start the highest-priority enabled rule's break (the "break now"
     /// action). No-op if already in a break or no rule is enabled.
     pub fn break_now(&mut self) -> Vec<Effect> {
@@ -810,6 +826,45 @@ mod tests {
         // Reaching the interval fires the break.
         let e = engine.tick(secs(1), secs(0));
         assert!(e.iter().any(|x| matches!(x, Effect::StartBreak { .. })));
+    }
+
+    #[test]
+    fn delay_break_pushes_the_break_back_and_cancels_the_warning() {
+        let settings = Settings {
+            warn: secs(5),
+            ..Settings::default()
+        };
+        let mut engine = Engine::new(vec![rule("eye", 10, 3, Enforcement::Soft)], settings);
+        engine.start();
+        for _ in 0..5 {
+            engine.tick(secs(1), secs(0)); // work = 5 -> warning emitted (5s to fire)
+        }
+
+        // Snooze 3s: work 5 -> 2, and the pending warning is cancelled.
+        let e = engine.delay_break("eye", secs(3));
+        assert!(e.iter().any(|x| matches!(x, Effect::BreakWarningCancelled)));
+
+        // Was 5s from firing, now 8s: the next 5 ticks (work -> 7) must not fire.
+        for _ in 0..5 {
+            let e = engine.tick(secs(1), secs(0));
+            assert!(!e.iter().any(|x| matches!(x, Effect::StartBreak { .. })));
+        }
+        // Three more reach the interval (work = 10) and fire — ~3s later than without the delay.
+        let mut fired = false;
+        for _ in 0..3 {
+            let e = engine.tick(secs(1), secs(0));
+            fired |= e
+                .iter()
+                .any(|x| matches!(x, Effect::StartBreak { rule_id, .. } if rule_id == "eye"));
+        }
+        assert!(fired, "the break should fire after the delayed countdown");
+    }
+
+    #[test]
+    fn delay_break_unknown_rule_is_a_noop() {
+        let mut engine = Engine::new(vec![rule("eye", 10, 3, Enforcement::Soft)], Settings::default());
+        engine.start();
+        assert!(engine.delay_break("nope", secs(60)).is_empty());
     }
 
     #[test]
