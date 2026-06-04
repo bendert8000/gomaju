@@ -7,7 +7,7 @@ use restee_core::config::{self, ConfigFile, RuleDto};
 use crate::alarms_window::{self, ALARMS_LABEL};
 use crate::app_state::AppState;
 use crate::idle::IdleStatus;
-use crate::rules_window::{self, RULES_LABEL};
+use crate::breaks_window::{self, BREAKS_LABEL};
 use crate::settings_window::{self, SETTINGS_LABEL};
 use crate::{autostart, hotkeys, runtime};
 
@@ -21,9 +21,9 @@ fn is_alarms(label: &str) -> bool {
     label == ALARMS_LABEL
 }
 
-/// Pure, unit-testable predicate: is this window label the break-rules window?
-fn is_rules(label: &str) -> bool {
-    label == RULES_LABEL
+/// Pure, unit-testable predicate: is this window label the breaks window?
+fn is_breaks(label: &str) -> bool {
+    label == BREAKS_LABEL
 }
 
 /// Shared gate body: app commands are not gated per-window by Tauri's capability system,
@@ -47,9 +47,9 @@ fn require_alarms(window: &WebviewWindow) -> Result<(), String> {
     gate(is_alarms(window.label()), "alarms")
 }
 
-/// Reject a rules command invoked from any window other than the break-rules window.
-fn require_rules(window: &WebviewWindow) -> Result<(), String> {
-    gate(is_rules(window.label()), "rules")
+/// Reject a breaks-dashboard command invoked from any window other than the breaks window.
+fn require_breaks(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_breaks(window.label()), "breaks")
 }
 
 /// Push a config's rules+settings into the live engine and apply any resulting effects.
@@ -76,7 +76,7 @@ pub fn cmd_reset_timer(
     rule_id: String,
 ) -> Result<(), String> {
     gate(
-        is_settings(window.label()) || is_rules(window.label()),
+        is_settings(window.label()) || is_breaks(window.label()),
         "settings/rules",
     )?;
     runtime::confirm_then_reset_one(&app, rule_id);
@@ -131,7 +131,7 @@ pub fn cmd_get_status(
 ) -> Result<StatusDto, String> {
     // Read-only status, shown in both the Settings banner and the Break-rules dashboard.
     gate(
-        is_settings(window.label()) || is_rules(window.label()),
+        is_settings(window.label()) || is_breaks(window.label()),
         "settings/rules",
     )?;
     let snapshot = state.engine.lock().unwrap().status();
@@ -281,14 +281,14 @@ pub fn cmd_close_alarms(window: WebviewWindow, app: AppHandle) -> Result<(), Str
     Ok(())
 }
 
-// --- Break rules (rules-window only) ---
+// --- Break rules (breaks-window only) ---
 
 #[tauri::command]
 pub fn cmd_get_rules(
     window: WebviewWindow,
     state: State<'_, AppState>,
 ) -> Result<Vec<RuleDto>, String> {
-    require_rules(&window)?;
+    require_breaks(&window)?;
     Ok(state.config.lock().unwrap().rules.clone())
 }
 
@@ -307,7 +307,7 @@ pub fn cmd_set_rule_flags(
     enabled: bool,
     repeat: bool,
 ) -> Result<(), String> {
-    require_rules(&window)?;
+    require_breaks(&window)?;
 
     let config = {
         let mut guard = state.config.lock().unwrap();
@@ -328,9 +328,9 @@ pub fn cmd_set_rule_flags(
 }
 
 #[tauri::command]
-pub fn cmd_close_rules(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
-    require_rules(&window)?;
-    rules_window::close(&app);
+pub fn cmd_close_breaks(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_breaks(&window)?;
+    breaks_window::close(&app);
     Ok(())
 }
 
@@ -342,14 +342,14 @@ pub async fn cmd_open_settings(window: WebviewWindow, app: AppHandle) -> Result<
     // is a native menu event, so it's unaffected). `settings_window::open` marshals the actual
     // window build to the main thread via `run_on_main_thread`, which now posts cleanly from
     // this off-main-thread command instead of re-entering the loop.
-    require_rules(&window)?;
+    require_breaks(&window)?;
     settings_window::open(&app);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_alarms, is_rules, is_settings};
+    use super::{is_alarms, is_breaks, is_settings};
 
     #[test]
     fn only_the_settings_window_is_privileged() {
@@ -359,7 +359,7 @@ mod tests {
         assert!(!is_settings("overlay-1"));
         assert!(!is_settings("warning-toast"));
         assert!(!is_settings("alarms"));
-        assert!(!is_settings("rules"));
+        assert!(!is_settings("breaks"));
         assert!(!is_settings("Settings")); // case-sensitive
         assert!(!is_settings(""));
     }
@@ -368,7 +368,7 @@ mod tests {
     fn only_the_alarms_window_is_privileged_for_alarm_commands() {
         assert!(is_alarms("alarms"));
         assert!(!is_alarms("settings"));
-        assert!(!is_alarms("rules"));
+        assert!(!is_alarms("breaks"));
         assert!(!is_alarms("overlay-0"));
         assert!(!is_alarms("warning-toast"));
         assert!(!is_alarms("Alarms")); // case-sensitive
@@ -376,12 +376,12 @@ mod tests {
     }
 
     #[test]
-    fn only_the_rules_window_is_privileged_for_rule_commands() {
-        assert!(is_rules("rules"));
-        assert!(!is_rules("settings"));
-        assert!(!is_rules("alarms"));
-        assert!(!is_rules("overlay-0"));
-        assert!(!is_rules("Rules")); // case-sensitive
-        assert!(!is_rules(""));
+    fn only_the_breaks_window_is_privileged_for_rule_commands() {
+        assert!(is_breaks("breaks"));
+        assert!(!is_breaks("settings"));
+        assert!(!is_breaks("alarms"));
+        assert!(!is_breaks("overlay-0"));
+        assert!(!is_breaks("Breaks")); // case-sensitive
+        assert!(!is_breaks(""));
     }
 }

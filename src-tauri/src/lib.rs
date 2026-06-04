@@ -9,7 +9,7 @@ mod i18n;
 mod idle;
 mod overlay;
 mod runtime;
-mod rules_window;
+mod breaks_window;
 mod settings_window;
 mod toast;
 mod tray;
@@ -106,7 +106,7 @@ pub fn run() {
             let open_rules = true;
 
             if open_rules {
-                rules_window::open(&handle);
+                breaks_window::open(&handle);
             } else if notify_on_start {
                 let loc = i18n::current_locale(&handle);
                 runtime::show_startup_notification(&handle, i18n::tr(&loc, "notif.startup"));
@@ -151,7 +151,7 @@ pub fn run() {
             commands::cmd_close_alarms,
             commands::cmd_get_rules,
             commands::cmd_set_rule_flags,
-            commands::cmd_close_rules,
+            commands::cmd_close_breaks,
             commands::cmd_open_settings,
         ])
         .build(tauri::generate_context!())

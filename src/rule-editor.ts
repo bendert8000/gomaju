@@ -1,5 +1,5 @@
 // Shared break-rule editor used by both the Settings window (src/main.ts) and the
-// standalone Break-rules window (src/rules.ts) — single source of truth for the rule row.
+// standalone Break-rules window (src/breaks.ts) — single source of truth for the rule row.
 
 import { t } from "./i18n";
 

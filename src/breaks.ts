@@ -171,12 +171,12 @@ async function refreshStatus(): Promise<void> {
 async function init(): Promise<void> {
   document.title = t("title.rules");
   applyI18n(document.body);
-  invoke("cmd_window_ready", { label: "rules" }).catch(() => {});
+  invoke("cmd_window_ready", { label: "breaks" }).catch(() => {});
   await load();
   await refreshStatus();
   window.setInterval(refreshStatus, 1000);
   $("settings-btn").addEventListener("click", () => invoke("cmd_open_settings"));
-  $("close-btn").addEventListener("click", () => invoke("cmd_close_rules"));
+  $("close-btn").addEventListener("click", () => invoke("cmd_close_breaks"));
   // Re-sync from disk when returning to this window (e.g. after editing in Settings, or a
   // once-rule auto-disabling while we were away).
   window.addEventListener("focus", () => {

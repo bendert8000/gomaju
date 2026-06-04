@@ -1,3 +1,9 @@
 [workspace]
 members = ["src-tauri", "crates/restee-core"]
 resolver = "2"
+
+[profile.dev]
+# Keep line-table backtraces but drop full debug symbols. Debug builds of a Tauri-sized
+# dependency tree (esp. the `windows` crate + our `staticlib`) otherwise bloat `target/`
+# to ~19 GB; this cuts it to a fraction with no loss of backtraces.
+debug = "line-tables-only"

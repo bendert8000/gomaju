@@ -3,10 +3,10 @@
 restee uses least-privilege capabilities, scoped by window label:
 
 - **`settings.json`** — the `settings` window. Gets `core:default`.
-- **`rules.json`** — the `rules` (break-rules) window. **Empty** permission set (like the
-  overlays); it only invokes app commands. The rule commands (`cmd_get_rules` /
-  `cmd_set_rule_flags` / `cmd_close_rules` / `cmd_open_settings`) are restricted to this
-  window by `require_rules()` in `src/commands.rs`.
+- **`breaks.json`** — the `breaks` (break-rules dashboard) window. **Empty** permission set
+  (like the overlays); it only invokes app commands. The rule commands (`cmd_get_rules` /
+  `cmd_set_rule_flags` / `cmd_close_breaks` / `cmd_open_settings`) are restricted to this
+  window by `require_breaks()` in `src/commands.rs`.
 - **`alarms.json`** — the `alarms` window. **Empty** permission set (like the overlays):
   it only invokes app-defined commands, which aren't capability-gated. The alarm commands
   (`cmd_get_alarms` / `cmd_save_alarms` / `cmd_close_alarms`) are restricted to this window

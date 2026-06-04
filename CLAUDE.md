@@ -72,7 +72,7 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 
 - Break rules live in **two** windows: **Settings** (`index.html` / `src/main.ts`, "Rules"
   card) is the full editor (shared `src/rule-editor.ts` grid). The **standalone Break-rules
-  window** (`rules.html` / `src/rules.ts`, label `rules`, tray "Breaks…"; window title is
+  window** (`breaks.html` / `src/breaks.ts`, label `breaks`, tray "Breaks…"; window title is
   still "Restee — Break rules") is a
   **quick-select dashboard**: big read-only cards where only On/Off (tap the card) and
   Repeat/Once (segmented control) are editable; each toggle auto-saves via
@@ -89,7 +89,7 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
   "Once"; re-check "On" to re-arm. All config writers hold the `config` lock across
   save+cache so the ticker's auto-disable can't clobber a concurrent window Save.
 - Both save paths reconfigure the live engine via `commands.rs::reconfigure_engine`.
-  `cmd_save_rules` (gated by `require_rules`) sanitizes **rules only**
+  `cmd_save_rules` (gated by `require_breaks`) sanitizes **rules only**
   (`config::sanitize_rules`), like `cmd_save_alarms` does for alarms. To prevent a stale
   Settings save from clobbering rules edited in the other window, both pages **refresh their
   rules grid on window focus**.
@@ -108,7 +108,7 @@ in sync with the file's `version`.
 
 ```
 crates/restee-core/   # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
-src/                  # frontend: settings (index.html/main.ts), rules.html, alarms.html, overlay.html, toast.html; shared rule-editor.ts
+src/                  # frontend: settings (index.html/main.ts), breaks.html, alarms.html, overlay.html, toast.html; shared rule-editor.ts
 src-tauri/            # Tauri app: tray, idle, overlays, hotkeys, autostart, audio, notifications, alarm scheduler, window modules
 ```
 
