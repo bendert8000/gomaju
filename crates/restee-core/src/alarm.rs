@@ -50,6 +50,9 @@ pub struct AlarmDto {
     pub date: Option<String>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Optional id of a saved chime to play when this alarm fires (empty = the default tone).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub chime_id: String,
 }
 
 fn default_true() -> bool {
@@ -294,6 +297,7 @@ mod tests {
             month: 0,
             date: None,
             enabled: true,
+            chime_id: String::new(),
         }
     }
 

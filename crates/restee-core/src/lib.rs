@@ -5,6 +5,7 @@
 //! all the timing/priority logic fully unit-testable in isolation.
 
 pub mod alarm;
+pub mod chime;
 pub mod config;
 mod engine;
 mod rule;

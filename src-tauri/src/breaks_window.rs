@@ -1,27 +1,27 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-/// Label of the break-rules window. Owned here; `commands::require_rules` imports it so the
-/// IPC gate can't drift from the real label.
-pub const RULES_LABEL: &str = "rules";
+/// Label of the breaks window (the break-rules quick-select dashboard). Owned here;
+/// `commands::require_breaks` imports it so the IPC gate can't drift from the real label.
+pub const BREAKS_LABEL: &str = "breaks";
 
-/// Close the rules window if it is open.
+/// Close the breaks window if it is open.
 pub fn close(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(RULES_LABEL) {
+    if let Some(window) = app.get_webview_window(BREAKS_LABEL) {
         let _ = window.close();
     }
 }
 
-/// Open the rules window, or focus it if already open.
+/// Open the breaks window, or focus it if already open.
 pub fn open(app: &AppHandle) {
     let app = app.clone();
     let _ = app.clone().run_on_main_thread(move || {
-        if let Some(existing) = app.get_webview_window(RULES_LABEL) {
+        if let Some(existing) = app.get_webview_window(BREAKS_LABEL) {
             let _ = existing.show();
             let _ = existing.set_focus();
             return;
         }
         let locale = crate::i18n::current_locale(&app);
-        match WebviewWindowBuilder::new(&app, RULES_LABEL, WebviewUrl::App("rules.html".into()))
+        match WebviewWindowBuilder::new(&app, BREAKS_LABEL, WebviewUrl::App("breaks.html".into()))
             .title(crate::i18n::tr(&locale, "title.rules"))
             .initialization_script(crate::webview::locale_init(&locale))
             .inner_size(640.0, 600.0)
@@ -32,9 +32,9 @@ pub fn open(app: &AppHandle) {
         {
             Ok(window) => {
                 let _ = window.set_focus();
-                eprintln!("restee: rules window opened");
+                eprintln!("restee: breaks window opened");
             }
-            Err(e) => eprintln!("restee: failed to open rules window: {e}"),
+            Err(e) => eprintln!("restee: failed to open breaks window: {e}"),
         }
     });
 }

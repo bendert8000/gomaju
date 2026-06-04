@@ -16,6 +16,7 @@ const MESSAGES: Record<string, Entry> = {
   "title.settings": { en: "Restee — Settings", "zh-Hant": "Restee — 設定" },
   "title.rules": { en: "Restee — Break rules", "zh-Hant": "Restee — 休息規則" },
   "title.alarms": { en: "Restee — Alarms", "zh-Hant": "Restee — 鬧鐘" },
+  "title.chimes": { en: "Restee — Chimes", "zh-Hant": "Restee — 鈴聲" },
 
   // --- Common ---
   "common.close": { en: "Close", "zh-Hant": "關閉" },
@@ -31,6 +32,19 @@ const MESSAGES: Record<string, Entry> = {
   },
   "confirm.dont_save": { en: "Don't Save", "zh-Hant": "不儲存" },
   "confirm.cancel": { en: "Cancel", "zh-Hant": "取消" },
+
+  // --- Quotes "changed on disk" conflict modal (Settings Quotes card) ---
+  "confirm.quotes_conflict_title": {
+    en: "Quotes changed outside Restee",
+    "zh-Hant": "語錄已在 Restee 外被變更",
+  },
+  "confirm.quotes_conflict_msg": {
+    en: "A quotes file was edited outside Restee since you opened this window. Overwrite it with your current list, or keep the version on disk (your quote edits here will be discarded)?",
+    "zh-Hant":
+      "自您開啟此視窗後，語錄檔已在 Restee 外被編輯。要以您目前的清單覆寫，還是保留磁碟上的版本（將捨棄您在此處的語錄變更）？",
+  },
+  "confirm.quotes_overwrite": { en: "Overwrite", "zh-Hant": "覆寫" },
+  "confirm.quotes_keep_disk": { en: "Keep on-disk version", "zh-Hant": "保留磁碟版本" },
 
   // --- Settings window ---
   "settings.idle_title": { en: "Idle detection backend", "zh-Hant": "閒置偵測後端" },
@@ -62,6 +76,16 @@ const MESSAGES: Record<string, Entry> = {
   "settings.sound_label": {
     en: "Play a chime when a break starts or ends",
     "zh-Hant": "休息開始或結束時播放提示音",
+  },
+  "settings.show_quotes_label": {
+    en: "Show a quote on the break screen",
+    "zh-Hant": "在休息畫面顯示語錄",
+  },
+  "settings.quotes_heading": { en: "Quotes", "zh-Hant": "語錄" },
+  "settings.add_quote": { en: "+ Add quote", "zh-Hant": "＋ 新增語錄" },
+  "settings.quotes_hint": {
+    en: "Quotes are shown in the app's language — edit each set with the toggle above. One quote per line; blank lines and lines starting with # aren't kept.",
+    "zh-Hant": "語錄會以應用程式的語言顯示 — 用上方切換來編輯各語言。每行一句；空白行與以 # 開頭的行不會保留。",
   },
   "settings.notif_label": {
     en: "Show a notification on soft breaks",
@@ -139,6 +163,39 @@ const MESSAGES: Record<string, Entry> = {
   "weekday.4": { en: "Fri", "zh-Hant": "五" },
   "weekday.5": { en: "Sat", "zh-Hant": "六" },
   "weekday.6": { en: "Sun", "zh-Hant": "日" },
+
+  // --- Chimes window ---
+  "chimes.heading": { en: "Restee — Chimes", "zh-Hant": "Restee — 鈴聲" },
+  "chimes.section_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
+  "chimes.desc": {
+    en: "Create custom sounds — a sequence of tones, or an imported audio file. A break rule or alarm can then pick a saved chime; leave a rule/alarm's chime unset to use the default.",
+    "zh-Hant":
+      "建立自訂聲音 — 一連串音調，或匯入的音訊檔。休息規則或鬧鐘即可選用已儲存的鈴聲；未設定則使用預設。",
+  },
+  "chimes.add": { en: "+ Add chime", "zh-Hant": "＋ 新增鈴聲" },
+  "chimes.name_ph": { en: "Chime name", "zh-Hant": "鈴聲名稱" },
+  "chimes.kind_tones": { en: "Tones", "zh-Hant": "音調" },
+  "chimes.kind_file": { en: "File", "zh-Hant": "檔案" },
+  "chimes.preview": { en: "Preview", "zh-Hant": "試聽" },
+  "chimes.pause": { en: "Pause", "zh-Hant": "暫停" },
+  "chimes.key": { en: "Key", "zh-Hant": "調" },
+  "chimes.octave": { en: "Octave", "zh-Hant": "八度" },
+  "chimes.length": { en: "Length", "zh-Hant": "長度" },
+  "chimes.volume": { en: "Volume", "zh-Hant": "音量" },
+  "chimes.melody": { en: "Melody", "zh-Hant": "旋律" },
+  "chimes.rest": { en: "Rest", "zh-Hant": "休止" },
+  "chimes.clear": { en: "Clear", "zh-Hant": "清除" },
+  "chimes.import": { en: "Import file…", "zh-Hant": "匯入檔案…" },
+  "chimes.open_folder": { en: "Open folder", "zh-Hant": "開啟資料夾" },
+  "chimes.no_file": { en: "No file selected", "zh-Hant": "尚未選擇檔案" },
+  "chimes.new_name": { en: "New chime", "zh-Hant": "新鈴聲" },
+  "chimes.default_name": { en: "Chime", "zh-Hant": "鈴聲" },
+
+  // Chime picker (shared by the rules editor + alarms)
+  "chime.label": { en: "Chime", "zh-Hant": "鈴聲" },
+  "chime.start_label": { en: "Start chime", "zh-Hant": "開始鈴聲" },
+  "chime.end_label": { en: "End chime", "zh-Hant": "結束鈴聲" },
+  "chime.default": { en: "Default", "zh-Hant": "預設" },
 
   // --- Rule editor (Settings rules grid) ---
   "editor.new_break": { en: "New break", "zh-Hant": "新休息" },

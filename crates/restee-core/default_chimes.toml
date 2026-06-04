@@ -1,0 +1,27 @@
+# Saved chimes (sound presets for breaks + alarms), seeded on first run. Edited via the Chimes
+# window; imported audio files live in the same folder as this file. A break rule or alarm
+# references a chime by id (see config.toml). Kept separate from config.toml on purpose.
+# `volume_pct` is the volume of the whole chime (its tones or imported file).
+[[chimes]]
+id = "gentle-bell"
+name = "Gentle Bell"
+kind = "tones"
+volume_pct = 18
+[[chimes.steps]]
+freq_hz = 660
+duration_ms = 200
+fade_in_ms = 40
+[[chimes.steps]]
+freq_hz = 988
+duration_ms = 320
+fade_in_ms = 40
+
+[[chimes]]
+id = "soft-ping"
+name = "Soft Ping"
+kind = "tones"
+volume_pct = 22
+[[chimes.steps]]
+freq_hz = 880
+duration_ms = 160
+fade_in_ms = 20

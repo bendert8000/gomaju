@@ -76,6 +76,21 @@
       </section>
 
       <section class="card">
+        <h2 data-i18n="settings.quotes_heading">Quotes</h2>
+        <label class="field field--checkbox">
+          <input id="show-quotes" type="checkbox" />
+          <span data-i18n="settings.show_quotes_label">Show a quote on the break screen</span>
+        </label>
+        <div class="quote-locale-toggle" id="quote-locale" role="group" aria-label="Quote language">
+          <button type="button" class="quote-locale-btn" data-locale="en">English</button>
+          <button type="button" class="quote-locale-btn" data-locale="zh-Hant">繁體中文</button>
+        </div>
+        <div id="quotes"></div>
+        <button id="add-quote" type="button" class="btn-ghost" data-i18n="settings.add_quote">+ Add quote</button>
+        <p class="muted" data-i18n="settings.quotes_hint">Quotes are shown in the app's language — edit each set with the toggle above. One quote per line; blank lines and lines starting with # aren't kept.</p>
+      </section>
+
+      <section class="card">
         <h2><span data-i18n="settings.hotkeys_heading">Break global hotkeys</span> <span class="muted" data-i18n="settings.hotkeys_optional">(optional)</span></h2>
         <p class="muted"><span data-i18n="settings.hotkeys_eg">e.g. </span><code>CommandOrControl+Alt+B</code><span data-i18n="settings.hotkeys_unbind">. Leave blank to unbind.</span></p>
         <label class="field"><span data-i18n="settings.hk_toggle">Start / pause</span><input id="hk-toggle" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>

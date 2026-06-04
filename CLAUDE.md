@@ -72,7 +72,7 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 
 - Break rules live in **two** windows: **Settings** (`index.html` / `src/main.ts`, "Rules"
   card) is the full editor (shared `src/rule-editor.ts` grid). The **standalone Break-rules
-  window** (`rules.html` / `src/rules.ts`, label `rules`, tray "Breaks…"; window title is
+  window** (`breaks.html` / `src/breaks.ts`, label `breaks`, tray "Breaks…"; window title is
   still "Restee — Break rules") is a
   **quick-select dashboard**: big read-only cards where only On/Off (tap the card) and
   Repeat/Once (segmented control) are editable; each toggle auto-saves via
@@ -89,12 +89,79 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
   "Once"; re-check "On" to re-arm. All config writers hold the `config` lock across
   save+cache so the ticker's auto-disable can't clobber a concurrent window Save.
 - Both save paths reconfigure the live engine via `commands.rs::reconfigure_engine`.
-  `cmd_save_rules` (gated by `require_rules`) sanitizes **rules only**
+  `cmd_save_rules` (gated by `require_breaks`) sanitizes **rules only**
   (`config::sanitize_rules`), like `cmd_save_alarms` does for alarms. To prevent a stale
   Settings save from clobbering rules edited in the other window, both pages **refresh their
   rules grid on window focus**.
 - Multi-window caveat: a true concurrent edit (both visible, save one then the other without
   refocusing) can still lose the earlier edit — acceptable for a single-user local app.
+
+## Custom chimes (sounds for breaks + alarms)
+
+- Audio is pure `rodio` sine-wave synthesis (`src-tauri/src/audio.rs`); three built-in tones
+  (break-start, break-over, alarm) are the **defaults**. Users can also create **saved chimes**:
+  named presets that are either a synthesized `ToneStep` sequence (`kind = "tones"`) or an
+  imported audio file (`kind = "file"`, decoded by `rodio::Decoder`). The model + `sanitize_chimes`
+  live in the dependency-free `crates/restee-core/src/chime.rs` (integer fields only — `ChimesFile`
+  derives `Eq`; `is_safe_filename` rejects path-escaping names). Chimes persist in their **own**
+  `chimes.toml` — at `<config_dir>/chimes/chimes.toml`, in the same folder as imported sound files —
+  **not** in `config.toml`. `chime::load_chimes`/`save_chimes` self-heal + seed from the embedded
+  `default_chimes.toml` on first run (which also creates the chimes folder). The host caches the
+  list in `AppState.chimes` (`Mutex<Vec<ChimeDto>>`); `AppState.chimes_path` is the toml's path.
+- A break **rule** picks a **start** chime (`RuleDto.chime_id`) and an **end** chime
+  (`RuleDto.end_chime_id`); an **alarm** picks one (`AlarmDto.chime_id`) — all still in
+  `config.toml`; empty (or an unknown id) = the built-in default tone. `audio::play_break_chime`
+  (start) / `play_break_over_chime` (end, `runtime.rs` `EndBreak`, only on a **completed** break,
+  not a skip) / `play_alarm_chime` resolve the id against `AppState.chimes` and fall back to the
+  default (the end chime falls back to the break-over tone). The Settings rule grid
+  (`rule-editor.ts`) shows two pickers per rule (Start chime / End chime). Alarms keep the "one tone
+  per minute" policy — if several fire at once, the first one's chime plays.
+- The **Chimes window** (`chimes.html` / `src/chimes.ts`, label `chimes`, tray "Chimes…") composes
+  with **musical notes** (`src/notes.ts`: Do-Re-Mi in C/G/F major → MIDI → Hz; tones stored as the
+  resulting `freq_hz`). **Volume is per-chime** (`ChimeDto.volume_pct`, 0..=100), not per-step —
+  `tone_source` synthesizes full-scale sines and the level is applied to the **whole** chime via
+  `Sink::set_volume`, so the one volume covers a tone sequence **and** an imported file. (Older
+  `chimes.toml` files with per-step `volume_pct` still load — the field is ignored and the chime
+  defaults to 20 until re-saved.) CRUD via `cmd_get_chimes` (reads the cache) / `cmd_save_chimes`
+  (sanitize → write `chimes.toml` → swap cache → prune orphaned **audio** files only, so
+  `chimes.toml` survives) / `cmd_preview_chime` (plays the unsaved def) / `cmd_import_chime_file`
+  (native picker in **Rust** via tauri-plugin-dialog → copies into `<config_dir>/chimes/<id>.<ext>`).
+  Writes are `require_chimes`-gated; `cmd_get_chimes` is readable from settings/alarms/chimes to fill
+  the picker dropdowns (`fillChimeSelect` in `rule-editor.ts`). Clicking a note-palette button also
+  **auditions that single note** (`playNote` → `cmd_preview_chime` with a one-step tones chime, at
+  the card's volume) for immediate feedback as you compose; rests are silent.
+- Preview is **stoppable** (the Preview button toggles ▶ Preview ⇄ ⏸ Pause). Unlike the
+  fire-and-forget break/alarm cues, `audio.rs` tracks one current preview behind a generation token
+  (`PREVIEW: Mutex<{gen, Arc<Sink>}>`): `cmd_preview_chime` returns the gen and `start_preview`
+  registers the sink; `cmd_stop_preview` (the ⏸ Pause) stops it; on natural finish the thread emits
+  `preview-ended` with its gen. The gen makes concurrent clicks safe — a new preview/stop supersedes
+  the old, and a superseded thread never emits, so `src/chimes.ts` reverts only the matching button.
+  Pause = stop (replay restarts from the beginning), for both tones and file chimes.
+
+## Break quotes + pre-break toast
+
+- The break overlay shows an optional inspirational **quote**, picked from the **active locale's**
+  quotes file (next to `config.toml`: `quotes.en.txt` / `quotes.zh-Hant.txt`, each seeded once from
+  `src-tauri/default_quotes.<locale>.txt`, re-read each break, picked by `quotes::pick(dir, &locale)`
+  using `cfg.locale`). **No cross-locale fallback** — an empty active set shows no quote. Toggle:
+  `settings.show_quotes`. Injected into `BreakInfo.quote` on both soft + strict overlays, like the
+  per-rule `note`.
+- Quotes are editable in the Settings **Quotes** card (`index.html` / `src/main.ts`, shared
+  `src/quotes-editor.ts` add/remove rows). A **locale toggle** (`.quote-locale-btn`, English /
+  繁體中文) switches which set the rows show — `src/main.ts` keeps a per-locale map
+  (`quotesByLocale`) and captures the visible rows on switch. Saved by the Settings **Save** button
+  alongside config, **all locales at once**. `cmd_get_quotes`/`cmd_save_quotes` (require_settings)
+  take a `locale` and read/write `quotes.<locale>.txt` via `quotes::load`/`sanitize`/`save` (atomic
+  temp+rename, like `config::save`; `locale` canonicalizes to `en`/`zh-Hant` in `quotes`, so a
+  frontend-supplied locale can't escape the dir); `save` echoes the sanitized list. The row editor
+  drops blank/`#`-comment lines (so a quote can't start with `#`), and quotes have **no in-memory
+  cache** (re-read each break). `quotes::seed_if_missing` also migrates a legacy single-file
+  `quotes.txt` into the English set. Save is conflict-guarded per locale: it re-reads each
+  `quotes.<locale>.txt` and, if any changed outside Restee since the editor last synced, prompts
+  Overwrite/Keep-disk (`confirmQuotesConflict`) before writing. `onFocusRefresh` re-syncs all
+  locales (like rules) when the window is clean.
+- The pre-break countdown toast (`toast.html`) is positioned **bottom-right** near the tray via
+  `Monitor::work_area()` (`toast.rs::position_bottom_right`), so it clears the taskbar.
 
 ## Config defaults
 
@@ -108,7 +175,7 @@ in sync with the file's `version`.
 
 ```
 crates/restee-core/   # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
-src/                  # frontend: settings (index.html/main.ts), rules.html, alarms.html, overlay.html, toast.html; shared rule-editor.ts
+src/                  # frontend: settings (index.html/main.ts), breaks.html, alarms.html, chimes.html, overlay.html, toast.html; shared rule-editor.ts
 src-tauri/            # Tauri app: tray, idle, overlays, hotkeys, autostart, audio, notifications, alarm scheduler, window modules
 ```
 

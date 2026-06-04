@@ -54,8 +54,9 @@ fn build_menu(
     let break_now =
         MenuItem::with_id(app, "break_now", i18n::tr(locale, "tray.break_now"), true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
-    let rules = MenuItem::with_id(app, "rules", i18n::tr(locale, "tray.rules"), true, None::<&str>)?;
+    let rules = MenuItem::with_id(app, "breaks", i18n::tr(locale, "tray.rules"), true, None::<&str>)?;
     let alarms = MenuItem::with_id(app, "alarms", i18n::tr(locale, "tray.alarms"), true, None::<&str>)?;
+    let chimes = MenuItem::with_id(app, "chimes", i18n::tr(locale, "tray.chimes"), true, None::<&str>)?;
     let settings =
         MenuItem::with_id(app, "settings", i18n::tr(locale, "tray.settings"), true, None::<&str>)?;
     // Language submenu: each language shown in its own name; check reflects the current locale.
@@ -90,6 +91,7 @@ fn build_menu(
         &sep1,
         &rules,
         &alarms,
+        &chimes,
         &settings,
         &language,
         &sep2,
@@ -127,9 +129,10 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "pause" => runtime::action_pause(app, state.inner()),
                 "reset" => runtime::confirm_then_reset(app),
                 "break_now" => runtime::action_break_now(app, state.inner()),
-                "rules" => crate::rules_window::open(app),
+                "breaks" => crate::breaks_window::open(app),
                 "settings" => crate::settings_window::open(app),
                 "alarms" => crate::alarms_window::open(app),
+                "chimes" => crate::chimes_window::open(app),
                 "lang-zh-hant" => runtime::set_locale(app, "zh-Hant"),
                 "lang-en" => runtime::set_locale(app, "en"),
                 "quit" => {

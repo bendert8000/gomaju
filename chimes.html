@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Restee — Chimes</title>
+    <script type="module" src="/src/chimes.ts" defer></script>
+  </head>
+  <body class="settings-page">
+    <header class="settings-header">
+      <h1 data-i18n="chimes.heading">Restee — Chimes</h1>
+    </header>
+
+    <main class="settings-main">
+      <section class="card">
+        <h2 data-i18n="chimes.section_heading">Chimes</h2>
+        <p class="muted" data-i18n="chimes.desc">
+          Create custom sounds — a sequence of tones, or an imported audio file. A break rule or
+          alarm can then pick a saved chime; leave a rule/alarm's chime unset to use the default.
+        </p>
+        <div id="chimes"></div>
+        <button id="add-chime" type="button" class="btn-ghost" data-i18n="chimes.add">+ Add chime</button>
+        <button id="open-folder" type="button" class="btn-ghost" data-i18n="chimes.open_folder">Open folder</button>
+      </section>
+    </main>
+
+    <footer class="settings-footer">
+      <span id="save-msg" class="muted"></span>
+      <div class="actions">
+        <button id="close-btn" type="button" class="btn-ghost" data-i18n="common.close">Close</button>
+        <button id="save-btn" type="button" class="btn-primary" data-i18n="common.save">Save</button>
+      </div>
+    </footer>
+  </body>
+</html>

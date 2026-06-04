@@ -36,6 +36,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.break_now" => pick(locale, "Break now", "立即休息"),
         "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
+        "tray.chimes" => pick(locale, "Chimes…", "鈴聲…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
         "tray.language" => pick(locale, "Language", "語言"),
         "tray.quit" => pick(locale, "Quit Restee", "結束 Restee"),
@@ -70,6 +71,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "title.settings" => pick(locale, "Restee — Settings", "Restee — 設定"),
         "title.rules" => pick(locale, "Restee — Break rules", "Restee — 休息規則"),
         "title.alarms" => pick(locale, "Restee — Alarms", "Restee — 鬧鐘"),
+        "title.chimes" => pick(locale, "Restee — Chimes", "Restee — 鈴聲"),
 
         _ => {
             // All keys should be in the catalog; surface a miss in dev rather than panic.

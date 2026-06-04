@@ -145,7 +145,7 @@ in-app via **Settings / Breaks… / Alarms…**, or by hand. A corrupt file is b
 
 ```
 crates/restee-core/  # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
-src/                 # frontend (Vite, vanilla TS): index.html (Settings), rules.html (Break-rules dashboard),
+src/                 # frontend (Vite, vanilla TS): index.html (Settings), breaks.html (Break-rules dashboard),
                      #   alarms.html (Alarms), overlay.html (break screen), toast.html (pre-break toast); shared rule-editor.ts
 src-tauri/           # Tauri host: tray, idle, overlays, hotkeys, autostart, audio, notifications, alarm scheduler
 ```

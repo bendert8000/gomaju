@@ -1,13 +1,16 @@
 use serde::Serialize;
 use tauri::{AppHandle, State, WebviewWindow};
+use tauri_plugin_dialog::DialogExt;
 
 use restee_core::alarm::{self, AlarmDto};
+use restee_core::chime::{self, ChimeDto, ChimesFile};
 use restee_core::config::{self, ConfigFile, RuleDto};
 
 use crate::alarms_window::{self, ALARMS_LABEL};
 use crate::app_state::AppState;
+use crate::chimes_window::{self, CHIMES_LABEL};
 use crate::idle::IdleStatus;
-use crate::rules_window::{self, RULES_LABEL};
+use crate::breaks_window::{self, BREAKS_LABEL};
 use crate::settings_window::{self, SETTINGS_LABEL};
 use crate::{autostart, hotkeys, runtime};
 
@@ -21,9 +24,14 @@ fn is_alarms(label: &str) -> bool {
     label == ALARMS_LABEL
 }
 
-/// Pure, unit-testable predicate: is this window label the break-rules window?
-fn is_rules(label: &str) -> bool {
-    label == RULES_LABEL
+/// Pure, unit-testable predicate: is this window label the breaks window?
+fn is_breaks(label: &str) -> bool {
+    label == BREAKS_LABEL
+}
+
+/// Pure, unit-testable predicate: is this window label the chimes window?
+fn is_chimes(label: &str) -> bool {
+    label == CHIMES_LABEL
 }
 
 /// Shared gate body: app commands are not gated per-window by Tauri's capability system,
@@ -47,9 +55,14 @@ fn require_alarms(window: &WebviewWindow) -> Result<(), String> {
     gate(is_alarms(window.label()), "alarms")
 }
 
-/// Reject a rules command invoked from any window other than the break-rules window.
-fn require_rules(window: &WebviewWindow) -> Result<(), String> {
-    gate(is_rules(window.label()), "rules")
+/// Reject a breaks-dashboard command invoked from any window other than the breaks window.
+fn require_breaks(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_breaks(window.label()), "breaks")
+}
+
+/// Reject a chimes-write command invoked from any window other than the chimes window.
+fn require_chimes(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_chimes(window.label()), "chimes")
 }
 
 /// Push a config's rules+settings into the live engine and apply any resulting effects.
@@ -76,7 +89,7 @@ pub fn cmd_reset_timer(
     rule_id: String,
 ) -> Result<(), String> {
     gate(
-        is_settings(window.label()) || is_rules(window.label()),
+        is_settings(window.label()) || is_breaks(window.label()),
         "settings/rules",
     )?;
     runtime::confirm_then_reset_one(&app, rule_id);
@@ -131,7 +144,7 @@ pub fn cmd_get_status(
 ) -> Result<StatusDto, String> {
     // Read-only status, shown in both the Settings banner and the Break-rules dashboard.
     gate(
-        is_settings(window.label()) || is_rules(window.label()),
+        is_settings(window.label()) || is_breaks(window.label()),
         "settings/rules",
     )?;
     let snapshot = state.engine.lock().unwrap().status();
@@ -203,6 +216,41 @@ pub fn cmd_save_config(
         config,
         hotkey_errors,
     })
+}
+
+// --- Break quotes (settings-window only; stored in quotes.txt, separate from config.toml) ---
+
+/// One locale's break quotes (parsed, one per line). Read by the Settings "Quotes" card on load,
+/// on focus, and on locale switch, and re-read inside the card's Save to detect external edits to
+/// `quotes.<locale>.txt`. `locale` canonicalizes to one of the two supported sets in `quotes`.
+#[tauri::command]
+pub fn cmd_get_quotes(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    locale: String,
+) -> Result<Vec<String>, String> {
+    require_settings(&window)?;
+    let dir = state.config_path.parent().ok_or("no config dir")?;
+    Ok(crate::quotes::load(dir, &locale))
+}
+
+/// Persist one locale's edited quote list to `quotes.<locale>.txt` (sanitize → atomic write),
+/// returning the sanitized list so the form reflects any trimmed/dropped lines (like
+/// `cmd_save_config` echoes its config). Quotes are re-read live on each break, so there's no
+/// in-memory cache to update (unlike config/alarms/chimes). The `quotes` parameter shadows the
+/// `crate::quotes` module name, so the module is referenced fully-qualified.
+#[tauri::command]
+pub fn cmd_save_quotes(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    locale: String,
+    quotes: Vec<String>,
+) -> Result<Vec<String>, String> {
+    require_settings(&window)?;
+    let dir = state.config_path.parent().ok_or("no config dir")?;
+    let clean = crate::quotes::sanitize(&quotes);
+    crate::quotes::save(dir, &locale, &clean).map_err(|e| e.to_string())?;
+    Ok(clean)
 }
 
 // --- Alarms (alarms-window only) ---
@@ -281,14 +329,209 @@ pub fn cmd_close_alarms(window: WebviewWindow, app: AppHandle) -> Result<(), Str
     Ok(())
 }
 
-// --- Break rules (rules-window only) ---
+// --- Chimes (chimes-window writes; settings/alarms/chimes may read the list) ---
+
+/// The saved chime list. Readable from the windows that show a chime picker (settings rules
+/// editor + alarms) and the chimes editor itself; writes stay chimes-only.
+#[tauri::command]
+pub fn cmd_get_chimes(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<Vec<ChimeDto>, String> {
+    gate(
+        is_settings(window.label()) || is_alarms(window.label()) || is_chimes(window.label()),
+        "settings/alarms/chimes",
+    )?;
+    Ok(state.chimes.lock().unwrap().clone())
+}
+
+/// Persist the edited chime list (clone → sanitize → save → swap, like `cmd_save_alarms`). Uses the
+/// full `sanitize` so a chime deleted here also clears any now-dangling rule/alarm references, then
+/// prunes imported files no longer referenced by any saved chime. Returns the sanitized list.
+#[tauri::command]
+pub fn cmd_save_chimes(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    chimes: Vec<ChimeDto>,
+) -> Result<Vec<ChimeDto>, String> {
+    require_chimes(&window)?;
+
+    let mut file = ChimesFile { chimes };
+    file.sanitize();
+    let sanitized = file.chimes.clone();
+
+    // Hold the cache lock across the write + swap so a failed write never leaves the cache ahead of
+    // disk. Chimes live in chimes.toml — this never touches config.toml.
+    let mut guard = state.chimes.lock().unwrap();
+    chime::save_chimes(&state.chimes_path, &file).map_err(|e| e.to_string())?;
+    *guard = file.chimes;
+    drop(guard);
+
+    prune_orphan_chime_files(&state, &sanitized);
+    Ok(sanitized)
+}
+
+/// Best-effort: delete any unreferenced **audio** file in the chimes folder. Restricted to known
+/// audio extensions so it never removes `chimes.toml` (or its `.bak`/`.tmp`), which share the folder.
+fn prune_orphan_chime_files(state: &AppState, chimes: &[ChimeDto]) {
+    const AUDIO_EXTS: [&str; 4] = ["wav", "mp3", "ogg", "flac"];
+    let Some(dir) = state.chimes_path.parent() else {
+        return;
+    };
+    let referenced: std::collections::HashSet<&str> = chimes
+        .iter()
+        .filter(|c| matches!(c.kind, restee_core::chime::ChimeKindDto::File))
+        .map(|c| c.file.as_str())
+        .collect();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let is_audio = entry
+            .path()
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| AUDIO_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+            .unwrap_or(false);
+        if is_audio {
+            if let Some(name) = entry.file_name().to_str() {
+                if !referenced.contains(name) {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+}
+
+/// Preview a chime live — the in-editor (possibly unsaved) definition. The chime is sanitized
+/// first so an extreme unsaved value can't blast; tones play from `steps`, a file chime plays the
+/// already-imported file from the chimes dir. The preview is **stoppable**: this returns a
+/// generation token, the playback emits `preview-ended` with that token when it finishes, and
+/// `cmd_stop_preview` halts it. Returns `0` when there's nothing to play (so the UI stays idle).
+#[tauri::command]
+pub fn cmd_preview_chime(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chime: ChimeDto,
+) -> Result<u64, String> {
+    require_chimes(&window)?;
+    let mut one = vec![chime];
+    chime::sanitize_chimes(&mut one);
+    let Some(chime) = one.into_iter().next() else {
+        return Ok(0); // sanitized away (e.g. tones with no steps) — nothing to play
+    };
+    let gen = match chime.kind {
+        restee_core::chime::ChimeKindDto::Tones => {
+            crate::audio::preview_chime_spec(app, chime.steps, chime.volume_pct)
+        }
+        restee_core::chime::ChimeKindDto::File => {
+            match state.config_path.parent().map(|p| p.join("chimes")) {
+                Some(dir) => {
+                    crate::audio::preview_chime_file(app, dir.join(&chime.file), chime.volume_pct)
+                }
+                None => 0,
+            }
+        }
+    };
+    Ok(gen)
+}
+
+/// Stop the currently-playing chime preview (the Chimes window's ⏸ Pause).
+#[tauri::command]
+pub fn cmd_stop_preview(window: WebviewWindow) -> Result<(), String> {
+    require_chimes(&window)?;
+    crate::audio::stop_preview();
+    Ok(())
+}
+
+/// Open a native file picker, copy the chosen audio file into `<config_dir>/chimes/<chime_id>.<ext>`,
+/// and return the stored **bare** filename (or `None` if cancelled). The editor then sets the
+/// chime's `kind = "file"` + `file = <returned>`. Async so the dialog runs off the main thread.
+#[tauri::command]
+pub async fn cmd_import_chime_file(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chime_id: String,
+) -> Result<Option<String>, String> {
+    require_chimes(&window)?;
+    // `chime_id` is a frontend-generated UUID; require it to be a safe bare filename component
+    // (it becomes the stored file's stem), so a crafted id can't escape the chimes dir.
+    if !chime::is_safe_filename(&chime_id) {
+        return Err("invalid chime id".into());
+    }
+    let dir = state
+        .config_path
+        .parent()
+        .map(|p| p.join("chimes"))
+        .ok_or("no config dir")?;
+
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Audio", &["wav", "mp3", "ogg", "flac"])
+        .blocking_pick_file();
+    let Some(src) = picked.and_then(|fp| fp.into_path().ok()) else {
+        return Ok(None); // cancelled
+    };
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .filter(|e| ["wav", "mp3", "ogg", "flac"].contains(&e.as_str()))
+        .ok_or("unsupported audio format")?;
+
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let filename = format!("{chime_id}.{ext}");
+    std::fs::copy(&src, dir.join(&filename)).map_err(|e| e.to_string())?;
+    Ok(Some(filename))
+}
+
+#[tauri::command]
+pub fn cmd_close_chimes(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_chimes(&window)?;
+    chimes_window::close(&app);
+    Ok(())
+}
+
+/// Open the chimes folder (where `chimes.toml` + imported sounds live) in the OS file manager.
+/// Creates it first so the button always works, even before any import.
+#[tauri::command]
+pub fn cmd_open_chimes_folder(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_chimes(&window)?;
+    let Some(dir) = state.chimes_path.parent() else {
+        return Err("no chimes folder".into());
+    };
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    open_in_file_manager(dir).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Launch the platform file manager on `path` (best-effort, detached). `spawn` returns immediately
+/// (no blocking / event-loop pumping), so this is safe to call from a synchronous command.
+fn open_in_file_manager(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let program = "xdg-open";
+    std::process::Command::new(program).arg(path).spawn()?;
+    Ok(())
+}
+
+// --- Break rules (breaks-window only) ---
 
 #[tauri::command]
 pub fn cmd_get_rules(
     window: WebviewWindow,
     state: State<'_, AppState>,
 ) -> Result<Vec<RuleDto>, String> {
-    require_rules(&window)?;
+    require_breaks(&window)?;
     Ok(state.config.lock().unwrap().rules.clone())
 }
 
@@ -307,7 +550,7 @@ pub fn cmd_set_rule_flags(
     enabled: bool,
     repeat: bool,
 ) -> Result<(), String> {
-    require_rules(&window)?;
+    require_breaks(&window)?;
 
     let config = {
         let mut guard = state.config.lock().unwrap();
@@ -328,9 +571,9 @@ pub fn cmd_set_rule_flags(
 }
 
 #[tauri::command]
-pub fn cmd_close_rules(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
-    require_rules(&window)?;
-    rules_window::close(&app);
+pub fn cmd_close_breaks(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_breaks(&window)?;
+    breaks_window::close(&app);
     Ok(())
 }
 
@@ -342,14 +585,14 @@ pub async fn cmd_open_settings(window: WebviewWindow, app: AppHandle) -> Result<
     // is a native menu event, so it's unaffected). `settings_window::open` marshals the actual
     // window build to the main thread via `run_on_main_thread`, which now posts cleanly from
     // this off-main-thread command instead of re-entering the loop.
-    require_rules(&window)?;
+    require_breaks(&window)?;
     settings_window::open(&app);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_alarms, is_rules, is_settings};
+    use super::{is_alarms, is_breaks, is_chimes, is_settings};
 
     #[test]
     fn only_the_settings_window_is_privileged() {
@@ -359,7 +602,7 @@ mod tests {
         assert!(!is_settings("overlay-1"));
         assert!(!is_settings("warning-toast"));
         assert!(!is_settings("alarms"));
-        assert!(!is_settings("rules"));
+        assert!(!is_settings("breaks"));
         assert!(!is_settings("Settings")); // case-sensitive
         assert!(!is_settings(""));
     }
@@ -368,7 +611,7 @@ mod tests {
     fn only_the_alarms_window_is_privileged_for_alarm_commands() {
         assert!(is_alarms("alarms"));
         assert!(!is_alarms("settings"));
-        assert!(!is_alarms("rules"));
+        assert!(!is_alarms("breaks"));
         assert!(!is_alarms("overlay-0"));
         assert!(!is_alarms("warning-toast"));
         assert!(!is_alarms("Alarms")); // case-sensitive
@@ -376,12 +619,22 @@ mod tests {
     }
 
     #[test]
-    fn only_the_rules_window_is_privileged_for_rule_commands() {
-        assert!(is_rules("rules"));
-        assert!(!is_rules("settings"));
-        assert!(!is_rules("alarms"));
-        assert!(!is_rules("overlay-0"));
-        assert!(!is_rules("Rules")); // case-sensitive
-        assert!(!is_rules(""));
+    fn only_the_breaks_window_is_privileged_for_rule_commands() {
+        assert!(is_breaks("breaks"));
+        assert!(!is_breaks("settings"));
+        assert!(!is_breaks("alarms"));
+        assert!(!is_breaks("overlay-0"));
+        assert!(!is_breaks("Breaks")); // case-sensitive
+        assert!(!is_breaks(""));
+    }
+
+    #[test]
+    fn only_the_chimes_window_is_privileged_for_chime_writes() {
+        assert!(is_chimes("chimes"));
+        assert!(!is_chimes("settings"));
+        assert!(!is_chimes("alarms"));
+        assert!(!is_chimes("breaks"));
+        assert!(!is_chimes("Chimes")); // case-sensitive
+        assert!(!is_chimes(""));
     }
 }
