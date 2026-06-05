@@ -1,5 +1,7 @@
 use serde::Serialize;
-use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 /// Label of the pre-break countdown toast. `commands::require_toast` imports it so the IPC gate
 /// (for the "Delay 1 min" snooze) can't drift from the real label.
@@ -21,7 +23,9 @@ pub struct WarningInfo {
 pub fn show(app: &AppHandle, info: WarningInfo) {
     close(app);
     let app = app.clone();
-    let _ = app.clone().run_on_main_thread(move || build_toast(&app, &info));
+    let _ = app
+        .clone()
+        .run_on_main_thread(move || build_toast(&app, &info));
 }
 
 /// Close the countdown toast if present.

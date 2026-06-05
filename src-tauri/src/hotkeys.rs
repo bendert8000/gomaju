@@ -23,7 +23,12 @@ pub fn apply(app: &AppHandle, hotkeys: &HotkeysDto) -> Vec<String> {
     let _ = app.global_shortcut().unregister_all();
     let mut errors = Vec::new();
     register(app, hotkeys.toggle.as_deref(), Action::Toggle, &mut errors);
-    register(app, hotkeys.break_now.as_deref(), Action::BreakNow, &mut errors);
+    register(
+        app,
+        hotkeys.break_now.as_deref(),
+        Action::BreakNow,
+        &mut errors,
+    );
     register(app, hotkeys.skip.as_deref(), Action::Skip, &mut errors);
     errors
 }

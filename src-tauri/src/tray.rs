@@ -41,34 +41,95 @@ fn build_menu(
     let alarm_items: Vec<MenuItem<tauri::Wry>> = alarm_lines
         .iter()
         .enumerate()
-        .map(|(i, line)| MenuItem::with_id(app, format!("alarm-line-{i}"), line, false, None::<&str>))
+        .map(|(i, line)| {
+            MenuItem::with_id(app, format!("alarm-line-{i}"), line, false, None::<&str>)
+        })
         .collect::<tauri::Result<Vec<_>>>()?;
     let sep_alarms = PredefinedMenuItem::separator(app)?;
 
     let sep0 = PredefinedMenuItem::separator(app)?;
     // CheckMenuItems render a native check before the text to mark the active state.
     let start = CheckMenuItem::with_id(app, "start", start_text, true, started, None::<&str>)?;
-    let pause =
-        CheckMenuItem::with_id(app, "pause", i18n::tr(locale, "tray.pause"), true, paused, None::<&str>)?;
-    let reset = MenuItem::with_id(app, "reset", i18n::tr(locale, "tray.reset"), true, None::<&str>)?;
-    let break_now =
-        MenuItem::with_id(app, "break_now", i18n::tr(locale, "tray.break_now"), true, None::<&str>)?;
+    let pause = CheckMenuItem::with_id(
+        app,
+        "pause",
+        i18n::tr(locale, "tray.pause"),
+        true,
+        paused,
+        None::<&str>,
+    )?;
+    let reset = MenuItem::with_id(
+        app,
+        "reset",
+        i18n::tr(locale, "tray.reset"),
+        true,
+        None::<&str>,
+    )?;
+    let break_now = MenuItem::with_id(
+        app,
+        "break_now",
+        i18n::tr(locale, "tray.break_now"),
+        true,
+        None::<&str>,
+    )?;
     let sep1 = PredefinedMenuItem::separator(app)?;
-    let rules = MenuItem::with_id(app, "breaks", i18n::tr(locale, "tray.rules"), true, None::<&str>)?;
-    let alarms = MenuItem::with_id(app, "alarms", i18n::tr(locale, "tray.alarms"), true, None::<&str>)?;
-    let chimes = MenuItem::with_id(app, "chimes", i18n::tr(locale, "tray.chimes"), true, None::<&str>)?;
-    let settings =
-        MenuItem::with_id(app, "settings", i18n::tr(locale, "tray.settings"), true, None::<&str>)?;
+    let rules = MenuItem::with_id(
+        app,
+        "breaks",
+        i18n::tr(locale, "tray.rules"),
+        true,
+        None::<&str>,
+    )?;
+    let alarms = MenuItem::with_id(
+        app,
+        "alarms",
+        i18n::tr(locale, "tray.alarms"),
+        true,
+        None::<&str>,
+    )?;
+    let chimes = MenuItem::with_id(
+        app,
+        "chimes",
+        i18n::tr(locale, "tray.chimes"),
+        true,
+        None::<&str>,
+    )?;
+    let settings = MenuItem::with_id(
+        app,
+        "settings",
+        i18n::tr(locale, "tray.settings"),
+        true,
+        None::<&str>,
+    )?;
     // Language submenu: each language shown in its own name; check reflects the current locale.
-    let lang_zh =
-        CheckMenuItem::with_id(app, "lang-zh-hant", "繁體中文", true, locale != "en", None::<&str>)?;
-    let lang_en = CheckMenuItem::with_id(app, "lang-en", "English", true, locale == "en", None::<&str>)?;
+    let lang_zh = CheckMenuItem::with_id(
+        app,
+        "lang-zh-hant",
+        "繁體中文",
+        true,
+        locale != "en",
+        None::<&str>,
+    )?;
+    let lang_en = CheckMenuItem::with_id(
+        app,
+        "lang-en",
+        "English",
+        true,
+        locale == "en",
+        None::<&str>,
+    )?;
     let language = SubmenuBuilder::new(app, i18n::tr(locale, "tray.language"))
         .item(&lang_zh)
         .item(&lang_en)
         .build()?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", i18n::tr(locale, "tray.quit"), true, None::<&str>)?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        i18n::tr(locale, "tray.quit"),
+        true,
+        None::<&str>,
+    )?;
 
     let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> =
         Vec::with_capacity(status_items.len() + alarm_items.len() + 13);
@@ -110,7 +171,15 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     // carry stable ids so `on_menu_event` routes across later rebuilds.
     let locale = i18n::current_locale(app);
     let placeholder = [i18n::tr(&locale, "tray.placeholder").to_string()];
-    let menu = build_menu(app, &locale, true, false, i18n::tr(&locale, "tray.start"), &placeholder, &[])?;
+    let menu = build_menu(
+        app,
+        &locale,
+        true,
+        false,
+        i18n::tr(&locale, "tray.start"),
+        &placeholder,
+        &[],
+    )?;
 
     let icon = app
         .default_window_icon()
@@ -168,7 +237,8 @@ pub fn refresh(
     let started = matches!(state, RunState::Running | RunState::InBreak);
     let paused = state == RunState::Paused;
     let start_text = if started {
-        i18n::tr(&locale, "tray.start_running").replace("{dur}", &i18n::human_dur(&locale, running_secs))
+        i18n::tr(&locale, "tray.start_running")
+            .replace("{dur}", &i18n::human_dur(&locale, running_secs))
     } else if paused {
         i18n::tr(&locale, "tray.resume").to_string()
     } else {
@@ -199,7 +269,15 @@ pub fn refresh(
     // and building off-thread to set on-thread is unsafe on some platforms.
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        match build_menu(&handle, &locale, started, paused, &start_text, &lines, &alarm_lines) {
+        match build_menu(
+            &handle,
+            &locale,
+            started,
+            paused,
+            &start_text,
+            &lines,
+            &alarm_lines,
+        ) {
             Ok(menu) => match handle.tray_by_id(TRAY_ID) {
                 Some(tray) => {
                     if let Err(e) = tray.set_menu(Some(menu)) {

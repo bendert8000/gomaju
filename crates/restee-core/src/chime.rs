@@ -19,7 +19,7 @@ const MIN_STEP_MS: u32 = 1;
 const MAX_STEPS: usize = 64;
 
 /// One step of a synthesized chime: a tone (or silence, when `freq_hz == 0`) for `duration_ms`.
-/// Loudness is **not** per-step — the whole chime has one `volume_pct` (see [`ChimeDto`]).
+/// Loudness is supplied by the rule/alarm picker that plays the chime, not by the chime itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToneStep {
     /// Frequency in Hz; `0` = silence (a gap between tones).
@@ -51,19 +51,9 @@ pub struct ChimeDto {
     /// File chimes only: the **bare** filename under the app's `chimes/` dir (no path components).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub file: String,
-    /// Playback volume for the **whole** chime — the tone sequence or the imported file alike,
-    /// `0..=100` (percent of the synth's reference amplitude / the file's native level). Defaults
-    /// to 20 (so configs written before this field existed, which had per-step volumes, get a sane
-    /// level).
-    #[serde(default = "default_chime_volume")]
-    pub volume_pct: u8,
     /// Tone chimes only: the sequence of tone steps.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<ToneStep>,
-}
-
-fn default_chime_volume() -> u8 {
-    20
 }
 
 /// Whether `name` is a safe **bare** filename to store/read under the chimes dir: non-empty, with
@@ -110,10 +100,6 @@ pub fn sanitize_chimes(chimes: &mut Vec<ChimeDto>) -> bool {
     chimes.retain_mut(|c| {
         if c.id.trim().is_empty() || !seen.insert(c.id.clone()) {
             return false; // empty or duplicate id
-        }
-        if c.volume_pct > 100 {
-            c.volume_pct = 100; // whole-chime volume is a percent
-            changed = true;
         }
         match c.kind {
             ChimeKindDto::Tones => {
@@ -221,7 +207,6 @@ mod tests {
             name: id.into(),
             kind: ChimeKindDto::Tones,
             file: String::new(),
-            volume_pct: 50,
             steps: vec![ToneStep {
                 freq_hz: 880,
                 duration_ms: 200,
@@ -250,7 +235,16 @@ mod tests {
     #[test]
     fn rejects_unsafe_file_names_keeps_safe() {
         assert!(is_safe_filename("bell.wav"));
-        for bad in ["", ".", "..", "../x.wav", "a/b.wav", "a\\b.wav", "C:\\x.wav", "x..y"] {
+        for bad in [
+            "",
+            ".",
+            "..",
+            "../x.wav",
+            "a/b.wav",
+            "a\\b.wav",
+            "C:\\x.wav",
+            "x..y",
+        ] {
             assert!(!is_safe_filename(bad), "{bad} should be rejected");
         }
         let file = |id: &str, name: &str| ChimeDto {
@@ -258,7 +252,6 @@ mod tests {
             name: id.into(),
             kind: ChimeKindDto::File,
             file: name.into(),
-            volume_pct: 20,
             steps: Vec::new(),
         };
         let mut chimes = vec![file("ok", "bell.wav"), file("bad", "../escape.wav")];
@@ -268,9 +261,8 @@ mod tests {
     }
 
     #[test]
-    fn clamps_step_ranges_and_chime_volume() {
+    fn clamps_step_ranges() {
         let mut c = tone("c");
-        c.volume_pct = 250; // whole-chime volume over 100
         c.steps[0] = ToneStep {
             freq_hz: 50_000,
             duration_ms: 0,
@@ -278,7 +270,6 @@ mod tests {
         };
         let mut chimes = vec![c];
         assert!(sanitize_chimes(&mut chimes));
-        assert_eq!(chimes[0].volume_pct, 100);
         let s = chimes[0].steps[0];
         assert_eq!(s.freq_hz, MAX_FREQ_HZ);
         assert_eq!(s.duration_ms, MIN_STEP_MS);
@@ -310,10 +301,17 @@ mod tests {
                     name: "Two".into(),
                     kind: ChimeKindDto::Tones,
                     file: String::new(),
-                    volume_pct: 20,
                     steps: vec![
-                        ToneStep { freq_hz: 660, duration_ms: 200, fade_in_ms: 20 },
-                        ToneStep { freq_hz: 990, duration_ms: 200, fade_in_ms: 20 },
+                        ToneStep {
+                            freq_hz: 660,
+                            duration_ms: 200,
+                            fade_in_ms: 20,
+                        },
+                        ToneStep {
+                            freq_hz: 990,
+                            duration_ms: 200,
+                            fade_in_ms: 20,
+                        },
                     ],
                 },
             ],
@@ -329,5 +327,25 @@ mod tests {
         let file = ChimesFile::default();
         let parsed: ChimesFile = toml::from_str(&toml::to_string_pretty(&file).unwrap()).unwrap();
         assert!(parsed.chimes.is_empty());
+    }
+
+    #[test]
+    fn old_volume_field_is_ignored_and_dropped_on_save() {
+        let text = r#"
+[[chimes]]
+id = "old"
+name = "Old"
+kind = "tones"
+volume_pct = 99
+
+[[chimes.steps]]
+freq_hz = 660
+duration_ms = 200
+fade_in_ms = 20
+"#;
+        let parsed: ChimesFile = toml::from_str(text).unwrap();
+        assert_eq!(parsed.chimes.len(), 1);
+        let saved = toml::to_string_pretty(&parsed).unwrap();
+        assert!(!saved.contains("volume_pct"));
     }
 }

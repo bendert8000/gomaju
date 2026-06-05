@@ -62,7 +62,7 @@ const MESSAGES: Record<string, Entry> = {
   "settings.idle_pause": { en: "Pause counting", "zh-Hant": "暫停計時" },
   "settings.idle_credit": { en: "Count it as a break", "zh-Hant": "視為已休息" },
   "settings.escape_label": { en: "Strict-break escape", "zh-Hant": "強制休息的退出方式" },
-  "settings.escape_friction": { en: "Hold to skip", "zh-Hant": "按住以略過" },
+  "settings.escape_friction": { en: "Hold to cancel break", "zh-Hant": "長按取消休息" },
   "settings.escape_easy": { en: "Easy skip button", "zh-Hant": "簡易略過按鈕" },
   "settings.escape_none": { en: "No easy escape", "zh-Hant": "無法輕易退出" },
   "settings.break_display_label": { en: "Break screen display", "zh-Hant": "休息畫面顯示" },
@@ -216,7 +216,7 @@ const MESSAGES: Record<string, Entry> = {
     en: "Hold Esc to exit in an emergency",
     "zh-Hant": "緊急情況請按住 Esc 退出",
   },
-  "overlay.hold_to_skip": { en: "Hold to skip", "zh-Hant": "按住以略過" },
+  "overlay.hold_to_skip": { en: "Hold to cancel break", "zh-Hant": "長按取消休息" },
   "overlay.keep_holding": { en: "Keep holding…", "zh-Hant": "繼續按住…" },
   "overlay.strict_hint": {
     en: "Step away from the screen for a bit.",

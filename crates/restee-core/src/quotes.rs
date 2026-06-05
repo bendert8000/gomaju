@@ -220,7 +220,12 @@ mod tests {
     #[test]
     fn sanitize_trims_drops_blank_and_comment_lines_per_locale() {
         let mut f = QuotesFile {
-            en: vec!["  Rest.  ".into(), String::new(), "# c".into(), "Stretch.".into()],
+            en: vec![
+                "  Rest.  ".into(),
+                String::new(),
+                "# c".into(),
+                "Stretch.".into(),
+            ],
             zh_hant: vec!["  休息。 ".into(), "   ".into()],
         };
         assert!(f.sanitize());
@@ -230,7 +235,10 @@ mod tests {
 
     #[test]
     fn sanitize_is_idempotent_and_reports_no_change_when_clean() {
-        let mut f = QuotesFile { en: vec!["Rest.".into()], zh_hant: vec!["休息。".into()] };
+        let mut f = QuotesFile {
+            en: vec!["Rest.".into()],
+            zh_hant: vec!["休息。".into()],
+        };
         assert!(!f.sanitize());
         let once = f.clone();
         assert!(!f.sanitize());
@@ -261,7 +269,10 @@ mod tests {
         let mut f: QuotesFile =
             toml::from_str(DEFAULT_QUOTES_TOML).expect("default_quotes.toml must parse");
         assert!(!f.en.is_empty(), "default en quotes should be non-empty");
-        assert!(!f.zh_hant.is_empty(), "default zh-Hant quotes should be non-empty");
+        assert!(
+            !f.zh_hant.is_empty(),
+            "default zh-Hant quotes should be non-empty"
+        );
         // The shipped default must already be valid — sanitize should change nothing.
         assert!(!f.sanitize());
     }
@@ -399,11 +410,18 @@ mod tests {
     fn load_valid_clean_file_is_not_rewritten() {
         let dir = temp_dir("load-clean");
         let path = dir.join("quotes.toml");
-        let f = QuotesFile { en: vec!["Rest.".into()], zh_hant: vec!["休息。".into()] };
+        let f = QuotesFile {
+            en: vec!["Rest.".into()],
+            zh_hant: vec!["休息。".into()],
+        };
         save_quotes(&path, &f).unwrap();
         let before = fs::read_to_string(&path).unwrap();
         assert_eq!(load_quotes(&path).unwrap(), f);
-        assert_eq!(fs::read_to_string(&path).unwrap(), before, "clean load must not rewrite");
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            before,
+            "clean load must not rewrite"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -433,7 +451,10 @@ mod tests {
         let path = dir.join("quotes.toml");
         save_quotes(
             &path,
-            &QuotesFile { en: vec!["old en".into()], zh_hant: vec!["保留中文".into()] },
+            &QuotesFile {
+                en: vec!["old en".into()],
+                zh_hant: vec!["保留中文".into()],
+            },
         )
         .unwrap();
         // Load full file, replace only en, sanitize, write — exactly what the command does.
@@ -443,7 +464,11 @@ mod tests {
         save_quotes(&path, &file).unwrap();
         let reloaded = load_quotes(&path).unwrap();
         assert_eq!(reloaded.en, ["new en"]);
-        assert_eq!(reloaded.zh_hant, ["保留中文"], "the other locale must be preserved");
+        assert_eq!(
+            reloaded.zh_hant,
+            ["保留中文"],
+            "the other locale must be preserved"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

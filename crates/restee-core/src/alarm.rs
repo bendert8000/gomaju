@@ -53,10 +53,24 @@ pub struct AlarmDto {
     /// Optional id of a saved chime to play when this alarm fires (empty = the default tone).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub chime_id: String,
+    /// Volume for this alarm's selected/default chime.
+    #[serde(
+        default = "default_chime_volume",
+        skip_serializing_if = "is_default_chime_volume"
+    )]
+    pub chime_volume_pct: u8,
 }
 
 fn default_true() -> bool {
     true
+}
+
+pub fn default_chime_volume() -> u8 {
+    20
+}
+
+fn is_default_chime_volume(v: &u8) -> bool {
+    *v == default_chime_volume()
 }
 
 /// Parse a 24-hour "HH:MM" string into `(hour, minute)` if well-formed.
@@ -109,9 +123,7 @@ fn parse_ymd(s: &str) -> Option<(i32, u8, u8)> {
 /// Whether `s` is a real calendar date "YYYY-MM-DD" (rejects e.g. 2026-02-30).
 fn is_real_ymd(s: &str) -> bool {
     match parse_ymd(s) {
-        Some((y, mo, d)) => {
-            y >= 0 && (1..=12).contains(&mo) && d >= 1 && d <= days_in_month(y, mo)
-        }
+        Some((y, mo, d)) => y >= 0 && (1..=12).contains(&mo) && d >= 1 && d <= days_in_month(y, mo),
         None => false,
     }
 }
@@ -160,7 +172,8 @@ pub fn alarm_is_due(
     }
     // Day-of-month with end-of-month clamp: a target past the month length fires on
     // the month's last day (so "31" fires on Feb 28/29, Apr 30, etc.).
-    let dom_matches = |target: u8| target == day || (target > days_in_month && day == days_in_month);
+    let dom_matches =
+        |target: u8| target == day || (target > days_in_month && day == days_in_month);
     match a.repeat {
         RepeatDto::Once => a.date.as_deref() == Some(ymd),
         RepeatDto::Daily => true,
@@ -241,6 +254,7 @@ pub fn sanitize_alarms(alarms: &mut [AlarmDto]) -> bool {
             a.time = "08:00".to_string();
             changed = true;
         }
+        clamp(&mut a.chime_volume_pct, 0, 100, &mut changed);
 
         // per-kind normalization
         match a.repeat {
@@ -298,6 +312,7 @@ mod tests {
             date: None,
             enabled: true,
             chime_id: String::new(),
+            chime_volume_pct: default_chime_volume(),
         }
     }
 
@@ -350,8 +365,14 @@ mod tests {
         let w2 = monday_week(days_from_civil(2026, 6, 15));
         assert_eq!(w2, w1 + 1);
         // Leap day: Feb spans 29 days in 2024 but 28 in 2023.
-        assert_eq!(days_from_civil(2024, 3, 1) - days_from_civil(2024, 2, 28), 2);
-        assert_eq!(days_from_civil(2023, 3, 1) - days_from_civil(2023, 2, 28), 1);
+        assert_eq!(
+            days_from_civil(2024, 3, 1) - days_from_civil(2024, 2, 28),
+            2
+        );
+        assert_eq!(
+            days_from_civil(2023, 3, 1) - days_from_civil(2023, 2, 28),
+            1
+        );
     }
 
     #[test]
@@ -359,7 +380,7 @@ mod tests {
         let mut a = alarm(RepeatDto::Biweekly, "08:30");
         a.weekdays = vec![0]; // Mon
         a.date = Some("2026-06-08".into()); // start week = week of Mon Jun 8
-        // On-weeks: Jun 8, Jun 22, Jul 6 (every other Monday from the start).
+                                            // On-weeks: Jun 8, Jun 22, Jul 6 (every other Monday from the start).
         assert!(alarm_is_due(&a, 8, 30, 0, 6, 8, 30, "2026-06-08"));
         assert!(alarm_is_due(&a, 8, 30, 0, 6, 22, 30, "2026-06-22"));
         assert!(alarm_is_due(&a, 8, 30, 0, 7, 6, 31, "2026-07-06"));
@@ -398,7 +419,7 @@ mod tests {
         let mut a = alarm(RepeatDto::Biweekly, "08:30");
         a.weekdays = vec![0]; // Mon
         a.date = Some("2026-06-10".into()); // anchor is the Wed in the week of Mon Jun 8
-        // Mon Jun 8 is in the anchor's week but precedes the anchor date -> skipped.
+                                            // Mon Jun 8 is in the anchor's week but precedes the anchor date -> skipped.
         assert!(!alarm_is_due(&a, 8, 30, 0, 6, 8, 30, "2026-06-08"));
         // Next on-week Monday (Jun 22) fires; the off-week Monday (Jun 15) never does.
         assert!(alarm_is_due(&a, 8, 30, 0, 6, 22, 30, "2026-06-22"));
@@ -557,5 +578,23 @@ mod tests {
         let changed = sanitize_alarms(&mut v);
         assert!(!changed);
         assert_eq!(v[0].day_of_month, 0);
+    }
+
+    #[test]
+    fn chime_volume_defaults_clamps_and_round_trips() {
+        let text = "id = \"a\"\nname = \"A\"\ntime = \"08:30\"\nrepeat = \"daily\"\n";
+        let parsed: AlarmDto = toml::from_str(text).unwrap();
+        assert_eq!(parsed.chime_volume_pct, default_chime_volume());
+
+        let mut v = vec![parsed.clone()];
+        v[0].chime_volume_pct = 250;
+        assert!(sanitize_alarms(&mut v));
+        assert_eq!(v[0].chime_volume_pct, 100);
+
+        v[0].chime_volume_pct = 0;
+        let saved = toml::to_string_pretty(&v[0]).unwrap();
+        assert!(saved.contains("chime_volume_pct = 0"));
+        let reparsed: AlarmDto = toml::from_str(&saved).unwrap();
+        assert_eq!(reparsed.chime_volume_pct, 0);
     }
 }

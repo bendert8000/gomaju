@@ -8,9 +8,9 @@ use restee_core::config::{self, ConfigFile, RuleDto};
 
 use crate::alarms_window::{self, ALARMS_LABEL};
 use crate::app_state::AppState;
+use crate::breaks_window::{self, BREAKS_LABEL};
 use crate::chimes_window::{self, CHIMES_LABEL};
 use crate::idle::IdleStatus;
-use crate::breaks_window::{self, BREAKS_LABEL};
 use crate::settings_window::{self, SETTINGS_LABEL};
 use crate::{autostart, hotkeys, runtime};
 
@@ -463,13 +463,15 @@ pub fn cmd_preview_chime(
     };
     let gen = match chime.kind {
         restee_core::chime::ChimeKindDto::Tones => {
-            crate::audio::preview_chime_spec(app, chime.steps, chime.volume_pct)
+            crate::audio::preview_chime_spec(app, chime.steps, config::default_chime_volume())
         }
         restee_core::chime::ChimeKindDto::File => {
             match state.config_path.parent().map(|p| p.join("chimes")) {
-                Some(dir) => {
-                    crate::audio::preview_chime_file(app, dir.join(&chime.file), chime.volume_pct)
-                }
+                Some(dir) => crate::audio::preview_chime_file(
+                    app,
+                    dir.join(&chime.file),
+                    config::default_chime_volume(),
+                ),
                 None => 0,
             }
         }
@@ -477,9 +479,9 @@ pub fn cmd_preview_chime(
     Ok(gen)
 }
 
-/// Preview the chime currently selected in a rule/alarm picker, **by id**: the saved chime, or the
-/// context's built-in default tone when the id is empty/unknown. `kind` (`break_start` | `break_over`
-/// | `alarm`) picks which default tone — an unknown kind is rejected. Stoppable like
+/// Preview the chime currently selected in a rule/alarm picker, **by id** and picker volume: the
+/// saved chime, or the context's built-in default tone when the id is empty/unknown. `kind`
+/// (`break_start` | `break_over` | `alarm`) picks which default tone — an unknown kind is rejected. Stoppable like
 /// `cmd_preview_chime`; returns the generation token (0 = nothing played). Readable from the windows
 /// that show a chime picker (settings rules editor + alarms); the chimes window uses the def-based
 /// `cmd_preview_chime` instead.
@@ -489,6 +491,7 @@ pub fn cmd_preview_chime_by_id(
     app: AppHandle,
     state: State<'_, AppState>,
     chime_id: String,
+    volume_pct: u8,
     kind: String,
 ) -> Result<u64, String> {
     gate(shows_chime_picker(window.label()), "settings/alarms")?;
@@ -505,7 +508,12 @@ pub fn cmd_preview_chime_by_id(
         .unwrap_or_default();
     let chimes = state.chimes.lock().unwrap();
     Ok(crate::audio::preview_assigned_or(
-        app, &chime_id, &chimes, &dir, tone,
+        app,
+        &chime_id,
+        volume_pct.min(100),
+        &chimes,
+        &dir,
+        tone,
     ))
 }
 

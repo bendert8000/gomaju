@@ -27,7 +27,14 @@ pub fn next_fire(a: &AlarmDto, now: DateTime<Local>) -> Option<DateTime<Local>> 
     let (ah, am) = parse_hhmm(&a.time)?;
     let at = |date: NaiveDate| -> Option<DateTime<Local>> {
         Local
-            .with_ymd_and_hms(date.year(), date.month(), date.day(), ah as u32, am as u32, 0)
+            .with_ymd_and_hms(
+                date.year(),
+                date.month(),
+                date.day(),
+                ah as u32,
+                am as u32,
+                0,
+            )
             .single()
     };
 
@@ -75,13 +82,7 @@ pub fn spawn_scheduler(app: AppHandle) {
         loop {
             std::thread::sleep(Duration::from_secs(1));
             let now = Local::now();
-            let stamp = (
-                now.year(),
-                now.month(),
-                now.day(),
-                now.hour(),
-                now.minute(),
-            );
+            let stamp = (now.year(), now.month(), now.day(), now.hour(), now.minute());
             if last_min == Some(stamp) {
                 continue; // still inside a minute we already handled
             }
@@ -111,7 +112,7 @@ pub fn spawn_scheduler(app: AppHandle) {
             // most once per minute so several alarms at the same time don't overlap into
             // a cacophony of audio streams. When several fire together, the first one's chime
             // wins (its assigned chime, or the default alarm tone if it has none).
-            let mut fired_chime: Option<String> = None;
+            let mut fired_chime: Option<(String, u8)> = None;
             for a in &alarms {
                 if !alarm_is_due(a, hh, mm, weekday_mon0, month, day, dim, &ymd) {
                     continue;
@@ -119,13 +120,13 @@ pub fn spawn_scheduler(app: AppHandle) {
                 eprintln!("restee: alarm fired ({})", a.name);
                 runtime::show_notification(&app, &a.name);
                 if fired_chime.is_none() {
-                    fired_chime = Some(a.chime_id.clone());
+                    fired_chime = Some((a.chime_id.clone(), a.chime_volume_pct));
                 }
                 if a.repeat == RepeatDto::Once {
                     disable_once(&app, &a.id);
                 }
             }
-            if let Some(chime_id) = fired_chime {
+            if let Some((chime_id, chime_volume_pct)) = fired_chime {
                 let dir = {
                     let st = app.state::<AppState>();
                     st.config_path
@@ -133,7 +134,7 @@ pub fn spawn_scheduler(app: AppHandle) {
                         .map(|p| p.join("chimes"))
                         .unwrap_or_default()
                 };
-                audio::play_alarm_chime(&chime_id, &chimes, &dir);
+                audio::play_alarm_chime(&chime_id, chime_volume_pct, &chimes, &dir);
             }
         }
     });
@@ -163,7 +164,14 @@ fn disable_once(app: &AppHandle, id: &str) {
 
     // Disk write succeeded — flip the flag in the live cache (re-find by id so a concurrent
     // alarms-window save isn't clobbered).
-    if let Some(a) = st.config.lock().unwrap().alarms.iter_mut().find(|a| a.id == id) {
+    if let Some(a) = st
+        .config
+        .lock()
+        .unwrap()
+        .alarms
+        .iter_mut()
+        .find(|a| a.id == id)
+    {
         a.enabled = false;
     }
     eprintln!("restee: once-alarm '{id}' disabled after firing");
@@ -194,6 +202,7 @@ mod tests {
             date: None,
             enabled: true,
             chime_id: String::new(),
+            chime_volume_pct: restee_core::alarm::default_chime_volume(),
         }
     }
 

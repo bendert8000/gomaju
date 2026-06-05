@@ -109,27 +109,29 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
   `default_chimes.toml` on first run (which also creates the chimes folder). The host caches the
   list in `AppState.chimes` (`Mutex<Vec<ChimeDto>>`); `AppState.chimes_path` is the toml's path.
 - A break **rule** picks a **start** chime (`RuleDto.chime_id`) and an **end** chime
-  (`RuleDto.end_chime_id`); an **alarm** picks one (`AlarmDto.chime_id`) — all still in
-  `config.toml`; empty (or an unknown id) = the built-in default tone. `audio::play_break_chime`
-  (start) / `play_break_over_chime` (end, `runtime.rs` `EndBreak`, only on a **completed** break,
-  not a skip) / `play_alarm_chime` resolve the id against `AppState.chimes` and fall back to the
-  default (the end chime falls back to the break-over tone). The Settings rule grid
-  (`rule-editor.ts`) shows two pickers per rule (Start chime / End chime). Alarms keep the "one tone
-  per minute" policy — if several fire at once, the first one's chime plays.
+  (`RuleDto.end_chime_id`), each with its own volume (`chime_volume_pct` /
+  `end_chime_volume_pct`, default 20); an **alarm** picks one (`AlarmDto.chime_id` +
+  `chime_volume_pct`) — all still in `config.toml`; empty (or an unknown id) = the built-in
+  default tone at that picker volume. `audio::play_break_chime` (start) /
+  `play_break_over_chime` (end, `runtime.rs` `EndBreak`, only on a **completed** break, not a skip)
+  / `play_alarm_chime` resolve the id against `AppState.chimes` and fall back to the default (the
+  end chime falls back to the break-over tone). The Settings rule grid (`rule-editor.ts`) shows two
+  pickers per rule (Start chime / End chime). Alarms keep the "one tone per minute" policy — if
+  several fire at once, the first one's chime and volume win.
 - The **Chimes window** (`chimes.html` / `src/chimes.ts`, label `chimes`, tray "Chimes…") composes
   with **musical notes** (`src/notes.ts`: Do-Re-Mi in C/G/F major → MIDI → Hz; tones stored as the
-  resulting `freq_hz`). **Volume is per-chime** (`ChimeDto.volume_pct`, 0..=100), not per-step —
-  `tone_source` synthesizes full-scale sines and the level is applied to the **whole** chime via
-  `Sink::set_volume`, so the one volume covers a tone sequence **and** an imported file. (Older
-  `chimes.toml` files with per-step `volume_pct` still load — the field is ignored and the chime
-  defaults to 20 until re-saved.) CRUD via `cmd_get_chimes` (reads the cache) / `cmd_save_chimes`
+  resulting `freq_hz`). **Volume is not part of a saved chime**: `tone_source` synthesizes
+  full-scale sines and playback applies the rule/alarm picker's `*_volume_pct` via
+  `Sink::set_volume`, so the same preset can be quiet in one place and louder in another. Older
+  `chimes.toml` files with `volume_pct` still load; the field is ignored and dropped on re-save.
+  CRUD via `cmd_get_chimes` (reads the cache) / `cmd_save_chimes`
   (sanitize → write `chimes.toml` → swap cache → prune orphaned **audio** files only, so
   `chimes.toml` survives) / `cmd_preview_chime` (plays the unsaved def) / `cmd_import_chime_file`
   (native picker in **Rust** via tauri-plugin-dialog → copies into `<config_dir>/chimes/<id>.<ext>`).
   Writes are `require_chimes`-gated; `cmd_get_chimes` is readable from settings/alarms/chimes to fill
   the picker dropdowns (`fillChimeSelect` in `rule-editor.ts`). Clicking a note-palette button also
   **auditions that single note** (`playNote` → `cmd_preview_chime` with a one-step tones chime, at
-  the card's volume) for immediate feedback as you compose; rests are silent.
+  fixed volume 20) for immediate feedback as you compose; rests are silent.
 - Preview is **stoppable** (the Preview button toggles ▶ Preview ⇄ ⏸ Pause). Unlike the
   fire-and-forget break/alarm cues, `audio.rs` tracks one current preview behind a generation token
   (`PREVIEW: Mutex<{gen, Arc<Sink>}>`): `cmd_preview_chime` returns the gen and `start_preview`

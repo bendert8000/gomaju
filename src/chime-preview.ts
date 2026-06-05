@@ -62,20 +62,23 @@ export function resetActivePreview(): void {
   }
 }
 
-/** Wire a ▶/⏸ toggle button. `getChimeId` is read at click time (so changing the <select> then
- * pressing ▶ auditions the new pick); `kind` picks the built-in tone for an empty ("Default") id. */
+/** Wire a ▶/⏸ toggle button. `getChimeId` and `getVolumePct` are read at click time (so changing
+ * either control then pressing ▶ auditions the current assignment); `kind` picks the built-in tone
+ * for an empty ("Default") id. */
 export function wirePreviewButton(
   btn: HTMLButtonElement,
   getChimeId: () => string,
+  getVolumePct: () => number,
   kind: PreviewKind,
 ): void {
   setIdleLabel(btn);
-  btn.addEventListener("click", () => void toggle(btn, getChimeId, kind));
+  btn.addEventListener("click", () => void toggle(btn, getChimeId, getVolumePct, kind));
 }
 
 async function toggle(
   btn: HTMLButtonElement,
   getChimeId: () => string,
+  getVolumePct: () => number,
   kind: PreviewKind,
 ): Promise<void> {
   if (btn === previewBtn) {
@@ -86,7 +89,11 @@ async function toggle(
   }
   setPreviewIdle(); // revert any other active button; the backend stops its audio when we start
   try {
-    const gen = await invoke<number>("cmd_preview_chime_by_id", { chimeId: getChimeId(), kind });
+    const gen = await invoke<number>("cmd_preview_chime_by_id", {
+      chimeId: getChimeId(),
+      volumePct: Math.min(100, Math.max(0, Math.round(getVolumePct()))),
+      kind,
+    });
     if (!gen) return; // nothing to play (e.g. an empty/missing chime with no default)
     previewGen = gen;
     previewBtn = btn;

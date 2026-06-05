@@ -43,7 +43,10 @@ mod tests {
         let path = temp_path("pick-active");
         save_quotes(
             &path,
-            &QuotesFile { en: vec!["only-en".into()], zh_hant: vec!["only-zh".into()] },
+            &QuotesFile {
+                en: vec!["only-en".into()],
+                zh_hant: vec!["only-zh".into()],
+            },
         )
         .unwrap();
         assert_eq!(pick(&path, "en").as_deref(), Some("only-en"));
@@ -53,7 +56,14 @@ mod tests {
     #[test]
     fn pick_none_when_active_locale_empty_no_cross_fallback() {
         let path = temp_path("pick-empty");
-        save_quotes(&path, &QuotesFile { en: vec![], zh_hant: vec!["有中文".into()] }).unwrap();
+        save_quotes(
+            &path,
+            &QuotesFile {
+                en: vec![],
+                zh_hant: vec!["有中文".into()],
+            },
+        )
+        .unwrap();
         // en is empty -> None, even though zh-Hant has quotes (no cross-locale fallback).
         assert_eq!(pick(&path, "en"), None);
     }

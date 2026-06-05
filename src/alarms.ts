@@ -28,6 +28,7 @@ interface AlarmDto {
   date: string | null; // "YYYY-MM-DD" (Once: fire date; Biweekly: start week)
   enabled: boolean;
   chime_id: string; // id of a saved chime to play (empty = default alarm tone)
+  chime_volume_pct: number; // volume for this alarm chime/default tone, 0..=100
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -93,7 +94,7 @@ function alarmRow(a: AlarmDto): HTMLElement {
       </span>
     </div>
     <div class="alarm-line alarm-chime-row">
-      <label>${t("chime.label")} <select class="alarm-chime"></select><button class="alarm-chime-preview btn-ghost chime-preview-btn" type="button"></button></label>
+      <label>${t("chime.label")} <select class="alarm-chime"></select><span>${t("chimes.volume")}</span><input class="alarm-chime-volume chime-volume-picker" type="number" min="0" max="100" /><button class="alarm-chime-preview btn-ghost chime-preview-btn" type="button"></button></label>
     </div>
     <div class="alarm-next"></div>
   `;
@@ -101,10 +102,14 @@ function alarmRow(a: AlarmDto): HTMLElement {
   q<HTMLInputElement>(row, ".alarm-name").value = a.name;
   const chimeSel = q<HTMLSelectElement>(row, ".alarm-chime");
   fillChimeSelect(chimeSel, chimes, a.chime_id ?? "");
+  q<HTMLInputElement>(row, ".alarm-chime-volume").value = String(
+    clampInt(String(a.chime_volume_pct ?? 20), 0, 100, 20),
+  );
   // ▶/⏸ preview after the picker; "Default" (empty) auditions the built-in alarm tone.
   wirePreviewButton(
     q<HTMLButtonElement>(row, ".alarm-chime-preview"),
     () => chimeSel.value,
+    () => clampInt(q<HTMLInputElement>(row, ".alarm-chime-volume").value, 0, 100, 20),
     "alarm",
   );
   q<HTMLInputElement>(row, ".alarm-time").value = a.time || "08:00";
@@ -192,6 +197,7 @@ function collectAlarms(): AlarmDto[] {
       date,
       enabled: q<HTMLInputElement>(row, ".alarm-enabled").checked,
       chime_id: q<HTMLSelectElement>(row, ".alarm-chime").value,
+      chime_volume_pct: clampInt(q<HTMLInputElement>(row, ".alarm-chime-volume").value, 0, 100, 20),
     };
   });
 }
@@ -315,6 +321,7 @@ async function init(): Promise<void> {
         date: null,
         enabled: true,
         chime_id: "",
+        chime_volume_pct: 20,
       }),
     );
   });

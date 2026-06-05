@@ -95,13 +95,16 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                     // so the config lock is held only for the spawn, not for playback.
                     if cfg.settings.sound {
                         let chime_id = rule.map(|r| r.chime_id.as_str()).unwrap_or("");
+                        let chime_volume_pct = rule
+                            .map(|r| r.chime_volume_pct)
+                            .unwrap_or_else(config::default_chime_volume);
                         let dir = state
                             .config_path
                             .parent()
                             .map(|p| p.join("chimes"))
                             .unwrap_or_default();
                         let chimes = state.chimes.lock().unwrap();
-                        crate::audio::play_break_chime(chime_id, &chimes, &dir);
+                        crate::audio::play_break_chime(chime_id, chime_volume_pct, &chimes, &dir);
                     }
                     (
                         cfg.settings.notifications,
@@ -133,10 +136,7 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                     show_notification(app, &body);
                 }
             }
-            Effect::BreakTick {
-                rule_id,
-                remaining,
-            } => {
+            Effect::BreakTick { rule_id, remaining } => {
                 let _ = app.emit(
                     "break-tick",
                     BreakTickPayload {
@@ -153,15 +153,14 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 // assigned end chime, falling back to the default break-over tone.
                 if *completed {
                     let state = app.state::<AppState>();
-                    let (sound, end_chime_id) = {
+                    let (sound, end_chime_id, end_chime_volume_pct) = {
                         let cfg = state.config.lock().unwrap();
-                        let end = cfg
-                            .rules
-                            .iter()
-                            .find(|r| r.id == *rule_id)
-                            .map(|r| r.end_chime_id.clone())
-                            .unwrap_or_default();
-                        (cfg.settings.sound, end)
+                        let rule = cfg.rules.iter().find(|r| r.id == *rule_id);
+                        let end = rule.map(|r| r.end_chime_id.clone()).unwrap_or_default();
+                        let volume = rule
+                            .map(|r| r.end_chime_volume_pct)
+                            .unwrap_or_else(config::default_chime_volume);
+                        (cfg.settings.sound, end, volume)
                     };
                     if sound {
                         let dir = state
@@ -170,7 +169,12 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                             .map(|p| p.join("chimes"))
                             .unwrap_or_default();
                         let chimes = state.chimes.lock().unwrap();
-                        crate::audio::play_break_over_chime(&end_chime_id, &chimes, &dir);
+                        crate::audio::play_break_over_chime(
+                            &end_chime_id,
+                            end_chime_volume_pct,
+                            &chimes,
+                            &dir,
+                        );
                     }
                 }
             }
@@ -358,7 +362,13 @@ pub fn refresh_tray(app: &AppHandle, state: RunState) {
         .into_iter()
         .map(|n| (n.rule_name, n.remaining_secs))
         .collect();
-    crate::tray::refresh(app, state, running_secs, breaks, todays_upcoming_alarms(&st));
+    crate::tray::refresh(
+        app,
+        state,
+        running_secs,
+        breaks,
+        todays_upcoming_alarms(&st),
+    );
 }
 
 /// Enabled alarms whose next fire is still ahead **today**, as `(name, "HH:MM")` soonest
@@ -385,14 +395,22 @@ fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String)> {
         })
         .collect();
     list.sort_by_key(|(mins, _, _)| *mins);
-    list.into_iter().map(|(_, name, time)| (name, time)).collect()
+    list.into_iter()
+        .map(|(_, name, time)| (name, time))
+        .collect()
 }
 
 /// Show an OS notification titled "restee" with `body`. Best-effort: on Windows the
 /// toast renders reliably only once the app is installed (has an app identity).
 pub fn show_notification(app: &AppHandle, body: &str) {
     use tauri_plugin_notification::NotificationExt;
-    match app.notification().builder().title("Restee").body(body).show() {
+    match app
+        .notification()
+        .builder()
+        .title("Restee")
+        .body(body)
+        .show()
+    {
         Ok(_) => eprintln!("restee: notification shown ({body})"),
         Err(e) => eprintln!("restee: notification failed ({e})"),
     }

@@ -12,7 +12,12 @@ use crate::app_state::AppState;
 
 /// The current UI locale from the live config (the single source of truth).
 pub fn current_locale(app: &AppHandle) -> String {
-    app.state::<AppState>().config.lock().unwrap().locale.clone()
+    app.state::<AppState>()
+        .config
+        .lock()
+        .unwrap()
+        .locale
+        .clone()
 }
 
 /// English iff the locale is exactly `"en"`; otherwise Traditional Chinese (the default).

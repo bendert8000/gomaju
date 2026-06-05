@@ -27,8 +27,6 @@ interface ChimeDto {
   id: string;
   name: string;
   kind: ChimeKind;
-  /** Volume of the whole chime (its tones or imported file), 0..=100. */
-  volume_pct: number;
   // The backend omits these when empty (serde `skip_serializing_if`): an incoming **file** chime
   // has no `steps`, an incoming **tones** chime has no `file` — so both arrive as `undefined`.
   // Normalize on read (see `chimeCard`); `collectChime` always sets them when sending back.
@@ -39,11 +37,6 @@ interface ChimeDto {
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const q = <T extends HTMLElement>(root: HTMLElement, selector: string): T =>
   root.querySelector(selector) as T;
-
-function clampInt(value: string, lo: number, hi: number, fallback: number): number {
-  const n = Math.round(Number(value));
-  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
-}
 
 // --- Melody (note chips) ---
 
@@ -128,7 +121,6 @@ function chimeCard(c: ChimeDto): HTMLElement {
       <button class="chime-preview btn-ghost" type="button">▶ ${t("chimes.preview")}</button>
       <button class="chime-remove btn-ghost" type="button" title="${t("common.remove")}">✕</button>
     </div>
-    <label class="chime-volume-row">${t("chimes.volume")} <input class="chime-volume" type="number" min="0" max="100" /></label>
     <div class="chime-tones">
       <div class="chime-controls">
         <label>${t("chimes.key")} <select class="chime-key"><option value="C">C</option><option value="G">G</option><option value="F">F</option></select></label>
@@ -153,14 +145,11 @@ function chimeCard(c: ChimeDto): HTMLElement {
   `;
   q<HTMLInputElement>(card, ".chime-name").value = c.name;
 
-  // Controls + melody. Default the picker to C major / octave 4 / quarter note / volume 20; seed the
-  // strip from the saved steps, or a C-E-G (octave 4) default when there are none (new chime, or a
-  // file -> tones switch). `volumeFromSteps` returns 20 for an empty (new) chime, and the saved
-  // volume for an existing one.
+  // Controls + melody. Default the picker to C major / octave 4 / quarter note; seed the strip from
+  // the saved steps, or a C-E-G (octave 4) default when there are none (new chime, or file -> tones).
   q<HTMLSelectElement>(card, ".chime-key").value = "C";
   q<HTMLSelectElement>(card, ".chime-octave").value = "4";
   q<HTMLSelectElement>(card, ".chime-length").value = "quarter";
-  q<HTMLInputElement>(card, ".chime-volume").value = String(c.volume_pct ?? 20);
   // A file chime arrives with `steps` omitted (undefined); treat it as an empty melody so the
   // strip setup below never calls `.length` on undefined.
   const steps = c.steps ?? [];
@@ -227,7 +216,6 @@ function chimeCard(c: ChimeDto): HTMLElement {
 
 function collectChime(card: HTMLElement): ChimeDto {
   const kind = (card.dataset.kind as ChimeKind) || "tones";
-  const volume_pct = clampInt(q<HTMLInputElement>(card, ".chime-volume").value, 0, 100, 20);
   let steps: ToneStep[] = [];
   if (kind === "tones") {
     const melody = collectMelody(card);
@@ -241,7 +229,6 @@ function collectChime(card: HTMLElement): ChimeDto {
     id: card.dataset.id || crypto.randomUUID(),
     name: q<HTMLInputElement>(card, ".chime-name").value.trim() || t("chimes.default_name"),
     kind,
-    volume_pct,
     file: kind === "file" ? card.dataset.file || "" : "",
     steps,
   };
@@ -301,18 +288,16 @@ async function preview(card: HTMLElement): Promise<void> {
 }
 
 /** Play a single just-added melody note for immediate audio feedback while composing. Reuses the
- * chime-preview path with a one-step `tones` chime, at the card's current volume. The caller skips
+ * chime-preview path with a one-step `tones` chime, at fixed volume 20. The caller skips
  * rests (`midi == null`), so the note here is always sounded. */
 async function playNote(card: HTMLElement, note: Note): Promise<void> {
   setPreviewIdle(); // a note audition supersedes (stops) any running chime preview
-  const vol = clampInt(q<HTMLInputElement>(card, ".chime-volume").value, 0, 100, 20);
   try {
     await invoke("cmd_preview_chime", {
       chime: {
         id: card.dataset.id || crypto.randomUUID(),
         name: "",
         kind: "tones",
-        volume_pct: vol,
         file: "",
         steps: notesToSteps([note]),
       },
@@ -382,7 +367,6 @@ async function init(): Promise<void> {
         id: crypto.randomUUID(),
         name: t("chimes.new_name"),
         kind: "tones",
-        volume_pct: 20,
         file: "",
         steps: [], // chimeCard seeds a C-E-G default melody when there are no steps
       }),

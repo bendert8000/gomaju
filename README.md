@@ -39,11 +39,11 @@ Built with **Tauri v2** (Rust core + TypeScript/HTML/CSS UI): tiny binaries, low
   configurable escape: **hold-to-skip**, **easy** one-click skip, or **no easy escape**.
 - **Custom chimes** — craft your own break and alarm sounds in the **Chimes** window
   (*Chimes…* in the tray): **compose a melody** from musical notes (Do-Re-Mi in C / G / F major,
-  with octave and note length) or **import an audio file** (wav / mp3 / ogg / flac), with one
-  volume for the whole chime. Preview as you go (▶ Preview ⇄ ⏸ Pause; each note also sounds as
+  with octave and note length) or **import an audio file** (wav / mp3 / ogg / flac). Preview as you go
+  (▶ Preview ⇄ ⏸ Pause; each note also sounds as
   you add it) and drag notes to reorder. Then each break rule can pick a **start** and an **end**
-  chime, and each alarm its own — leave it unset to use the built-in default tones. Saved presets
-  live in their own `chimes.toml`.
+  chime, and each alarm its own, with volume set per selection — leave it unset to use the built-in
+  default tones. Saved presets live in their own `chimes.toml`.
 - **Heads-up warning** — an optional, non-focus-stealing countdown toast a few seconds before
   a break starts (configurable; `0` = off).
 - **Activity-aware** — auto-pauses while you're idle. The default *pause* policy just freezes

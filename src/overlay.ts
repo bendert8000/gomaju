@@ -95,7 +95,7 @@ async function skip(): Promise<void> {
   }
 }
 
-// How long the friction "hold to skip" must be held.
+// How long the friction "hold to cancel break" affordance must be held.
 const HOLD_MS = 3000;
 
 // Skip affordance per escape mode.

@@ -85,10 +85,22 @@ pub struct RuleDto {
     /// Optional id of a saved chime to play when this break starts (empty = the default tone).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub chime_id: String,
+    /// Volume for this break-start chime selection.
+    #[serde(
+        default = "default_chime_volume",
+        skip_serializing_if = "is_default_chime_volume"
+    )]
+    pub chime_volume_pct: u8,
     /// Optional id of a saved chime to play when this break ends/completes (empty = the default
     /// break-over tone). Only plays on a completed break, not a skip.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub end_chime_id: String,
+    /// Volume for this break-end chime selection.
+    #[serde(
+        default = "default_chime_volume",
+        skip_serializing_if = "is_default_chime_volume"
+    )]
+    pub end_chime_volume_pct: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,6 +174,14 @@ pub struct ConfigFile {
 
 fn default_true() -> bool {
     true
+}
+
+pub fn default_chime_volume() -> u8 {
+    20
+}
+
+fn is_default_chime_volume(v: &u8) -> bool {
+    *v == default_chime_volume()
 }
 
 /// Default UI language: Traditional Chinese.
@@ -270,6 +290,16 @@ pub fn sanitize_rules(rules: &mut [RuleDto]) -> bool {
             r.break_secs = brk;
             changed = true;
         }
+        let chime_vol = r.chime_volume_pct.clamp(0, 100);
+        if chime_vol != r.chime_volume_pct {
+            r.chime_volume_pct = chime_vol;
+            changed = true;
+        }
+        let end_chime_vol = r.end_chime_volume_pct.clamp(0, 100);
+        if end_chime_vol != r.end_chime_volume_pct {
+            r.end_chime_volume_pct = end_chime_vol;
+            changed = true;
+        }
     }
     changed
 }
@@ -294,7 +324,12 @@ impl ConfigFile {
                 *changed = true;
             }
         };
-        clamp(&mut self.settings.warn_seconds, 0, MAX_WARN_SECS, &mut changed);
+        clamp(
+            &mut self.settings.warn_seconds,
+            0,
+            MAX_WARN_SECS,
+            &mut changed,
+        );
         if self.settings.away_threshold_secs < 1 {
             self.settings.away_threshold_secs = 1;
             changed = true;
@@ -438,8 +473,10 @@ mod tests {
         let parsed: ConfigFile = toml::from_str(older).unwrap();
         assert_eq!(parsed.locale, "zh-Hant");
         // An explicit locale round-trips.
-        let mut cfg = ConfigFile::default();
-        cfg.locale = "en".into();
+        let cfg = ConfigFile {
+            locale: "en".into(),
+            ..ConfigFile::default()
+        };
         let parsed: ConfigFile = toml::from_str(&toml::to_string_pretty(&cfg).unwrap()).unwrap();
         assert_eq!(parsed.locale, "en");
     }
@@ -447,7 +484,10 @@ mod tests {
     #[test]
     fn break_display_defaults_and_round_trips() {
         // Default is the text countdown (so older configs/behaviour are unchanged).
-        assert_eq!(SettingsDto::default().break_display, BreakDisplayDto::Countdown);
+        assert_eq!(
+            SettingsDto::default().break_display,
+            BreakDisplayDto::Countdown
+        );
         // A config TOML without `break_display` (older file) deserializes to the default.
         let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
         let parsed: ConfigFile = toml::from_str(older).unwrap();
@@ -496,8 +536,10 @@ mod tests {
 
     #[test]
     fn sanitize_clamps_unknown_locale_to_default() {
-        let mut cfg = ConfigFile::default();
-        cfg.locale = "fr".into();
+        let mut cfg = ConfigFile {
+            locale: "fr".into(),
+            ..ConfigFile::default()
+        };
         assert!(cfg.sanitize());
         assert_eq!(cfg.locale, "zh-Hant");
         // A supported locale is left alone.
@@ -512,15 +554,23 @@ mod tests {
         // chime_id refs stay in config.toml (the chime *definitions* moved to chimes.toml).
         let mut cfg = ConfigFile::default();
         cfg.rules[0].chime_id = "gentle-bell".into();
+        cfg.rules[0].chime_volume_pct = 35;
         cfg.rules[0].end_chime_id = "soft-close".into();
+        cfg.rules[0].end_chime_volume_pct = 40;
         cfg.alarms[0].chime_id = "soft-ping".into();
+        cfg.alarms[0].chime_volume_pct = 45;
         let text = toml::to_string_pretty(&cfg).unwrap();
         assert!(text.contains("chime_id = \"gentle-bell\""));
+        assert!(text.contains("chime_volume_pct = 35"));
         assert!(text.contains("end_chime_id = \"soft-close\""));
+        assert!(text.contains("end_chime_volume_pct = 40"));
         let parsed: ConfigFile = toml::from_str(&text).unwrap();
         assert_eq!(parsed.rules[0].chime_id, "gentle-bell");
+        assert_eq!(parsed.rules[0].chime_volume_pct, 35);
         assert_eq!(parsed.rules[0].end_chime_id, "soft-close");
+        assert_eq!(parsed.rules[0].end_chime_volume_pct, 40);
         assert_eq!(parsed.alarms[0].chime_id, "soft-ping");
+        assert_eq!(parsed.alarms[0].chime_volume_pct, 45);
         // An unknown id is left as-is (playback falls back to the default tone).
         let mut p = parsed;
         assert!(!p.sanitize());
@@ -542,6 +592,7 @@ mod tests {
                     date: None,
                     enabled: true,
                     chime_id: String::new(),
+                    chime_volume_pct: alarm::default_chime_volume(),
                 },
                 AlarmDto {
                     id: "a2".into(),
@@ -554,6 +605,7 @@ mod tests {
                     date: None,
                     enabled: true,
                     chime_id: String::new(),
+                    chime_volume_pct: alarm::default_chime_volume(),
                 },
             ],
             ..ConfigFile::default()
@@ -603,5 +655,27 @@ mod tests {
         cfg.settings.warn_seconds = 99_999;
         assert!(cfg.sanitize());
         assert_eq!(cfg.settings.warn_seconds, MAX_WARN_SECS);
+    }
+
+    #[test]
+    fn rule_chime_volumes_default_clamp_and_round_trip() {
+        let older = "id = \"r\"\nname = \"R\"\ninterval_secs = 60\nbreak_secs = 10\nenforcement = \"soft\"\n";
+        let parsed: RuleDto = toml::from_str(older).unwrap();
+        assert_eq!(parsed.chime_volume_pct, default_chime_volume());
+        assert_eq!(parsed.end_chime_volume_pct, default_chime_volume());
+
+        let mut rules = vec![parsed];
+        rules[0].chime_volume_pct = 250;
+        rules[0].end_chime_volume_pct = 0;
+        assert!(sanitize_rules(&mut rules));
+        assert_eq!(rules[0].chime_volume_pct, 100);
+        assert_eq!(rules[0].end_chime_volume_pct, 0);
+
+        let saved = toml::to_string_pretty(&rules[0]).unwrap();
+        assert!(saved.contains("chime_volume_pct = 100"));
+        assert!(saved.contains("end_chime_volume_pct = 0"));
+        let reparsed: RuleDto = toml::from_str(&saved).unwrap();
+        assert_eq!(reparsed.chime_volume_pct, 100);
+        assert_eq!(reparsed.end_chime_volume_pct, 0);
     }
 }

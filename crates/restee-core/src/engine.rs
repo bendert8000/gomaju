@@ -143,8 +143,7 @@ impl Engine {
     pub fn status(&self) -> EngineStatus {
         // Collect enabled rules and sort by the full `Duration` remaining (not the
         // truncated seconds) so sub-second ties keep their order, then map to secs.
-        let mut enabled: Vec<&RuleState> =
-            self.rules.iter().filter(|rs| rs.rule.enabled).collect();
+        let mut enabled: Vec<&RuleState> = self.rules.iter().filter(|rs| rs.rule.enabled).collect();
         enabled.sort_by_key(|rs| rs.remaining());
         let all: Vec<NextBreak> = enabled
             .iter()
@@ -194,11 +193,7 @@ impl Engine {
         if self.state != RunState::InBreak {
             return vec![];
         }
-        let rule_id = self
-            .active
-            .take()
-            .map(|a| a.rule_id)
-            .unwrap_or_default();
+        let rule_id = self.active.take().map(|a| a.rule_id).unwrap_or_default();
         self.state = RunState::Running;
         vec![
             Effect::EndBreak {
@@ -609,8 +604,7 @@ mod tests {
             ..Settings::default()
         };
         // interval=100 so accumulation never fires during this test.
-        let mut engine =
-            Engine::new(vec![rule("eye", 100, 10, Enforcement::Soft)], settings);
+        let mut engine = Engine::new(vec![rule("eye", 100, 10, Enforcement::Soft)], settings);
         engine.start();
         for _ in 0..20 {
             engine.tick(secs(1), secs(0)); // 20s of active work
@@ -626,7 +620,10 @@ mod tests {
                 .filter(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye"))
                 .count();
         }
-        assert_eq!(resets, 1, "break should be credited exactly once per idle span");
+        assert_eq!(
+            resets, 1,
+            "break should be credited exactly once per idle span"
+        );
         assert_eq!(engine.state(), RunState::Running);
     }
 
@@ -719,10 +716,12 @@ mod tests {
         engine.start();
         let fx = engine.break_now();
         assert!(fx.iter().any(|e| matches!(e, Effect::StartBreak { .. })));
-        assert!(fx.iter().any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "once")));
+        assert!(fx
+            .iter()
+            .any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "once")));
 
         engine.skip(); // end the break
-        // The once rule is now disabled, so a manual break has nothing to fire.
+                       // The once rule is now disabled, so a manual break has nothing to fire.
         let again = engine.break_now();
         assert!(
             !again.iter().any(|e| matches!(e, Effect::StartBreak { .. })),
@@ -855,7 +854,10 @@ mod tests {
         // Inside the window: no repeated warning, no fire yet.
         for _ in 0..4 {
             let e = engine.tick(secs(1), secs(0));
-            assert!(!e.iter().any(|x| matches!(x, Effect::BreakWarning { .. })), "no repeat");
+            assert!(
+                !e.iter().any(|x| matches!(x, Effect::BreakWarning { .. })),
+                "no repeat"
+            );
             assert!(!e.iter().any(|x| matches!(x, Effect::StartBreak { .. })));
         }
         // Reaching the interval fires the break.
@@ -897,7 +899,10 @@ mod tests {
 
     #[test]
     fn delay_break_unknown_rule_is_a_noop() {
-        let mut engine = Engine::new(vec![rule("eye", 10, 3, Enforcement::Soft)], Settings::default());
+        let mut engine = Engine::new(
+            vec![rule("eye", 10, 3, Enforcement::Soft)],
+            Settings::default(),
+        );
         engine.start();
         assert!(engine.delay_break("nope", secs(60)).is_empty());
     }
@@ -925,7 +930,10 @@ mod tests {
                 cancelled = true;
             }
         }
-        assert!(cancelled, "an idle-credited break should cancel its pending warning");
+        assert!(
+            cancelled,
+            "an idle-credited break should cancel its pending warning"
+        );
     }
 
     #[test]
@@ -1061,7 +1069,10 @@ mod tests {
         for _ in 0..8 {
             warned.extend(warned_ids(&engine.tick(secs(1), secs(0))));
         }
-        assert!(warned.contains(&"eye".to_string()), "expected eye warned, got {warned:?}");
+        assert!(
+            warned.contains(&"eye".to_string()),
+            "expected eye warned, got {warned:?}"
+        );
         assert!(
             !warned.contains(&"long".to_string()),
             "the later-but-higher-priority 'long' must not be warned, got {warned:?}"
@@ -1146,8 +1157,7 @@ mod tests {
         let mut long_fire = None;
         for _ in 0..30 {
             let e = engine.tick(secs(1), secs(0));
-            if e
-                .iter()
+            if e.iter()
                 .any(|x| matches!(x, Effect::StartBreak { rule_id, .. } if rule_id == "long"))
             {
                 long_fire = Some(e);
@@ -1194,7 +1204,11 @@ mod tests {
         assert!(eye_fired, "eye should fire at its 30s interval");
 
         // At that moment "sit" had 30s of work -> 15s remaining, and must NOT be reset to 45.
-        assert_eq!(remaining(&engine, "eye"), Some(30), "the firing rule resets to full");
+        assert_eq!(
+            remaining(&engine, "eye"),
+            Some(30),
+            "the firing rule resets to full"
+        );
         assert_eq!(
             remaining(&engine, "sit"),
             Some(15),
@@ -1231,7 +1245,8 @@ mod tests {
         // (a) the strict rule fires, (b) the co-due soft rule is reset on the same tick.
         assert_eq!(started_rule(&fire).as_deref(), Some("posture"));
         assert!(
-            fire.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
+            fire.iter()
+                .any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
             "the co-due soft rule should be reset when the strict break fires, got {fire:?}"
         );
 
@@ -1280,7 +1295,11 @@ mod tests {
         for _ in 0..5 {
             engine.tick(secs(1), secs(0));
         }
-        assert_eq!(remaining(&engine, "walk"), Some(30), "walk keeps its 30/60 progress");
+        assert_eq!(
+            remaining(&engine, "walk"),
+            Some(30),
+            "walk keeps its 30/60 progress"
+        );
 
         // 30 more units: re-armed "blink" (interval 30) and "walk" (now 60/60) come due together.
         let mut collide = None;
@@ -1292,9 +1311,14 @@ mod tests {
             }
         }
         let fx = collide.expect("blink and walk should come due together");
-        assert_eq!(started_rule(&fx).as_deref(), Some("blink"), "strict blink wins the collision");
+        assert_eq!(
+            started_rule(&fx).as_deref(),
+            Some("blink"),
+            "strict blink wins the collision"
+        );
         assert!(
-            fx.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "walk")),
+            fx.iter()
+                .any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "walk")),
             "the LONGER-interval co-due 'walk' must be reset, got {fx:?}"
         );
     }
@@ -1328,7 +1352,8 @@ mod tests {
         let fire = engine.break_now();
         assert_eq!(started_rule(&fire).as_deref(), Some("manual"));
         assert!(
-            fire.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
+            fire.iter()
+                .any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
             "break_now should reset the coincidentally-due longer 'eye' rule, got {fire:?}"
         );
     }
@@ -1351,16 +1376,20 @@ mod tests {
         assert_eq!(started_rule(&fire).as_deref(), Some("posture"));
         // Winner consumed:
         assert!(
-            fire.iter().any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "posture")),
+            fire.iter()
+                .any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "posture")),
             "the firing once rule should be disabled, got {fire:?}"
         );
         // Loser reset but NOT consumed:
         assert!(
-            fire.iter().any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
+            fire.iter()
+                .any(|e| matches!(e, Effect::RuleReset { rule_id } if rule_id == "eye")),
             "the co-due once loser should be reset, got {fire:?}"
         );
         assert!(
-            !fire.iter().any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "eye")),
+            !fire
+                .iter()
+                .any(|e| matches!(e, Effect::RuleDisabled { rule_id } if rule_id == "eye")),
             "the co-due once loser must NOT be disabled, got {fire:?}"
         );
 
@@ -1372,7 +1401,10 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, Effect::StartBreak { rule_id, .. } if rule_id == "eye"));
         }
-        assert!(eye_refired, "the re-armed once 'eye' rule should fire on its next cycle");
+        assert!(
+            eye_refired,
+            "the re-armed once 'eye' rule should fire on its next cycle"
+        );
     }
 
     #[test]

@@ -33,7 +33,7 @@ export interface Note {
 }
 
 /** Mirrors restee_core::chime::ToneStep — the host synth's input. Loudness is not per-step; the
- * whole chime has one volume (see ChimeDto in chimes.ts). */
+ * playback volume is supplied by the rule/alarm picker using the chime. */
 export interface ToneStep {
   freq_hz: number;
   duration_ms: number;

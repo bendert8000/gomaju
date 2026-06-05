@@ -53,7 +53,10 @@ fn create_overlays(app: &AppHandle, info: &BreakInfo) {
     );
 
     let monitors = app.available_monitors().unwrap_or_default();
-    eprintln!("restee: creating overlays for {} monitor(s)", monitors.len());
+    eprintln!(
+        "restee: creating overlays for {} monitor(s)",
+        monitors.len()
+    );
     if monitors.is_empty() {
         build_one(app, 0, &init, None);
         return;

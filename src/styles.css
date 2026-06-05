@@ -60,7 +60,9 @@ body {
   font-size: clamp(0.9rem, 2vw, 1.4rem);
   font-weight: 400;
   opacity: 0.78;
-  max-width: 40rem;
+  width: 72rem;
+  max-width: calc(100vw - 4rem);
+  overflow-wrap: anywhere;
   white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
 }
 
@@ -162,7 +164,7 @@ body {
   background: rgba(255, 255, 255, 0.16);
 }
 
-/* Progress fill that grows left-to-right while a friction "hold to skip" is held. */
+/* Progress fill that grows left-to-right while a friction "hold to cancel break" is held. */
 .overlay__skip-fill {
   position: absolute;
   left: 0;
@@ -464,6 +466,13 @@ input[type="checkbox"] {
 .rule-chime-row select {
   max-width: 14rem;
 }
+input.chime-volume-picker {
+  width: 3.5rem;
+  flex: 0 0 3.5rem;
+}
+.rule-row input.chime-volume-picker {
+  width: 3.5rem;
+}
 /* Chime picker on an alarm row. */
 .alarm-chime-row label {
   display: inline-flex;
@@ -583,17 +592,6 @@ input[type="checkbox"] {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-}
-.chime-volume {
-  width: 3.5rem;
-}
-/* Whole-chime volume: its own always-visible row (applies to tones and imported files). */
-.chime-volume-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin: 0 0 0.55rem;
-  font-size: 0.85rem;
 }
 /* Music-note symbols (incl. the astral-plane half note 𝅗𝅥) need a font that has them. */
 .chime-length {

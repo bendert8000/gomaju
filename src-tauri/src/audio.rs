@@ -41,12 +41,6 @@ where
     });
 }
 
-/// Play a gentle two-note chime. Generated in code (no bundled asset) at low amplitude
-/// with a short fade-in, so it reads as a soft cue rather than a harsh beep.
-pub fn play_chime() {
-    play("chime", fill_break_start);
-}
-
 /// Fill for the break-start chime. A named fn (not an inline closure) so it can be reused as the
 /// break-start default-tone *preview* (`preview_default`), not just the fire-and-forget cue.
 fn fill_break_start(sink: &Sink) {
@@ -60,12 +54,6 @@ fn fill_break_start(sink: &Sink) {
     sink.append(note(987.77, 320)); // B5
 }
 
-/// Play a short, gentle "break over" cue: a brief descending two-note (the inverse of the
-/// rising start chime) so it reads as "done — resume". Same low amplitude as the chime.
-pub fn play_break_over() {
-    play("break-over chime", fill_break_over);
-}
-
 /// Fill for the break-over cue (reused as the break-over default-tone preview).
 fn fill_break_over(sink: &Sink) {
     let note = |freq: f32, ms: u64| {
@@ -76,14 +64,6 @@ fn fill_break_over(sink: &Sink) {
     };
     sink.append(note(987.77, 140)); // B5
     sink.append(note(659.25, 200)); // E5 (descending -> resolved)
-}
-
-/// Play a distinct, attention-grabbing alarm tone: louder than the chime (0.35 vs 0.18),
-/// a two-tone beep repeated a few times — but strictly bounded (~3.5s, no infinite loop),
-/// since a runaway alarm in a break app is worse than a missed one. Used by the alarm
-/// scheduler, independent of the break `sound` setting.
-pub fn play_alarm() {
-    play("alarm tone", fill_alarm);
 }
 
 /// Fill for the alarm tone (reused as the alarm default-tone preview). Bounded (~3.5s), so a preview
@@ -118,18 +98,18 @@ const SYNTH_RELEASE_MS: u32 = 8;
 /// short release (fade-out over `SYNTH_RELEASE_MS`) envelope, so notes start and **end** at zero
 /// amplitude and never click. `freq_hz == 0` yields silence (a rest/gap).
 fn tone_source(step: &ToneStep) -> SamplesBuffer<f32> {
-    let total =
-        (SYNTH_SAMPLE_RATE as u64 * step.duration_ms.max(1) as u64 / 1000).max(1) as usize;
+    let total = (SYNTH_SAMPLE_RATE as u64 * step.duration_ms.max(1) as u64 / 1000).max(1) as usize;
     let attack = (SYNTH_SAMPLE_RATE as u64 * step.fade_in_ms as u64 / 1000) as usize;
     // Keep the release within the note (and leave room for the attack on very short notes).
     let release =
         ((SYNTH_SAMPLE_RATE as u64 * SYNTH_RELEASE_MS as u64 / 1000) as usize).min(total / 2);
     let mut samples = Vec::with_capacity(total);
     for i in 0..total {
-        // Full-scale sine; the whole-chime volume is applied via the sink (`set_volume`). A
+        // Full-scale sine; the caller's assignment volume is applied via the sink (`set_volume`). A
         // `freq_hz == 0` step is `sin(0) == 0` -> silence.
         let mut s =
-            (std::f32::consts::TAU * step.freq_hz as f32 * (i as f32 / SYNTH_SAMPLE_RATE as f32)).sin();
+            (std::f32::consts::TAU * step.freq_hz as f32 * (i as f32 / SYNTH_SAMPLE_RATE as f32))
+                .sin();
         if attack > 0 && i < attack {
             s *= i as f32 / attack as f32; // attack (fade in)
         }
@@ -154,7 +134,7 @@ fn silence(ms: u32) -> SamplesBuffer<f32> {
     SamplesBuffer::new(1, SYNTH_SAMPLE_RATE, vec![0.0f32; n])
 }
 
-/// Play a user-defined synthesized chime: a sequence of tone steps at the chime's `volume_pct`
+/// Play a user-defined synthesized chime: a sequence of tone steps at the caller's `volume_pct`
 /// (applied to the whole sink). A `freq_hz == 0` step is silence (a gap); each step gets an attack
 /// + short release so notes don't click (`tone_source`).
 pub fn play_chime_spec(steps: Vec<ToneStep>, volume_pct: u8) {
@@ -166,7 +146,7 @@ pub fn play_chime_spec(steps: Vec<ToneStep>, volume_pct: u8) {
     });
 }
 
-/// Play an imported audio-file chime (wav/mp3/ogg/flac via rodio's default decoders) at the chime's
+/// Play an imported audio-file chime (wav/mp3/ogg/flac via rodio's default decoders) at the caller's
 /// `volume_pct` (a percent of the file's native level). Best-effort: a missing or undecodable file
 /// is logged and ignored.
 pub fn play_chime_file(path: PathBuf, volume_pct: u8) {
@@ -182,41 +162,81 @@ pub fn play_chime_file(path: PathBuf, volume_pct: u8) {
     });
 }
 
-/// Play the chime referenced by `chime_id` (looked up in `chimes`), falling back to `default`
-/// when it's unassigned, missing, or malformed. `chimes_dir` is where imported files live; file
-/// names are re-checked with `is_safe_filename` and joined only under it (never a raw path).
-fn play_assigned_or(chime_id: &str, chimes: &[ChimeDto], chimes_dir: &Path, default: fn()) {
+fn play_default_tone(what: &'static str, fill: fn(&Sink), volume_pct: u8) {
+    play(what, move |sink| {
+        sink.set_volume(volume_pct as f32 / 100.0);
+        fill(sink);
+    });
+}
+
+/// Play the chime referenced by `chime_id` (looked up in `chimes`) at `volume_pct`, falling back to
+/// the given built-in tone when it's unassigned, missing, or malformed. `chimes_dir` is where
+/// imported files live; file names are re-checked with `is_safe_filename` and joined only under it.
+fn play_assigned_or(
+    chime_id: &str,
+    volume_pct: u8,
+    chimes: &[ChimeDto],
+    chimes_dir: &Path,
+    default_what: &'static str,
+    default: fn(&Sink),
+) {
     if !chime_id.is_empty() {
         if let Some(c) = chimes.iter().find(|c| c.id == chime_id) {
             match c.kind {
                 ChimeKindDto::Tones if !c.steps.is_empty() => {
-                    play_chime_spec(c.steps.clone(), c.volume_pct);
+                    play_chime_spec(c.steps.clone(), volume_pct);
                     return;
                 }
                 ChimeKindDto::File if is_safe_filename(&c.file) => {
-                    play_chime_file(chimes_dir.join(&c.file), c.volume_pct);
+                    play_chime_file(chimes_dir.join(&c.file), volume_pct);
                     return;
                 }
                 _ => {} // malformed -> fall through to the default tone
             }
         }
     }
-    default();
+    play_default_tone(default_what, default, volume_pct);
 }
 
 /// Break-start cue: the rule's assigned chime, or the built-in default chime.
-pub fn play_break_chime(chime_id: &str, chimes: &[ChimeDto], chimes_dir: &Path) {
-    play_assigned_or(chime_id, chimes, chimes_dir, play_chime);
+pub fn play_break_chime(chime_id: &str, volume_pct: u8, chimes: &[ChimeDto], chimes_dir: &Path) {
+    play_assigned_or(
+        chime_id,
+        volume_pct,
+        chimes,
+        chimes_dir,
+        "chime",
+        fill_break_start,
+    );
 }
 
 /// Break-end cue: the rule's assigned end chime, or the built-in default break-over tone.
-pub fn play_break_over_chime(chime_id: &str, chimes: &[ChimeDto], chimes_dir: &Path) {
-    play_assigned_or(chime_id, chimes, chimes_dir, play_break_over);
+pub fn play_break_over_chime(
+    chime_id: &str,
+    volume_pct: u8,
+    chimes: &[ChimeDto],
+    chimes_dir: &Path,
+) {
+    play_assigned_or(
+        chime_id,
+        volume_pct,
+        chimes,
+        chimes_dir,
+        "break-over chime",
+        fill_break_over,
+    );
 }
 
 /// Alarm cue: the alarm's assigned chime, or the built-in default alarm tone.
-pub fn play_alarm_chime(chime_id: &str, chimes: &[ChimeDto], chimes_dir: &Path) {
-    play_assigned_or(chime_id, chimes, chimes_dir, play_alarm);
+pub fn play_alarm_chime(chime_id: &str, volume_pct: u8, chimes: &[ChimeDto], chimes_dir: &Path) {
+    play_assigned_or(
+        chime_id,
+        volume_pct,
+        chimes,
+        chimes_dir,
+        "alarm tone",
+        fill_alarm,
+    );
 }
 
 // --- Stoppable preview (Chimes window) ---
@@ -233,7 +253,8 @@ struct PreviewState {
     sink: Option<Arc<Sink>>,
 }
 
-static PREVIEW: LazyLock<Mutex<PreviewState>> = LazyLock::new(|| Mutex::new(PreviewState::default()));
+static PREVIEW: LazyLock<Mutex<PreviewState>> =
+    LazyLock::new(|| Mutex::new(PreviewState::default()));
 
 /// Stop the current preview (if any). Bumps the gen so the playing thread won't emit `preview-ended`
 /// (the caller already knows it stopped). No-op when nothing is playing.
@@ -289,7 +310,7 @@ where
         };
         fill(&sink);
         sink.append(silence(SYNTH_TAIL_MS)); // drain on silence so the stream drop doesn't pop
-        // Register as the current preview — unless a newer preview/stop superseded us while we set up.
+                                             // Register as the current preview — unless a newer preview/stop superseded us while we set up.
         {
             let mut p = PREVIEW.lock().unwrap();
             if p.gen != gen {
@@ -357,17 +378,21 @@ impl DefaultTone {
 }
 
 /// Preview a built-in default tone (stoppable). Used when a picker is on "Default" (empty id).
-pub fn preview_default(app: AppHandle, tone: DefaultTone) -> u64 {
-    start_preview(app, tone.fill())
+pub fn preview_default(app: AppHandle, tone: DefaultTone, volume_pct: u8) -> u64 {
+    start_preview(app, move |sink| {
+        sink.set_volume(volume_pct as f32 / 100.0);
+        tone.fill()(sink);
+    })
 }
 
 /// Stoppable mirror of `play_assigned_or`: preview the saved chime referenced by `chime_id`, or the
-/// context's built-in `tone` when it's unassigned/missing/malformed. File names are re-checked with
-/// `is_safe_filename` and joined only under `chimes_dir`. Returns the generation token (0 only if
-/// nothing could play).
+/// context's built-in `tone` when it's unassigned/missing/malformed, at `volume_pct`. File names are
+/// re-checked with `is_safe_filename` and joined only under `chimes_dir`. Returns the generation
+/// token (0 only if nothing could play).
 pub fn preview_assigned_or(
     app: AppHandle,
     chime_id: &str,
+    volume_pct: u8,
     chimes: &[ChimeDto],
     chimes_dir: &Path,
     tone: DefaultTone,
@@ -376,14 +401,14 @@ pub fn preview_assigned_or(
         if let Some(c) = chimes.iter().find(|c| c.id == chime_id) {
             match c.kind {
                 ChimeKindDto::Tones if !c.steps.is_empty() => {
-                    return preview_chime_spec(app, c.steps.clone(), c.volume_pct);
+                    return preview_chime_spec(app, c.steps.clone(), volume_pct);
                 }
                 ChimeKindDto::File if is_safe_filename(&c.file) => {
-                    return preview_chime_file(app, chimes_dir.join(&c.file), c.volume_pct);
+                    return preview_chime_file(app, chimes_dir.join(&c.file), volume_pct);
                 }
                 _ => {} // malformed -> fall through to the default tone
             }
         }
     }
-    preview_default(app, tone)
+    preview_default(app, tone, volume_pct)
 }
