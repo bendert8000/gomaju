@@ -182,6 +182,8 @@ pub fn load_quotes(path: &Path) -> std::io::Result<QuotesFile> {
     let text = fs::read_to_string(path)?;
     match toml::from_str::<QuotesFile>(&text) {
         Ok(mut file) => {
+            // Best-effort re-persist: the returned value is always sanitized even if this write
+            // fails (the next startup re-sanitizes and retries). Mirrors `chime::load_chimes`.
             if file.sanitize() {
                 let _ = save_quotes(path, &file);
             }
@@ -402,6 +404,24 @@ mod tests {
         let before = fs::read_to_string(&path).unwrap();
         assert_eq!(load_quotes(&path).unwrap(), f);
         assert_eq!(fs::read_to_string(&path).unwrap(), before, "clean load must not rewrite");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_dirty_valid_file_is_rewritten() {
+        // A valid TOML whose entries need sanitizing: load_quotes returns the clean value AND
+        // re-persists it, so the dirty content is gone from disk (the `if file.sanitize()` arm).
+        let dir = temp_dir("load-dirty");
+        let path = dir.join("quotes.toml");
+        fs::write(&path, "en = [\"  Rest.  \", \"# c\", \"Stretch.\"]\n").unwrap();
+        let f = load_quotes(&path).unwrap();
+        assert_eq!(f.en, ["Rest.", "Stretch."]);
+        // The on-disk file was rewritten clean — the dirty markers are gone.
+        let on_disk = fs::read_to_string(&path).unwrap();
+        assert!(!on_disk.contains("# c"));
+        assert!(!on_disk.contains("  Rest.  "));
+        // Reloading yields the same clean value (now no rewrite needed).
+        assert_eq!(load_quotes(&path).unwrap(), f);
         let _ = fs::remove_dir_all(&dir);
     }
 
