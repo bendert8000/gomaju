@@ -1,0 +1,28 @@
+# Default break quotes seeded on first run (one entry per quote). The user's quotes.toml lives in
+# the OS config dir next to config.toml; Restee never overwrites it after seeding/migration.
+
+en = [
+  "Rest is not idleness, and to lie sometimes on the grass is by no means a waste of time.",
+  "Almost everything will work again if you unplug it for a few minutes — including you.",
+  "Take care of your body. It's the only place you have to live.",
+  "Your eyes deserve a horizon now and then.",
+  "The time to relax is when you don't have time for it.",
+  "Breathe. The rest can wait a moment.",
+  "A short pause now saves a long ache later.",
+  "Stand up, stretch, and let your mind wander.",
+  "Sometimes the most productive thing you can do is rest.",
+  "Look up. Look far. Let your eyes loosen.",
+]
+
+"zh-Hant" = [
+  "休息不是懶惰，偶爾躺在草地上看天空，絕非浪費時間。",
+  "幾乎所有東西重新插電後都能再運作 —— 包括你自己。",
+  "照顧好你的身體，那是你唯一的棲身之所。",
+  "讓眼睛偶爾望向遠方的地平線。",
+  "越是沒空休息的時候，越該休息。",
+  "深呼吸，其餘的事可以稍等片刻。",
+  "此刻短短的暫停，能省去日後長長的痠痛。",
+  "站起來，伸展一下，讓思緒隨意漫遊。",
+  "有時候，最有生產力的事就是休息。",
+  "抬頭，望遠，讓雙眼放鬆。",
+]

@@ -71,6 +71,11 @@ fn sanitize_list(quotes: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// The starter quotes a fresh install is seeded with — editable TOML, embedded at compile time, so
+/// `quotes.toml` isn't empty on first run (and is the corrupt-recovery source). The
+/// `embedded_default_quotes()` parser that consumes it is introduced in Task 4, where it's first used.
+pub const DEFAULT_QUOTES_TOML: &str = include_str!("../default_quotes.toml");
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +131,15 @@ mod tests {
         let parsed: QuotesFile = toml::from_str(text).expect("stray key must not error");
         assert_eq!(parsed.en, ["hi"]);
         assert!(parsed.zh_hant.is_empty());
+    }
+
+    #[test]
+    fn embedded_default_quotes_parse_and_are_clean() {
+        let mut f: QuotesFile =
+            toml::from_str(DEFAULT_QUOTES_TOML).expect("default_quotes.toml must parse");
+        assert!(!f.en.is_empty(), "default en quotes should be non-empty");
+        assert!(!f.zh_hant.is_empty(), "default zh-Hant quotes should be non-empty");
+        // The shipped default must already be valid — sanitize should change nothing.
+        assert!(!f.sanitize());
     }
 }
