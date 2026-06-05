@@ -123,18 +123,9 @@ fn sanitize_list(quotes: &[String]) -> Vec<String> {
         .map(str::to_string)
         .collect()
 }
-
-/// Parse plain-text quote-file contents (one quote per line; trim; drop blank + `#`-comment lines).
-/// Used only by the one-time `.txt` -> `quotes.toml` migration.
-fn parse_text(contents: &str) -> Vec<String> {
-    contents
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .map(str::to_string)
-        .collect()
-}
 ```
+
+(`parse_text`, used only by the migration, is introduced in Task 4 where it's first used — keeping every commit free of dead-code warnings.)
 
 - [ ] **Step 2: Export the module**
 
@@ -414,6 +405,17 @@ git commit -m "feat(core): atomic save_quotes + best-effort read_quotes"
 - [ ] **Step 1: Implement the helpers** (in `crates/restee-core/src/quotes.rs`, after `read_quotes`)
 
 ```rust
+/// Parse plain-text quote-file contents (one quote per line; trim; drop blank + `#`-comment lines).
+/// Used only by the one-time `.txt` -> `quotes.toml` migration.
+fn parse_text(contents: &str) -> Vec<String> {
+    contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
 /// Build the initial `QuotesFile` from any existing legacy `.txt` files, user edits winning over the
 /// embedded default, per locale. Only used on the missing-`quotes.toml` (first-run) path.
 ///
