@@ -1,5 +1,5 @@
 // Quote-list editor for the Settings "Quotes" card — one editable row per quote. Kept in its own
-// module (like rule-editor.ts) so src/main.ts stays lean. Quotes persist to `quotes.txt` (separate
+// module (like rule-editor.ts) so src/main.ts stays lean. Quotes persist to `quotes.toml` (separate
 // from config.toml) via cmd_get_quotes / cmd_save_quotes; the backend sanitizes on save.
 
 import { t } from "./i18n";

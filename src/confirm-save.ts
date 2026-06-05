@@ -65,7 +65,7 @@ export function confirmUnsaved(): Promise<CloseChoice> {
 
 export type QuotesConflictChoice = "overwrite" | "keep_disk";
 
-/** Shown on Save when `quotes.txt` changed on disk since the Quotes editor last synced. Resolves
+/** Shown on Save when `quotes.toml` changed on disk since the Quotes editor last synced. Resolves
  * with the user's choice. The user clicked Save, so "overwrite" (their list wins) is the primary
  * action; Esc / overlay-click = keep_disk, the non-destructive escape (preserve the on-disk edit). */
 export function confirmQuotesConflict(): Promise<QuotesConflictChoice> {

@@ -52,7 +52,7 @@ if (info.note) {
   noteEl.textContent = info.note;
   noteEl.hidden = false;
 }
-// Optional inspirational quote (from the user's quotes.txt), shown above the break name. Hidden when empty.
+// Optional inspirational quote (from the user's quotes.toml), shown above the break name. Hidden when empty.
 if (info.quote) {
   quoteEl.textContent = info.quote;
   quoteEl.hidden = false;

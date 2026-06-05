@@ -110,7 +110,7 @@ pub struct SettingsDto {
     /// text countdown so configs written before this field keep their original behavior.
     #[serde(default = "default_break_display")]
     pub break_display: BreakDisplayDto,
-    /// Show an inspirational quote (from the user-editable `quotes.txt`) on the break overlay.
+    /// Show an inspirational quote (from the user-editable `quotes.toml`) on the break overlay.
     /// Defaults to on; older configs without the field default in as `true`.
     #[serde(default = "default_true")]
     pub show_quotes: bool,

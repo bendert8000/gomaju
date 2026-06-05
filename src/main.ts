@@ -71,7 +71,7 @@ let guard!: UnsavedGuard;
 // Saved chimes (from chimes.toml, separate from config), for the per-rule chime pickers.
 // Refreshed on load + on focus so chimes created in the Chimes window show up here.
 let chimes: ChimeOption[] = [];
-// Break quotes are per-locale (`quotes.<locale>.txt`, separate from config.toml). The editor shows
+// Break quotes are per-locale, stored in quotes.toml (separate from config.toml). The editor shows
 // one locale's rows at a time (`activeQuoteLocale`); the other locales' edits live in
 // `quotesByLocale`. `quotesBaselineByLocale` is each set as last synced from disk (after load, a
 // clean focus-refresh, or a successful save) — `saveQuotes()` compares disk against it per locale
@@ -201,7 +201,7 @@ async function refreshRulesFromDisk(): Promise<void> {
 async function onFocusRefresh(): Promise<void> {
   if (guard.isDirty()) return;
   await refreshRulesFromDisk();
-  // Also re-sync every locale's quotes from disk, so an external `quotes.<locale>.txt` edit made
+  // Also re-sync every locale's quotes from disk, so an external quotes.toml edit made
   // while this (clean) window was backgrounded is shown and re-baselined — otherwise markSaved()
   // below would lock in the stale quote rows and a later save would silently overwrite that edit.
   await loadAllQuotes();
@@ -209,7 +209,7 @@ async function onFocusRefresh(): Promise<void> {
   guard.markSaved();
 }
 
-// Persist every locale's quote rows, guarding against an edit made to any `quotes.<locale>.txt`
+// Persist every locale's quote rows, guarding against an edit made to quotes.toml
 // outside Restee since this editor last synced. The visible locale's rows are captured first. Each
 // locale's disk is compared to its baseline; if any diverged, the user gets one prompt: overwrite
 // (our lists win) or keep-disk (adopt the on-disk version for the *conflicted* locales, discarding
@@ -249,7 +249,7 @@ async function saveQuotes(): Promise<void> {
 async function save(): Promise<boolean> {
   const msg = $("save-msg");
   try {
-    // Quotes first: a plain quotes.txt write with no live side-effects, and the one that can
+    // Quotes first: a quotes.toml write with no live side-effects, and the one that can
     // prompt (conflict guard). Then config, which reconfigures engine/hotkeys/autostart. Only
     // mark the form saved if BOTH succeed — any throw leaves the window dirty for a retry.
     await saveQuotes();

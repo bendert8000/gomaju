@@ -63,7 +63,7 @@ body {
   white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
 }
 
-/* Optional inspirational quote (from the user's quotes.txt), shown above the break name.
+/* Optional inspirational quote (from the user's quotes.toml), shown above the break name.
    Italic + dimmer than the note so it reads as an ambient flourish, on both soft and strict
    screens. Sits at the top of the column with the normal flex gap below it to the name. */
 .overlay__quote {
