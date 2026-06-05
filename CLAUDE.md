@@ -141,25 +141,33 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 ## Break quotes + pre-break toast
 
 - The break overlay shows an optional inspirational **quote**, picked from the **active locale's**
-  quotes file (next to `config.toml`: `quotes.en.txt` / `quotes.zh-Hant.txt`, each seeded once from
-  `src-tauri/default_quotes.<locale>.txt`, re-read each break, picked by `quotes::pick(dir, &locale)`
-  using `cfg.locale`). **No cross-locale fallback** — an empty active set shows no quote. Toggle:
-  `settings.show_quotes`. Injected into `BreakInfo.quote` on both soft + strict overlays, like the
-  per-rule `note`.
+  list in `quotes.toml` (next to `config.toml`), re-read each break by `quotes::pick(&quotes_path,
+  &locale)` using `cfg.locale`. **No cross-locale fallback** — an empty active set shows no quote.
+  Toggle: `settings.show_quotes`. Injected into `BreakInfo.quote` on both soft + strict overlays,
+  like the per-rule `note`.
+- Quotes are stored in a single **`quotes.toml`** (`<config_dir>/quotes.toml`) with two top-level
+  arrays: `en = [...]` and `"zh-Hant" = [...]`. The data model + validation live in
+  `crates/restee-core/src/quotes.rs` (mirrors `chime.rs`): `QuotesFile` struct, `sanitize()` (trim +
+  drop blank/`#`-comment lines per locale), `read_quotes` (best-effort, **never writes** — used for
+  all reads and the per-break pick), `save_quotes` (atomic temp+rename), and `load_quotes`
+  (self-healing: missing → migrate-or-seed + write; corrupt → back up `.toml.bak` + reseed from
+  embedded `crates/restee-core/default_quotes.toml`; valid → sanitize + persist only if changed).
+  **First-run migration:** `load_quotes` builds `quotes.toml` from the old `quotes.en.txt` /
+  `quotes.zh-Hant.txt` (and legacy `quotes.txt` → `en` if `quotes.en.txt` absent), then **deletes**
+  those `.txt` files. `lib.rs` calls `load_quotes` once at startup; `AppState.quotes_path` holds the
+  path. No in-memory cache — `read_quotes` runs each break.
 - Quotes are editable in the Settings **Quotes** card (`index.html` / `src/main.ts`, shared
   `src/quotes-editor.ts` add/remove rows). A **locale toggle** (`.quote-locale-btn`, English /
   繁體中文) switches which set the rows show — `src/main.ts` keeps a per-locale map
   (`quotesByLocale`) and captures the visible rows on switch. Saved by the Settings **Save** button
   alongside config, **all locales at once**. `cmd_get_quotes`/`cmd_save_quotes` (require_settings)
-  take a `locale` and read/write `quotes.<locale>.txt` via `quotes::load`/`sanitize`/`save` (atomic
-  temp+rename, like `config::save`; `locale` canonicalizes to `en`/`zh-Hant` in `quotes`, so a
-  frontend-supplied locale can't escape the dir); `save` echoes the sanitized list. The row editor
-  drops blank/`#`-comment lines (so a quote can't start with `#`), and quotes have **no in-memory
-  cache** (re-read each break). `quotes::seed_if_missing` also migrates a legacy single-file
-  `quotes.txt` into the English set. Save is conflict-guarded per locale: it re-reads each
-  `quotes.<locale>.txt` and, if any changed outside Restee since the editor last synced, prompts
-  Overwrite/Keep-disk (`confirmQuotesConflict`) before writing. `onFocusRefresh` re-syncs all
-  locales (like rules) when the window is clean.
+  keep per-locale signatures (frontend untouched). `cmd_get_quotes` uses `read_quotes`;
+  `cmd_save_quotes` is **read-modify-write** (`read_quotes` → set locale → `sanitize` →
+  `save_quotes`) so saving one locale never clobbers the other, and uses `read_quotes` (not
+  `load_quotes`) so no migration/backup side-effects. The row editor drops blank/`#`-comment lines.
+  Save is conflict-guarded per locale: re-reads `quotes.toml` and, if changed outside Restee since
+  last sync, prompts Overwrite/Keep-disk (`confirmQuotesConflict`) before writing. `onFocusRefresh`
+  re-syncs all locales (like rules) when the window is clean.
 - The pre-break countdown toast (`toast.html`) is positioned **bottom-right** near the tray via
   `Monitor::work_area()` (`toast.rs::position_bottom_right`), so it clears the taskbar. It carries a
   **Delay 1 min** snooze button: `toast.ts` → `cmd_delay_break(rule_id, 60)` (toast-window-gated) →
