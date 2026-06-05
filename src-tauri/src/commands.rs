@@ -259,11 +259,12 @@ pub fn cmd_get_quotes(
     Ok(file.get(&locale).to_vec())
 }
 
-/// Persist one locale's edited quote list into `quotes.toml` via load-modify-write: load the full
-/// file, replace only this locale's array, sanitize, write. Replacing one locale means saving `en`
-/// never clobbers `zh-Hant` (the Settings window saves each locale in a separate call). Returns the
-/// sanitized list so the form reflects any trimmed/dropped rows (like `cmd_save_config`). Quotes are
-/// re-read live on each break, so there's no in-memory cache to update (unlike config/alarms/chimes).
+/// Persist one locale's edited quote list into `quotes.toml` via read-modify-write: read the current
+/// file (non-writing), replace only this locale's array, sanitize, write. Replacing one locale means
+/// saving `en` never clobbers `zh-Hant` (the Settings window saves each locale in a separate call).
+/// Uses `read_quotes` (not `load_quotes`) so a save never triggers migration/backup writes and stays
+/// symmetric with `cmd_get_quotes`. Returns the sanitized list so the form reflects any trimmed/dropped
+/// rows (like `cmd_save_config`). Quotes are re-read live on each break, so there's no in-memory cache.
 #[tauri::command]
 pub fn cmd_save_quotes(
     window: WebviewWindow,
@@ -272,8 +273,7 @@ pub fn cmd_save_quotes(
     quotes: Vec<String>,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let mut file =
-        restee_core::quotes::load_quotes(&state.quotes_path).map_err(|e| e.to_string())?;
+    let mut file = restee_core::quotes::read_quotes(&state.quotes_path);
     file.set(&locale, quotes);
     file.sanitize();
     restee_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
