@@ -19,6 +19,9 @@ pub struct AppState {
     /// parent folder also holds imported sound files.
     pub chimes: Mutex<Vec<ChimeDto>>,
     pub chimes_path: PathBuf,
+    /// Path to `quotes.toml` (break quotes, separate from config.toml, next to it in the config
+    /// dir). Read live on each break by `quotes::pick`; the Settings "Quotes" card edits it.
+    pub quotes_path: PathBuf,
     /// Health of the idle backend, decided once at startup.
     pub idle_status: IdleStatus,
     /// When the timer last (re)entered Running; `None` while paused/stopped. Used to

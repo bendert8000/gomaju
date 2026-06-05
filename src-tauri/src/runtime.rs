@@ -86,11 +86,7 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                     // config.toml), picked per break when enabled. Best-effort: no/empty file ->
                     // empty string (no cross-locale fallback).
                     let quote = if cfg.settings.show_quotes {
-                        state
-                            .config_path
-                            .parent()
-                            .and_then(|dir| crate::quotes::pick(dir, &cfg.locale))
-                            .unwrap_or_default()
+                        crate::quotes::pick(&state.quotes_path, &cfg.locale).unwrap_or_default()
                     } else {
                         String::new()
                     };

@@ -62,9 +62,15 @@ pub fn run() {
                 );
             }
 
-            // Seed the user-editable break-quotes file next to config.toml (first run only).
-            if let Some(dir) = config_path.parent() {
-                quotes::seed_if_missing(dir);
+            // Break quotes live in their own quotes.toml (separate from config.toml). On first run
+            // this migrates the old per-locale quotes.<locale>.txt files into it and deletes them;
+            // it also self-heals a missing/corrupt file. pick re-reads it live each break.
+            let quotes_path: PathBuf = config_path
+                .parent()
+                .map(|dir| dir.join("quotes.toml"))
+                .unwrap_or_else(|| PathBuf::from("quotes.toml"));
+            if let Err(e) = restee_core::quotes::load_quotes(&quotes_path) {
+                eprintln!("restee: could not initialize quotes.toml ({e})");
             }
 
             // Load saved chimes from their own file (chimes/chimes.toml), kept separate from
@@ -102,6 +108,7 @@ pub fn run() {
                 config_path,
                 chimes: Mutex::new(chimes),
                 chimes_path,
+                quotes_path,
                 idle_status,
                 // The engine starts Running, so the clock is already ticking.
                 running_since: Mutex::new(Some(std::time::Instant::now())),

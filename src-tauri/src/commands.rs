@@ -243,11 +243,11 @@ pub fn cmd_save_config(
     })
 }
 
-// --- Break quotes (settings-window only; stored in quotes.txt, separate from config.toml) ---
+// --- Break quotes (settings-window only; stored in quotes.toml, separate from config.toml) ---
 
-/// One locale's break quotes (parsed, one per line). Read by the Settings "Quotes" card on load,
-/// on focus, and on locale switch, and re-read inside the card's Save to detect external edits to
-/// `quotes.<locale>.txt`. `locale` canonicalizes to one of the two supported sets in `quotes`.
+/// One locale's break quotes (sanitized). Read by the Settings "Quotes" card on load, on focus, and
+/// on locale switch, and re-read inside the card's Save to detect external edits to `quotes.toml`.
+/// A read never writes (`read_quotes`); `locale` canonicalizes to one of the two supported sets.
 #[tauri::command]
 pub fn cmd_get_quotes(
     window: WebviewWindow,
@@ -255,15 +255,15 @@ pub fn cmd_get_quotes(
     locale: String,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let dir = state.config_path.parent().ok_or("no config dir")?;
-    Ok(crate::quotes::load(dir, &locale))
+    let file = restee_core::quotes::read_quotes(&state.quotes_path);
+    Ok(file.get(&locale).to_vec())
 }
 
-/// Persist one locale's edited quote list to `quotes.<locale>.txt` (sanitize → atomic write),
-/// returning the sanitized list so the form reflects any trimmed/dropped lines (like
-/// `cmd_save_config` echoes its config). Quotes are re-read live on each break, so there's no
-/// in-memory cache to update (unlike config/alarms/chimes). The `quotes` parameter shadows the
-/// `crate::quotes` module name, so the module is referenced fully-qualified.
+/// Persist one locale's edited quote list into `quotes.toml` via load-modify-write: load the full
+/// file, replace only this locale's array, sanitize, write. Replacing one locale means saving `en`
+/// never clobbers `zh-Hant` (the Settings window saves each locale in a separate call). Returns the
+/// sanitized list so the form reflects any trimmed/dropped rows (like `cmd_save_config`). Quotes are
+/// re-read live on each break, so there's no in-memory cache to update (unlike config/alarms/chimes).
 #[tauri::command]
 pub fn cmd_save_quotes(
     window: WebviewWindow,
@@ -272,10 +272,12 @@ pub fn cmd_save_quotes(
     quotes: Vec<String>,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let dir = state.config_path.parent().ok_or("no config dir")?;
-    let clean = crate::quotes::sanitize(&quotes);
-    crate::quotes::save(dir, &locale, &clean).map_err(|e| e.to_string())?;
-    Ok(clean)
+    let mut file =
+        restee_core::quotes::load_quotes(&state.quotes_path).map_err(|e| e.to_string())?;
+    file.set(&locale, quotes);
+    file.sanitize();
+    restee_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
+    Ok(file.get(&locale).to_vec())
 }
 
 // --- Alarms (alarms-window only) ---
