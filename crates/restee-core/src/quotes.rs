@@ -104,6 +104,99 @@ pub fn read_quotes(path: &Path) -> QuotesFile {
     }
 }
 
+/// Parse the embedded `default_quotes.toml` into a `QuotesFile` (first-run seed + corrupt-recovery
+/// source). Introduced here because this is its first non-test use (the migration + `load_quotes`).
+fn embedded_default_quotes() -> QuotesFile {
+    toml::from_str(DEFAULT_QUOTES_TOML).expect("embedded default_quotes.toml must parse")
+}
+
+/// Parse plain-text quote-file contents (one quote per line; trim; drop blank + `#`-comment lines).
+/// Used only by the one-time `.txt` -> `quotes.toml` migration.
+fn parse_text(contents: &str) -> Vec<String> {
+    contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Build the initial `QuotesFile` from any existing legacy `.txt` files, user edits winning over the
+/// embedded default, per locale. Only used on the missing-`quotes.toml` (first-run) path.
+///
+/// Fallback chain:
+/// - `en`      <- `quotes.en.txt`, else legacy `quotes.txt`, else embedded default.
+/// - `zh-Hant` <- `quotes.zh-Hant.txt`, else embedded default.
+///
+/// Both-present (`quotes.en.txt` AND `quotes.txt`): `quotes.en.txt` wins; `quotes.txt` is a stale,
+/// already-migrated orphan (the old pre-localization migration copied it into `quotes.en.txt`).
+fn migrate_from_txt(config_dir: &Path) -> QuotesFile {
+    let mut file = embedded_default_quotes();
+    if let Ok(text) = fs::read_to_string(config_dir.join("quotes.en.txt")) {
+        file.en = parse_text(&text);
+    } else if let Ok(text) = fs::read_to_string(config_dir.join("quotes.txt")) {
+        file.en = parse_text(&text);
+    }
+    if let Ok(text) = fs::read_to_string(config_dir.join("quotes.zh-Hant.txt")) {
+        file.zh_hant = parse_text(&text);
+    }
+    file
+}
+
+/// Best-effort delete of the consumed legacy `.txt` files after a successful migration write. A
+/// failed delete is logged and ignored — the orphan is never read again (migration only runs when
+/// `quotes.toml` is absent, and by now it exists).
+fn delete_legacy_txt(config_dir: &Path) {
+    for name in ["quotes.en.txt", "quotes.zh-Hant.txt", "quotes.txt"] {
+        let p = config_dir.join(name);
+        if p.exists() {
+            match fs::remove_file(&p) {
+                Ok(()) => eprintln!("restee: removed migrated quote file {}", p.display()),
+                Err(e) => eprintln!("restee: could not remove {} ({e})", p.display()),
+            }
+        }
+    }
+}
+
+/// Load `quotes.toml`, self-healing like `chime::load_chimes`:
+/// - **missing** -> migrate from the legacy `.txt` files (or seed from the embedded default when
+///   none exist), write, then delete the consumed `.txt` files. Migration runs ONLY here.
+/// - **corrupt** -> back up `quotes.toml.bak` and reseed from the **embedded default only** (never
+///   re-read the `.txt` siblings — they were deleted after the first migration, and re-reading a
+///   failed-delete orphan could resurrect stale content over a newer-but-corrupt file).
+/// - **valid** -> parse + sanitize, persisting only if sanitize changed something.
+///
+/// `path` is the `quotes.toml` path; its parent is the config dir that holds the legacy `.txt`
+/// files. Called once at startup, and by `cmd_save_quotes` to read the current file before editing.
+pub fn load_quotes(path: &Path) -> std::io::Result<QuotesFile> {
+    let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
+
+    if !path.exists() {
+        let mut file = migrate_from_txt(config_dir);
+        file.sanitize();
+        save_quotes(path, &file)?;
+        delete_legacy_txt(config_dir);
+        return Ok(file);
+    }
+
+    let text = fs::read_to_string(path)?;
+    match toml::from_str::<QuotesFile>(&text) {
+        Ok(mut file) => {
+            if file.sanitize() {
+                let _ = save_quotes(path, &file);
+            }
+            Ok(file)
+        }
+        Err(_) => {
+            let backup = path.with_extension("toml.bak");
+            let _ = fs::rename(path, &backup);
+            let file = embedded_default_quotes();
+            save_quotes(path, &file)?;
+            Ok(file)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +303,127 @@ mod tests {
         assert_eq!(f.en, ["Rest."]);
         // The file on disk is untouched by a read.
         assert!(fs::read_to_string(&path).unwrap().contains("# c"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn migrate_prefers_locale_txt_then_legacy_then_default() {
+        // en.txt present -> wins; zh-Hant.txt absent -> embedded default.
+        let dir = temp_dir("migrate-prefer");
+        fs::write(dir.join("quotes.en.txt"), "From en.txt.\n# skip\n").unwrap();
+        let f = migrate_from_txt(&dir);
+        assert_eq!(f.en, ["From en.txt."]);
+        assert!(!f.zh_hant.is_empty()); // embedded default
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn migrate_falls_back_to_legacy_quotes_txt_for_en() {
+        // Only legacy quotes.txt (no quotes.en.txt) -> becomes en.
+        let dir = temp_dir("migrate-legacy");
+        fs::write(dir.join("quotes.txt"), "Legacy line.\n").unwrap();
+        let f = migrate_from_txt(&dir);
+        assert_eq!(f.en, ["Legacy line."]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn migrate_both_present_prefers_en_txt_over_legacy() {
+        let dir = temp_dir("migrate-both");
+        fs::write(dir.join("quotes.en.txt"), "Authoritative.\n").unwrap();
+        fs::write(dir.join("quotes.txt"), "Stale orphan.\n").unwrap();
+        let f = migrate_from_txt(&dir);
+        assert_eq!(f.en, ["Authoritative."]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_legacy_removes_all_three_when_present() {
+        let dir = temp_dir("migrate-delete");
+        for n in ["quotes.en.txt", "quotes.zh-Hant.txt", "quotes.txt"] {
+            fs::write(dir.join(n), "x\n").unwrap();
+        }
+        delete_legacy_txt(&dir);
+        for n in ["quotes.en.txt", "quotes.zh-Hant.txt", "quotes.txt"] {
+            assert!(!dir.join(n).exists(), "{n} should be deleted");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_missing_with_no_txt_seeds_embedded_default() {
+        let dir = temp_dir("load-seed");
+        let path = dir.join("quotes.toml");
+        let f = load_quotes(&path).unwrap();
+        assert!(path.exists());
+        assert_eq!(f, embedded_default_quotes());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_missing_migrates_txt_and_deletes_them() {
+        let dir = temp_dir("load-migrate");
+        let path = dir.join("quotes.toml");
+        fs::write(dir.join("quotes.en.txt"), "Migrated EN.\n").unwrap();
+        fs::write(dir.join("quotes.zh-Hant.txt"), "中文遷移。\n").unwrap();
+
+        let f = load_quotes(&path).unwrap();
+        assert_eq!(f.en, ["Migrated EN."]);
+        assert_eq!(f.zh_hant, ["中文遷移。"]);
+        assert!(path.exists());
+        assert!(!dir.join("quotes.en.txt").exists());
+        assert!(!dir.join("quotes.zh-Hant.txt").exists());
+        // Re-load reads the toml, not the (now-deleted) txt.
+        assert_eq!(load_quotes(&path).unwrap(), f);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_corrupt_backs_up_and_reseeds_from_embedded_not_txt() {
+        let dir = temp_dir("load-corrupt");
+        let path = dir.join("quotes.toml");
+        fs::write(&path, "garbage = [[[ not toml").unwrap();
+        // A leftover stray .txt must NOT be re-consumed on corrupt recovery.
+        fs::write(dir.join("quotes.en.txt"), "Should be ignored.\n").unwrap();
+
+        let f = load_quotes(&path).unwrap();
+        assert_eq!(f, embedded_default_quotes());
+        assert!(dir.join("quotes.toml.bak").exists());
+        assert_ne!(f.en, ["Should be ignored."]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_valid_clean_file_is_not_rewritten() {
+        let dir = temp_dir("load-clean");
+        let path = dir.join("quotes.toml");
+        let f = QuotesFile { en: vec!["Rest.".into()], zh_hant: vec!["休息。".into()] };
+        save_quotes(&path, &f).unwrap();
+        let before = fs::read_to_string(&path).unwrap();
+        assert_eq!(load_quotes(&path).unwrap(), f);
+        assert_eq!(fs::read_to_string(&path).unwrap(), before, "clean load must not rewrite");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_one_locale_preserves_the_other() {
+        // Mirrors cmd_save_quotes's load-modify-write: editing en must not touch zh-Hant.
+        // (Spec requirement: saving one locale preserves the other.)
+        let dir = temp_dir("save-isolation");
+        let path = dir.join("quotes.toml");
+        save_quotes(
+            &path,
+            &QuotesFile { en: vec!["old en".into()], zh_hant: vec!["保留中文".into()] },
+        )
+        .unwrap();
+        // Load full file, replace only en, sanitize, write — exactly what the command does.
+        let mut file = load_quotes(&path).unwrap();
+        file.set("en", vec!["new en".into()]);
+        file.sanitize();
+        save_quotes(&path, &file).unwrap();
+        let reloaded = load_quotes(&path).unwrap();
+        assert_eq!(reloaded.en, ["new en"]);
+        assert_eq!(reloaded.zh_hant, ["保留中文"], "the other locale must be preserved");
         let _ = fs::remove_dir_all(&dir);
     }
 }
