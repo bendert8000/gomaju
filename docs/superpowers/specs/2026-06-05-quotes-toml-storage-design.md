@@ -76,7 +76,7 @@ pub fn save_quotes(path: &Path, file: &QuotesFile) -> std::io::Result<()>
 pub fn read_quotes(path: &Path) -> QuotesFile   // best-effort, no write (hot path)
 ```
 
-- `load_quotes` (called once at startup, and by `cmd_save_quotes` to read the current full file before modifying one locale):
+- `load_quotes` (called once at startup only — the self-healing/migrating init; `cmd_save_quotes` deliberately uses the non-writing `read_quotes` instead, so a save never triggers migration/backup side-effects):
   - **Missing** `quotes.toml` → run **migration** (below) to build the initial file, then `save_quotes`. Migration-from-`.txt` happens **only** here.
   - **Corrupt** → rename to `quotes.toml.bak`, reseed from the **embedded default only** (NOT from `.txt` migration), write. Rationale (per Codex review): the `.txt` files were deleted after a successful first migration; if a delete had failed, re-running migration on a *corrupt* (but newer) toml could resurrect stale `.txt` content over the user's recent edits. So once `quotes.toml` exists, the `.txt` siblings are never read again.
   - **Valid** → parse + `sanitize`; persist only if sanitize changed something.
@@ -113,10 +113,10 @@ fn pseudo_random_index(len: usize) -> usize   // unchanged (SystemTime-seeded)
 `cmd_get_quotes(locale)` / `cmd_save_quotes(locale, quotes)` keep their exact shapes and return types, so the frontend is untouched.
 
 - `cmd_get_quotes(locale)`: `read_quotes(quotes_path).get(locale).to_vec()`.
-- `cmd_save_quotes(locale, quotes)`: **load-modify-write** — `load_quotes` the current file, `set(locale, sanitize(quotes))`, `save_quotes`. Replacing only the one locale's array means saving `en` never clobbers `zh-Hant` (same merge-safety model as `cmd_set_rule_flags`). Returns the sanitized list (as today, so the form reflects trimmed/dropped rows).
+- `cmd_save_quotes(locale, quotes)`: **read-modify-write** — `read_quotes` the current file (no side-effects), `set(locale, quotes)`, `sanitize()`, `save_quotes`. Replacing only the one locale's array means saving `en` never clobbers `zh-Hant` (same merge-safety model as `cmd_set_rule_flags`). Returns the sanitized list (so the form reflects trimmed/dropped rows). `read_quotes` (not `load_quotes`) keeps the save free of migration/backup writes and symmetric with `cmd_get_quotes`.
 - The frontend's per-locale conflict guard re-reads via `cmd_get_quotes` (now backed by `quotes.toml`) — behavior unchanged.
 
-**Read vs. write, unambiguously (Codex Gap 2):** every *read* path (`cmd_get_quotes`, the conflict re-read, the per-break `pick`) uses `read_quotes` — **never writes**. Only two paths write: startup `load_quotes` (seed/migrate/self-heal) and `cmd_save_quotes` (`load_quotes` → `set` → `save_quotes`). So a command-time read never triggers self-healing or migration; those are confined to startup and explicit saves.
+**Read vs. write, unambiguously (Codex Gap 2):** every *read* path (`cmd_get_quotes`, the conflict re-read, `cmd_save_quotes`'s read step, the per-break `pick`) uses `read_quotes` — **never writes**. Only two paths write: startup `load_quotes` (seed/migrate/self-heal) and `cmd_save_quotes`'s final `save_quotes`. So no command ever triggers self-healing or migration; those are confined to startup.
 
 ### 5. Startup + `AppState`
 

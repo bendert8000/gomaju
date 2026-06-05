@@ -257,16 +257,13 @@ en = [
 ]
 ```
 
-- [ ] **Step 2: Add the embedded const + helper** (in `crates/restee-core/src/quotes.rs`, after the `parse_text` fn)
+- [ ] **Step 2: Add the embedded const** (in `crates/restee-core/src/quotes.rs`, after `sanitize_list`)
 
 ```rust
 /// The starter quotes a fresh install is seeded with — editable TOML, embedded at compile time, so
-/// `quotes.toml` isn't empty on first run (and is the corrupt-recovery source).
+/// `quotes.toml` isn't empty on first run (and is the corrupt-recovery source). The
+/// `embedded_default_quotes()` parser that consumes it is introduced in Task 4, where it's first used.
 pub const DEFAULT_QUOTES_TOML: &str = include_str!("../default_quotes.toml");
-
-fn embedded_default_quotes() -> QuotesFile {
-    toml::from_str(DEFAULT_QUOTES_TOML).expect("embedded default_quotes.toml must parse")
-}
 ```
 
 - [ ] **Step 3: Write the test** (add to the `tests` module)
@@ -274,7 +271,8 @@ fn embedded_default_quotes() -> QuotesFile {
 ```rust
     #[test]
     fn embedded_default_quotes_parse_and_are_clean() {
-        let mut f = embedded_default_quotes();
+        let mut f: QuotesFile =
+            toml::from_str(DEFAULT_QUOTES_TOML).expect("default_quotes.toml must parse");
         assert!(!f.en.is_empty(), "default en quotes should be non-empty");
         assert!(!f.zh_hant.is_empty(), "default zh-Hant quotes should be non-empty");
         // The shipped default must already be valid — sanitize should change nothing.
@@ -405,6 +403,12 @@ git commit -m "feat(core): atomic save_quotes + best-effort read_quotes"
 - [ ] **Step 1: Implement the helpers** (in `crates/restee-core/src/quotes.rs`, after `read_quotes`)
 
 ```rust
+/// Parse the embedded `default_quotes.toml` into a `QuotesFile` (first-run seed + corrupt-recovery
+/// source). Introduced here because this is its first non-test use (the migration + `load_quotes`).
+fn embedded_default_quotes() -> QuotesFile {
+    toml::from_str(DEFAULT_QUOTES_TOML).expect("embedded default_quotes.toml must parse")
+}
+
 /// Parse plain-text quote-file contents (one quote per line; trim; drop blank + `#`-comment lines).
 /// Used only by the one-time `.txt` -> `quotes.toml` migration.
 fn parse_text(contents: &str) -> Vec<String> {
@@ -827,11 +831,12 @@ pub fn cmd_get_quotes(
     Ok(file.get(&locale).to_vec())
 }
 
-/// Persist one locale's edited quote list into `quotes.toml` via load-modify-write: load the full
-/// file, replace only this locale's array, sanitize, write. Replacing one locale means saving `en`
-/// never clobbers `zh-Hant` (the Settings window saves each locale in a separate call). Returns the
-/// sanitized list so the form reflects any trimmed/dropped rows (like `cmd_save_config`). Quotes are
-/// re-read live on each break, so there's no in-memory cache to update (unlike config/alarms/chimes).
+/// Persist one locale's edited quote list into `quotes.toml` via read-modify-write: read the current
+/// file (non-writing), replace only this locale's array, sanitize, write. Replacing one locale means
+/// saving `en` never clobbers `zh-Hant` (the Settings window saves each locale in a separate call).
+/// Uses `read_quotes` (not `load_quotes`) so a save never triggers migration/backup writes and stays
+/// symmetric with `cmd_get_quotes`. Returns the sanitized list so the form reflects any trimmed/dropped
+/// rows (like `cmd_save_config`). Quotes are re-read live on each break, so there's no in-memory cache.
 #[tauri::command]
 pub fn cmd_save_quotes(
     window: WebviewWindow,
@@ -840,8 +845,7 @@ pub fn cmd_save_quotes(
     quotes: Vec<String>,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let mut file =
-        restee_core::quotes::load_quotes(&state.quotes_path).map_err(|e| e.to_string())?;
+    let mut file = restee_core::quotes::read_quotes(&state.quotes_path);
     file.set(&locale, quotes);
     file.sanitize();
     restee_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
