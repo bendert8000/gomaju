@@ -9,9 +9,7 @@
 //! marked a comment), and blank/whitespace-only quotes are dropped. There is no cross-locale
 //! fallback — an empty active locale shows no quote.
 
-#[allow(unused_imports)]
 use std::fs;
-#[allow(unused_imports)]
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -75,6 +73,36 @@ fn sanitize_list(quotes: &[String]) -> Vec<String> {
 /// `quotes.toml` isn't empty on first run (and is the corrupt-recovery source). The
 /// `embedded_default_quotes()` parser that consumes it is introduced in Task 4, where it's first used.
 pub const DEFAULT_QUOTES_TOML: &str = include_str!("../default_quotes.toml");
+
+/// Atomically write `quotes.toml` (temp + rename), creating its parent dir. Mirrors
+/// `chime::save_chimes` / `config::save`, so a failed write never truncates the live file.
+pub fn save_quotes(path: &Path, file: &QuotesFile) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let text = toml::to_string_pretty(file)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let tmp = path.with_extension("toml.tmp");
+    fs::write(&tmp, text)?;
+    fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Best-effort read for the hot path (the per-break pick): parse + in-memory sanitize, and **never
+/// writes**. Returns an empty `QuotesFile` on any read/parse error (a corrupt hand-edit shows no
+/// quote until the next startup `load_quotes` self-heals it).
+pub fn read_quotes(path: &Path) -> QuotesFile {
+    match fs::read_to_string(path) {
+        Ok(text) => match toml::from_str::<QuotesFile>(&text) {
+            Ok(mut file) => {
+                file.sanitize();
+                file
+            }
+            Err(_) => QuotesFile::default(),
+        },
+        Err(_) => QuotesFile::default(),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -141,5 +169,47 @@ mod tests {
         assert!(!f.zh_hant.is_empty(), "default zh-Hant quotes should be non-empty");
         // The shipped default must already be valid — sanitize should change nothing.
         assert!(!f.sanitize());
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("restee-quotes-{name}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn save_then_read_round_trips() {
+        let dir = temp_dir("save-read");
+        let path = dir.join("quotes.toml");
+        let f = QuotesFile {
+            en: vec!["Take a breath.".into()],
+            zh_hant: vec!["深呼吸。".into()],
+        };
+        save_quotes(&path, &f).unwrap();
+        assert_eq!(read_quotes(&path), f);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_missing_or_corrupt_yields_empty() {
+        let dir = temp_dir("read-bad");
+        let missing = dir.join("quotes.toml");
+        assert_eq!(read_quotes(&missing), QuotesFile::default());
+        fs::write(&missing, "this is not = valid toml [[[").unwrap();
+        assert_eq!(read_quotes(&missing), QuotesFile::default());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_sanitizes_in_memory_without_writing() {
+        let dir = temp_dir("read-sanitize");
+        let path = dir.join("quotes.toml");
+        fs::write(&path, "en = [\"  Rest.  \", \"# c\"]\n").unwrap();
+        let f = read_quotes(&path);
+        assert_eq!(f.en, ["Rest."]);
+        // The file on disk is untouched by a read.
+        assert!(fs::read_to_string(&path).unwrap().contains("# c"));
+        let _ = fs::remove_dir_all(&dir);
     }
 }
