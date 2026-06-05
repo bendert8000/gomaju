@@ -11,6 +11,7 @@ import {
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 import { collectQuotes, quoteRow, renderQuotes } from "./quotes-editor";
 import { confirmQuotesConflict } from "./confirm-save";
+import { installPreviewEndedListener } from "./chime-preview";
 
 // --- Types mirroring the Rust config DTOs ---
 
@@ -278,6 +279,7 @@ async function init(): Promise<void> {
   document.title = t("title.settings");
   applyI18n(document.body);
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
+  installPreviewEndedListener(); // revert a chime-picker ▶/⏸ button when its preview ends
   current = await invoke<ConfigFile>("cmd_get_config");
   await loadChimes();
   render(current);

@@ -44,31 +44,38 @@ where
 /// Play a gentle two-note chime. Generated in code (no bundled asset) at low amplitude
 /// with a short fade-in, so it reads as a soft cue rather than a harsh beep.
 pub fn play_chime() {
-    play("chime", |sink| {
-        let note = |freq: f32, ms: u64| {
-            SineWave::new(freq)
-                .take_duration(Duration::from_millis(ms))
-                .amplify(0.18)
-                .fade_in(Duration::from_millis(40))
-        };
-        sink.append(note(659.25, 200)); // E5
-        sink.append(note(987.77, 320)); // B5
-    });
+    play("chime", fill_break_start);
+}
+
+/// Fill for the break-start chime. A named fn (not an inline closure) so it can be reused as the
+/// break-start default-tone *preview* (`preview_default`), not just the fire-and-forget cue.
+fn fill_break_start(sink: &Sink) {
+    let note = |freq: f32, ms: u64| {
+        SineWave::new(freq)
+            .take_duration(Duration::from_millis(ms))
+            .amplify(0.18)
+            .fade_in(Duration::from_millis(40))
+    };
+    sink.append(note(659.25, 200)); // E5
+    sink.append(note(987.77, 320)); // B5
 }
 
 /// Play a short, gentle "break over" cue: a brief descending two-note (the inverse of the
 /// rising start chime) so it reads as "done — resume". Same low amplitude as the chime.
 pub fn play_break_over() {
-    play("break-over chime", |sink| {
-        let note = |freq: f32, ms: u64| {
-            SineWave::new(freq)
-                .take_duration(Duration::from_millis(ms))
-                .amplify(0.18)
-                .fade_in(Duration::from_millis(30))
-        };
-        sink.append(note(987.77, 140)); // B5
-        sink.append(note(659.25, 200)); // E5 (descending -> resolved)
-    });
+    play("break-over chime", fill_break_over);
+}
+
+/// Fill for the break-over cue (reused as the break-over default-tone preview).
+fn fill_break_over(sink: &Sink) {
+    let note = |freq: f32, ms: u64| {
+        SineWave::new(freq)
+            .take_duration(Duration::from_millis(ms))
+            .amplify(0.18)
+            .fade_in(Duration::from_millis(30))
+    };
+    sink.append(note(987.77, 140)); // B5
+    sink.append(note(659.25, 200)); // E5 (descending -> resolved)
 }
 
 /// Play a distinct, attention-grabbing alarm tone: louder than the chime (0.35 vs 0.18),
@@ -76,24 +83,28 @@ pub fn play_break_over() {
 /// since a runaway alarm in a break app is worse than a missed one. Used by the alarm
 /// scheduler, independent of the break `sound` setting.
 pub fn play_alarm() {
-    play("alarm tone", |sink| {
-        let beep = |freq: f32, ms: u64| {
-            SineWave::new(freq)
-                .take_duration(Duration::from_millis(ms))
-                .amplify(0.35)
-                .fade_in(Duration::from_millis(15))
-        };
-        // Five high/low cycles ~= 3.5s total, each followed by a short silent gap.
-        for _ in 0..5 {
-            sink.append(beep(880.0, 250)); // A5
-            sink.append(beep(1174.66, 250)); // D6
-            sink.append(
-                SineWave::new(0.0)
-                    .take_duration(Duration::from_millis(200))
-                    .amplify(0.0),
-            );
-        }
-    });
+    play("alarm tone", fill_alarm);
+}
+
+/// Fill for the alarm tone (reused as the alarm default-tone preview). Bounded (~3.5s), so a preview
+/// of it ends on its own just like the fire-and-forget alarm cue.
+fn fill_alarm(sink: &Sink) {
+    let beep = |freq: f32, ms: u64| {
+        SineWave::new(freq)
+            .take_duration(Duration::from_millis(ms))
+            .amplify(0.35)
+            .fade_in(Duration::from_millis(15))
+    };
+    // Five high/low cycles ~= 3.5s total, each followed by a short silent gap.
+    for _ in 0..5 {
+        sink.append(beep(880.0, 250)); // A5
+        sink.append(beep(1174.66, 250)); // D6
+        sink.append(
+            SineWave::new(0.0)
+                .take_duration(Duration::from_millis(200))
+                .amplify(0.0),
+        );
+    }
 }
 
 /// Synthesis sample rate for tone steps. rodio resamples to the device rate as needed.
@@ -237,18 +248,28 @@ pub fn stop_preview() {
 /// Start a stoppable preview on a detached thread, superseding any current one. Returns the
 /// generation token the frontend matches against the `preview-ended` event. The gen starts at 1, so
 /// a returned value is always truthy ("playing"); the command returns 0 only when nothing plays.
+///
+/// Superseding also emits `preview-ended` for the *previous* generation, so a button in **another**
+/// window that was showing ⏸ for it reverts to ▶. This is emitted unconditionally (not gated on a
+/// live `sink`): a preview registers its sink only later, inside its own thread, so a fast supersede
+/// can land while `p.sink` is still `None` — gating on it would leave that window's button stuck.
+/// Gen-matching on the JS side means only the matching button reverts; a stale/duplicate emit no-ops.
 fn start_preview<F>(app: AppHandle, fill: F) -> u64
 where
     F: FnOnce(&Sink) + Send + 'static,
 {
-    let gen = {
+    let (gen, superseded) = {
         let mut p = PREVIEW.lock().unwrap();
+        let superseded = p.gen; // the generation we're replacing (0 = none has ever played)
         p.gen += 1;
         if let Some(sink) = p.sink.take() {
             sink.stop(); // stop whatever was playing
         }
-        p.gen
+        (p.gen, superseded)
     };
+    if superseded != 0 {
+        let _ = app.emit("preview-ended", superseded);
+    }
     std::thread::spawn(move || {
         let (_stream, handle) = match OutputStream::try_default() {
             Ok(out) => out,
@@ -314,4 +335,55 @@ pub fn preview_chime_file(app: AppHandle, path: PathBuf, volume_pct: u8) -> u64 
             Err(e) => eprintln!("restee: could not open chime {} ({e})", path.display()),
         }
     })
+}
+
+/// Which built-in tone "Default" (an empty/unknown chime id) maps to, per picker context. Mirrors
+/// the fallbacks of `play_break_chime` / `play_break_over_chime` / `play_alarm_chime`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefaultTone {
+    BreakStart,
+    BreakOver,
+    Alarm,
+}
+
+impl DefaultTone {
+    fn fill(self) -> fn(&Sink) {
+        match self {
+            DefaultTone::BreakStart => fill_break_start,
+            DefaultTone::BreakOver => fill_break_over,
+            DefaultTone::Alarm => fill_alarm,
+        }
+    }
+}
+
+/// Preview a built-in default tone (stoppable). Used when a picker is on "Default" (empty id).
+pub fn preview_default(app: AppHandle, tone: DefaultTone) -> u64 {
+    start_preview(app, tone.fill())
+}
+
+/// Stoppable mirror of `play_assigned_or`: preview the saved chime referenced by `chime_id`, or the
+/// context's built-in `tone` when it's unassigned/missing/malformed. File names are re-checked with
+/// `is_safe_filename` and joined only under `chimes_dir`. Returns the generation token (0 only if
+/// nothing could play).
+pub fn preview_assigned_or(
+    app: AppHandle,
+    chime_id: &str,
+    chimes: &[ChimeDto],
+    chimes_dir: &Path,
+    tone: DefaultTone,
+) -> u64 {
+    if !chime_id.is_empty() {
+        if let Some(c) = chimes.iter().find(|c| c.id == chime_id) {
+            match c.kind {
+                ChimeKindDto::Tones if !c.steps.is_empty() => {
+                    return preview_chime_spec(app, c.steps.clone(), c.volume_pct);
+                }
+                ChimeKindDto::File if is_safe_filename(&c.file) => {
+                    return preview_chime_file(app, chimes_dir.join(&c.file), c.volume_pct);
+                }
+                _ => {} // malformed -> fall through to the default tone
+            }
+        }
+    }
+    preview_default(app, tone)
 }

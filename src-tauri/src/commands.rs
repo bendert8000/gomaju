@@ -34,6 +34,19 @@ fn is_chimes(label: &str) -> bool {
     label == CHIMES_LABEL
 }
 
+/// Windows that show a chime picker (`<select>`), and so may preview a chime by id: the settings
+/// rules editor and the alarms window. (The chimes window previews unsaved definitions via
+/// `cmd_preview_chime` instead, so it is intentionally not here.)
+fn shows_chime_picker(label: &str) -> bool {
+    is_settings(label) || is_alarms(label)
+}
+
+/// Windows that carry a chime preview ▶/⏸ button, and so may stop a running preview: the chime
+/// pickers plus the chimes editor.
+fn has_chime_preview(label: &str) -> bool {
+    shows_chime_picker(label) || is_chimes(label)
+}
+
 /// Shared gate body: app commands are not gated per-window by Tauri's capability system,
 /// so this caller-label check is the real least-privilege enforcement. `what` names the
 /// privileged scope for the rejection message.
@@ -464,10 +477,42 @@ pub fn cmd_preview_chime(
     Ok(gen)
 }
 
-/// Stop the currently-playing chime preview (the Chimes window's ⏸ Pause).
+/// Preview the chime currently selected in a rule/alarm picker, **by id**: the saved chime, or the
+/// context's built-in default tone when the id is empty/unknown. `kind` (`break_start` | `break_over`
+/// | `alarm`) picks which default tone — an unknown kind is rejected. Stoppable like
+/// `cmd_preview_chime`; returns the generation token (0 = nothing played). Readable from the windows
+/// that show a chime picker (settings rules editor + alarms); the chimes window uses the def-based
+/// `cmd_preview_chime` instead.
+#[tauri::command]
+pub fn cmd_preview_chime_by_id(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chime_id: String,
+    kind: String,
+) -> Result<u64, String> {
+    gate(shows_chime_picker(window.label()), "settings/alarms")?;
+    let tone = match kind.as_str() {
+        "break_start" => crate::audio::DefaultTone::BreakStart,
+        "break_over" => crate::audio::DefaultTone::BreakOver,
+        "alarm" => crate::audio::DefaultTone::Alarm,
+        other => return Err(format!("unknown chime kind: {other}")),
+    };
+    let dir = state
+        .config_path
+        .parent()
+        .map(|p| p.join("chimes"))
+        .unwrap_or_default();
+    let chimes = state.chimes.lock().unwrap();
+    Ok(crate::audio::preview_assigned_or(
+        app, &chime_id, &chimes, &dir, tone,
+    ))
+}
+
+/// Stop the currently-playing chime preview (the ⏸ Pause in the Chimes, Settings, or Alarms window).
 #[tauri::command]
 pub fn cmd_stop_preview(window: WebviewWindow) -> Result<(), String> {
-    require_chimes(&window)?;
+    gate(has_chime_preview(window.label()), "settings/alarms/chimes")?;
     crate::audio::stop_preview();
     Ok(())
 }
@@ -619,7 +664,9 @@ pub async fn cmd_open_settings(window: WebviewWindow, app: AppHandle) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{is_alarms, is_breaks, is_chimes, is_settings};
+    use super::{
+        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, shows_chime_picker,
+    };
 
     #[test]
     fn only_the_settings_window_is_privileged() {
@@ -663,5 +710,30 @@ mod tests {
         assert!(!is_chimes("breaks"));
         assert!(!is_chimes("Chimes")); // case-sensitive
         assert!(!is_chimes(""));
+    }
+
+    #[test]
+    fn only_chime_picker_windows_may_preview_by_id() {
+        // cmd_preview_chime_by_id: the windows that show a chime <select>.
+        assert!(shows_chime_picker("settings"));
+        assert!(shows_chime_picker("alarms"));
+        // Chimes previews unsaved defs via cmd_preview_chime, not by id; everything else is denied.
+        assert!(!shows_chime_picker("chimes"));
+        assert!(!shows_chime_picker("breaks"));
+        assert!(!shows_chime_picker("overlay-0"));
+        assert!(!shows_chime_picker("warning-toast"));
+        assert!(!shows_chime_picker(""));
+    }
+
+    #[test]
+    fn chime_preview_windows_may_stop_preview() {
+        // cmd_stop_preview: the chime pickers plus the chimes editor.
+        assert!(has_chime_preview("settings"));
+        assert!(has_chime_preview("alarms"));
+        assert!(has_chime_preview("chimes"));
+        assert!(!has_chime_preview("breaks"));
+        assert!(!has_chime_preview("overlay-0"));
+        assert!(!has_chime_preview("warning-toast"));
+        assert!(!has_chime_preview(""));
     }
 }

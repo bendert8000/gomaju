@@ -190,6 +190,7 @@ pub fn run() {
             commands::cmd_get_chimes,
             commands::cmd_save_chimes,
             commands::cmd_preview_chime,
+            commands::cmd_preview_chime_by_id,
             commands::cmd_stop_preview,
             commands::cmd_import_chime_file,
             commands::cmd_close_chimes,

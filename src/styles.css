@@ -17,6 +17,7 @@ body {
 /* --- Break overlay --- */
 
 .overlay {
+  position: relative; /* containing block for the absolutely-positioned quote near the top */
   width: 100vw;
   height: 100vh;
   display: grid;
@@ -63,15 +64,20 @@ body {
   white-space: pre-wrap; /* honor manual line breaks in multi-line notes */
 }
 
-/* Optional inspirational quote (from the user's quotes.toml), shown above the break name.
-   Italic + dimmer than the note so it reads as an ambient flourish, on both soft and strict
-   screens. Sits at the top of the column with the normal flex gap below it to the name. */
+/* Optional inspirational quote (from the user's quotes.toml). Italic + dimmer than the note so it
+   reads as an ambient flourish, on both soft and strict screens. Pinned near the TOP of the overlay
+   (out of the centered content stack) so the name/timer stay centered; `top` is the height knob. */
 .overlay__quote {
+  position: absolute;
+  top: 14vh;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(36rem, 90vw);
+  text-align: center;
   font-size: clamp(0.85rem, 1.8vw, 1.25rem);
   font-style: italic;
   font-weight: 400;
   opacity: 0.62;
-  max-width: 36rem;
   text-wrap: balance;
 }
 .overlay__quote:empty {
@@ -465,6 +471,21 @@ input[type="checkbox"] {
   gap: 0.5rem;
   font-size: 0.8rem;
   opacity: 0.85;
+}
+
+/* ▶/⏸ preview button sitting right after a chime <select> (Settings rules + Alarms). Compact,
+   fixed-width so the icon swap doesn't shift the row; tinted while playing. */
+.chime-preview-btn {
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.45rem;
+  min-width: 1.9rem;
+  line-height: 1;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.chime-preview-btn.playing {
+  color: #3b82f6;
+  border-color: #3b82f6;
 }
 
 /* --- Quotes editor (Settings "Quotes" card) --- */

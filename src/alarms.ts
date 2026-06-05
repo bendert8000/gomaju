@@ -2,6 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, LOCALE, t } from "./i18n";
 import { fillChimeSelect, type ChimeOption } from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+import {
+  installPreviewEndedListener,
+  resetActivePreview,
+  wirePreviewButton,
+} from "./chime-preview";
 
 // Assigned in init() once the alarms are first rendered; referenced only afterwards.
 let guard!: UnsavedGuard;
@@ -88,13 +93,20 @@ function alarmRow(a: AlarmDto): HTMLElement {
       </span>
     </div>
     <div class="alarm-line alarm-chime-row">
-      <label>${t("chime.label")} <select class="alarm-chime"></select></label>
+      <label>${t("chime.label")} <select class="alarm-chime"></select><button class="alarm-chime-preview btn-ghost chime-preview-btn" type="button"></button></label>
     </div>
     <div class="alarm-next"></div>
   `;
 
   q<HTMLInputElement>(row, ".alarm-name").value = a.name;
-  fillChimeSelect(q<HTMLSelectElement>(row, ".alarm-chime"), chimes, a.chime_id ?? "");
+  const chimeSel = q<HTMLSelectElement>(row, ".alarm-chime");
+  fillChimeSelect(chimeSel, chimes, a.chime_id ?? "");
+  // ▶/⏸ preview after the picker; "Default" (empty) auditions the built-in alarm tone.
+  wirePreviewButton(
+    q<HTMLButtonElement>(row, ".alarm-chime-preview"),
+    () => chimeSel.value,
+    "alarm",
+  );
   q<HTMLInputElement>(row, ".alarm-time").value = a.time || "08:00";
   q<HTMLInputElement>(row, ".alarm-enabled").checked = a.enabled;
   q<HTMLSelectElement>(row, ".alarm-repeat").value = a.repeat;
@@ -135,6 +147,7 @@ function alarmRow(a: AlarmDto): HTMLElement {
 }
 
 function renderAlarms(alarms: AlarmDto[]): void {
+  resetActivePreview(); // rows (and their preview buttons) are about to be rebuilt
   const container = $("alarms");
   container.innerHTML = "";
   for (const a of alarms) container.appendChild(alarmRow(a));
@@ -264,6 +277,7 @@ async function init(): Promise<void> {
   document.title = t("title.alarms");
   applyI18n(document.body);
   invoke("cmd_window_ready", { label: "alarms" }).catch(() => {});
+  installPreviewEndedListener(); // revert a chime-picker ▶/⏸ button when its preview ends
   // Load saved chimes first so each alarm row's chime picker can be populated.
   try {
     chimes = await invoke<ChimeOption[]>("cmd_get_chimes");

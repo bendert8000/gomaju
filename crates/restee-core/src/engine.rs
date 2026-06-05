@@ -173,11 +173,17 @@ impl Engine {
         }
     }
 
-    /// Manually pause counting (from Running).
+    /// Manually pause counting (from Running). Also cancels a pending pre-break warning —
+    /// while paused the break is no longer imminent, so the countdown toast should close. The
+    /// warning re-fires once the break is imminent again after resuming.
     pub fn pause(&mut self) -> Vec<Effect> {
         if self.state == RunState::Running {
             self.state = RunState::Paused;
-            vec![Effect::StateChanged(RunState::Paused)]
+            let mut effects = vec![Effect::StateChanged(RunState::Paused)];
+            if self.warned.take().is_some() {
+                effects.push(Effect::BreakWarningCancelled);
+            }
+            effects
         } else {
             vec![]
         }
@@ -748,6 +754,35 @@ mod tests {
         assert!(
             fire.iter().any(|x| matches!(x, Effect::StartBreak { .. })),
             "should fire after resuming and reaching the interval, got {fire:?}"
+        );
+    }
+
+    #[test]
+    fn pause_cancels_a_pending_break_warning() {
+        let settings = Settings {
+            warn: secs(5),
+            ..Settings::default()
+        };
+        let mut engine = Engine::new(vec![rule("eye", 10, 3, Enforcement::Soft)], settings);
+        engine.start();
+        for _ in 0..5 {
+            engine.tick(secs(1), secs(0)); // work = 5 -> warning emitted (countdown toast up)
+        }
+
+        // Pausing cancels the pending warning so the host closes the countdown toast.
+        let e = engine.pause();
+        assert!(
+            e.iter().any(|x| matches!(x, Effect::BreakWarningCancelled)),
+            "pause should cancel the pending warning, got {e:?}"
+        );
+        assert_eq!(engine.state(), RunState::Paused);
+
+        // Resuming still inside the warning window re-emits the warning (toast comes back).
+        engine.start();
+        let e = engine.tick(secs(1), secs(0)); // work = 6, still in [5, 10)
+        assert!(
+            e.iter().any(|x| matches!(x, Effect::BreakWarning { .. })),
+            "resuming in the warning window should re-emit the warning, got {e:?}"
         );
     }
 

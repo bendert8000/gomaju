@@ -2,6 +2,7 @@
 // standalone Break-rules window (src/breaks.ts) — single source of truth for the rule row.
 
 import { t } from "./i18n";
+import { resetActivePreview, wirePreviewButton } from "./chime-preview";
 
 export type Enforcement = "soft" | "strict";
 
@@ -88,8 +89,8 @@ export function ruleRow(rule: RuleDto, chimes: ChimeOption[] = []): HTMLElement 
     <input class="rule-repeat" type="checkbox" title="${t("editor.repeat_title")}" />
     <button class="rule-remove btn-ghost" type="button" title="${t("common.remove")}">✕</button>
     <textarea class="rule-note" rows="2" placeholder="${t("editor.note_placeholder")}"></textarea>
-    <label class="rule-chime-row">${t("chime.start_label")} <select class="rule-chime"></select></label>
-    <label class="rule-chime-row">${t("chime.end_label")} <select class="rule-end-chime"></select></label>
+    <label class="rule-chime-row">${t("chime.start_label")} <select class="rule-chime"></select><button class="rule-chime-preview btn-ghost chime-preview-btn" type="button"></button></label>
+    <label class="rule-chime-row">${t("chime.end_label")} <select class="rule-end-chime"></select><button class="rule-end-chime-preview btn-ghost chime-preview-btn" type="button"></button></label>
   `;
   rowInput(row, ".rule-name").value = rule.name;
   rowInput(row, ".rule-interval").value = String(Math.round(rule.interval_secs / 60));
@@ -98,8 +99,15 @@ export function ruleRow(rule: RuleDto, chimes: ChimeOption[] = []): HTMLElement 
   rowInput(row, ".rule-enabled").checked = rule.enabled;
   rowInput(row, ".rule-repeat").checked = rule.repeat;
   (row.querySelector(".rule-note") as HTMLTextAreaElement).value = rule.note ?? "";
-  fillChimeSelect(rowSelect(row, ".rule-chime"), chimes, rule.chime_id ?? "");
-  fillChimeSelect(rowSelect(row, ".rule-end-chime"), chimes, rule.end_chime_id ?? "");
+  const startSel = rowSelect(row, ".rule-chime");
+  const endSel = rowSelect(row, ".rule-end-chime");
+  fillChimeSelect(startSel, chimes, rule.chime_id ?? "");
+  fillChimeSelect(endSel, chimes, rule.end_chime_id ?? "");
+  // ▶/⏸ preview after each picker; reads the select's current value at click time. "Default"
+  // (empty) auditions the context's built-in tone (break-start / break-over).
+  const rowBtn = (cls: string): HTMLButtonElement => row.querySelector(cls) as HTMLButtonElement;
+  wirePreviewButton(rowBtn(".rule-chime-preview"), () => startSel.value, "break_start");
+  wirePreviewButton(rowBtn(".rule-end-chime-preview"), () => endSel.value, "break_over");
   row.querySelector(".rule-remove")!.addEventListener("click", () => row.remove());
   return row;
 }
@@ -110,6 +118,7 @@ export function renderRules(
   rules: RuleDto[],
   chimes: ChimeOption[] = [],
 ): void {
+  resetActivePreview(); // rows (and their preview buttons) are about to be rebuilt
   container.innerHTML = "";
   for (const rule of rules) container.appendChild(ruleRow(rule, chimes));
 }

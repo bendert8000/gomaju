@@ -98,29 +98,74 @@ cargo clippy --workspace --all-targets
 The timing/priority/idle logic and the alarm-recurrence matcher live in the dependency-free
 `restee-core` crate, so they test in well under a second without compiling Tauri.
 
-## Package
+## Build from source
 
-```bash
+Build on the OS you're targeting — Tauri bundles **native** installers per platform, so you
+can't cross-build a Windows `.exe` on macOS (or vice-versa). CI builds every platform at once —
+see [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+All bundles land under `target/release/bundle/` (the workspace-root `target/`, **not** under
+`src-tauri/`).
+
+### Prerequisites
+
+In addition to the [Requirements](#requirements) above (Rust stable + Node 18+; CI uses Node 20):
+
+- **Windows** — [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+  (the *Desktop development with C++* workload) for Rust's MSVC toolchain. WebView2 is preinstalled
+  on Windows 10/11.
+- **macOS** — Xcode Command Line Tools: `xcode-select --install`. For a cross-arch or universal
+  build, add the Rust targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`.
+- **Linux** — `webkit2gtk` and friends (the `apt` packages listed in
+  [`release.yml`](.github/workflows/release.yml)).
+
+Then install the frontend dependencies once: `npm install`.
+
+### Build for Windows
+
+```powershell
 npm run tauri build
 ```
 
-Produces installers under `target/release/bundle/` (workspace-root `target/`, not under
-`src-tauri/`):
-- **Windows** — `msi/` (WiX) and `nsis/` (`.exe` setup).
-- **macOS** — `dmg/` + `macos/*.app` (build on macOS).
-- **Linux** — `deb/`, `rpm/`, `appimage/` (build on Linux; AppImage is the most
-  portable, and most reliable for the tray).
+Installers land under `target\release\bundle\`:
 
-Cross-platform installers are produced automatically in CI — see
-[`.github/workflows/release.yml`](.github/workflows/release.yml).
+- `msi\` — WiX installer, e.g. `Restee_0.1.0_x64_en-US.msi`
+- `nsis\` — NSIS setup `.exe`, e.g. `Restee_0.1.0_x64-setup.exe`
 
-### Run a release binary without bundling
+For a no-installer binary, see [Standalone binary](#standalone-binary-no-installer) below.
 
-To produce a standalone, runnable binary (no installers) — e.g. for quick local
-testing:
+### Build for macOS
 
 ```bash
-cargo build --release --features custom-protocol   # → target/release/restee[.exe]
+npm run tauri build                                       # host architecture
+npm run tauri build -- --target universal-apple-darwin    # universal (needs both Rust targets)
+# single arch: --target aarch64-apple-darwin | --target x86_64-apple-darwin
+```
+
+Output: `macos/Restee.app` + `dmg/Restee_<ver>_<arch>.dmg`.
+
+The build is **unsigned**, so Gatekeeper blocks a double-click. Right-click the app → **Open**
+(confirm once), or clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /path/to/Restee.app
+```
+
+### Build for Linux
+
+```bash
+npm run tauri build   # after installing the apt packages from Prerequisites above
+```
+
+Produces `deb/`, `rpm/`, and `appimage/` bundles (AppImage is the most portable, and the most
+reliable for the tray).
+
+### Standalone binary (no installer)
+
+For a quick runnable binary with no installer (handy for local testing):
+
+```bash
+cargo build --release --features custom-protocol   # → target/release/restee.exe (Windows) | restee (macOS/Linux)
 ```
 
 > **Do not** build a runnable app with a bare `cargo build`/`cargo build --release`.
@@ -129,6 +174,14 @@ cargo build --release --features custom-protocol   # → target/release/restee[.
 > (`http://localhost:1420`). With no dev server running you get a blank window /
 > `ERR_CONNECTION_REFUSED`. `npm run tauri dev` and `npm run tauri build` enable the
 > feature automatically; a plain `cargo build` does not.
+
+This reuses the existing `dist/`; if you changed anything under `src/`, refresh it first with
+`npm run build`. On **Windows**, stop any running instance before building — a running tray app
+locks the binary, so the build otherwise fails with `Access denied (os error 5)`:
+
+```powershell
+Stop-Process -Name restee -Force
+```
 
 ### Signing (follow-up)
 
