@@ -10,6 +10,7 @@ mod hotkeys;
 mod i18n;
 mod idle;
 mod overlay;
+mod pause_toast;
 mod quotes;
 mod runtime;
 mod settings_window;
@@ -112,6 +113,7 @@ pub fn run() {
                 idle_status,
                 // The engine starts Running, so the clock is already ticking.
                 running_since: Mutex::new(Some(std::time::Instant::now())),
+                pause_reminder: Mutex::new(Default::default()),
             });
 
             tray::build_tray(&handle)?;
@@ -171,11 +173,14 @@ pub fn run() {
             commands::cmd_skip,
             commands::cmd_reset_timer,
             commands::cmd_delay_break,
+            commands::cmd_resume_from_pause_reminder,
+            commands::cmd_stay_paused_from_reminder,
             commands::cmd_get_config,
             commands::cmd_get_idle_status,
             commands::cmd_get_status,
             commands::cmd_save_config,
             commands::cmd_close_settings,
+            commands::cmd_get_app_version,
             commands::cmd_get_quotes,
             commands::cmd_save_quotes,
             commands::cmd_window_ready,

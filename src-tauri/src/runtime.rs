@@ -39,6 +39,7 @@ pub fn spawn_ticker(app: AppHandle, idle: Box<dyn IdleSource>) {
             }
             // Keep the tray's elapsed time fresh (no-op unless the rendered text changed).
             refresh_tray(&app, state);
+            maybe_show_pause_reminder(&app, state);
         }
     });
 }
@@ -341,6 +342,101 @@ fn update_running_since(app: &AppHandle, state: RunState) {
         RunState::Paused | RunState::Stopped => *since = None,
         RunState::InBreak => {}
     }
+    sync_pause_reminder_for_state(app, state);
+}
+
+pub fn sync_pause_reminder(app: &AppHandle) {
+    let state = app.state::<AppState>().engine.lock().unwrap().state();
+    sync_pause_reminder_for_state(app, state);
+}
+
+fn sync_pause_reminder_for_state(app: &AppHandle, state: RunState) {
+    match state {
+        RunState::Paused => arm_pause_reminder_from_now(app),
+        RunState::Stopped | RunState::Running | RunState::InBreak => clear_pause_reminder(app),
+    }
+}
+
+fn arm_pause_reminder_from_now(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let (enabled, interval) = pause_reminder_config(st.inner());
+    crate::pause_toast::close(app);
+    let mut reminder = st.pause_reminder.lock().unwrap();
+    reminder.generation = reminder.generation.wrapping_add(1);
+    reminder.prompt_open = false;
+    reminder.next_due = enabled.then(|| Instant::now() + interval);
+}
+
+fn clear_pause_reminder(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let mut reminder = st.pause_reminder.lock().unwrap();
+    if reminder.next_due.is_some() || reminder.prompt_open {
+        reminder.generation = reminder.generation.wrapping_add(1);
+    }
+    reminder.next_due = None;
+    reminder.prompt_open = false;
+    crate::pause_toast::close(app);
+}
+
+fn pause_reminder_config(st: &AppState) -> (bool, Duration) {
+    let cfg = st.config.lock().unwrap();
+    (
+        cfg.settings.pause_reminder_enabled,
+        Duration::from_secs(cfg.settings.pause_reminder_interval_secs.max(60)),
+    )
+}
+
+fn maybe_show_pause_reminder(app: &AppHandle, state: RunState) {
+    if state != RunState::Paused {
+        return;
+    }
+
+    let st = app.state::<AppState>();
+    let (enabled, interval) = pause_reminder_config(st.inner());
+    if !enabled {
+        clear_pause_reminder(app);
+        return;
+    }
+
+    let now = Instant::now();
+    let show = {
+        let mut reminder = st.pause_reminder.lock().unwrap();
+        if reminder.prompt_open {
+            return;
+        }
+        let due = *reminder.next_due.get_or_insert(now + interval);
+        if now < due {
+            return;
+        }
+        reminder.prompt_open = true;
+        true
+    };
+
+    if show {
+        crate::pause_toast::show(app);
+    }
+}
+
+pub fn resume_from_pause_reminder(app: &AppHandle, st: &AppState) {
+    crate::pause_toast::close(app);
+    let state = st.engine.lock().unwrap().state();
+    if state == RunState::Paused {
+        action_start(app, st);
+    } else {
+        clear_pause_reminder(app);
+    }
+}
+
+pub fn stay_paused_from_reminder(app: &AppHandle, st: &AppState) {
+    crate::pause_toast::close(app);
+    if st.engine.lock().unwrap().state() != RunState::Paused {
+        clear_pause_reminder(app);
+        return;
+    }
+    let (enabled, interval) = pause_reminder_config(st);
+    let mut reminder = st.pause_reminder.lock().unwrap();
+    reminder.prompt_open = false;
+    reminder.next_due = enabled.then(|| Instant::now() + interval);
 }
 
 /// Update the tray Start/Pause checks, elapsed text, and "next break in …" info line.

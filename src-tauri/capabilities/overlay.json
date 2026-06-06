@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "overlay",
-  "description": "Capability for break overlays and the countdown toast. Empty permission set: these windows get no core API access. App-defined commands are not capability-gated, so they can still invoke cmd_skip / cmd_window_ready; the Rust-side require_settings() check blocks every settings-only command.",
-  "windows": ["overlay-*", "warning-toast"],
+  "description": "Capability for break overlays and reminder toasts. Empty permission set: these windows get no core API access. App-defined commands are not capability-gated, so they can still invoke their narrow commands; the Rust-side caller-label checks block every settings-only command.",
+  "windows": ["overlay-*", "warning-toast", "pause-toast"],
   "permissions": []
 }

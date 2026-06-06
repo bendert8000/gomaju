@@ -266,6 +266,9 @@ body {
 .toast--strict .toast__dot {
   background: #ff8c6a;
 }
+.toast--pause .toast__dot {
+  background: #8fcf9a;
+}
 .toast__title {
   font-size: 0.95rem;
   font-weight: 600;
@@ -300,6 +303,22 @@ body {
 }
 .toast__delay:hover {
   background: rgba(255, 255, 255, 0.14);
+}
+.toast__delay:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.toast__delay--primary {
+  background: rgba(143, 207, 154, 0.22);
+  border-color: rgba(143, 207, 154, 0.45);
+}
+.toast__delay--primary:hover {
+  background: rgba(143, 207, 154, 0.3);
+}
+.toast__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 .toast__bar {
   height: 4px;
@@ -691,11 +710,22 @@ input.chime-volume-picker {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 0.85rem 1.25rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+.settings-footer__status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+#app-version {
+  white-space: nowrap;
+}
 .actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 0.6rem;
 }
 

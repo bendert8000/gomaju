@@ -35,14 +35,14 @@ fn build_menu(
     let status_items: Vec<MenuItem<tauri::Wry>> = lines
         .iter()
         .enumerate()
-        .map(|(i, line)| MenuItem::with_id(app, format!("status-{i}"), line, false, None::<&str>))
+        .map(|(i, line)| MenuItem::with_id(app, format!("status-{i}"), line, true, None::<&str>))
         .collect::<tauri::Result<Vec<_>>>()?;
     // Today's upcoming alarms — disabled info lines shown in their own section below the breaks.
     let alarm_items: Vec<MenuItem<tauri::Wry>> = alarm_lines
         .iter()
         .enumerate()
         .map(|(i, line)| {
-            MenuItem::with_id(app, format!("alarm-line-{i}"), line, false, None::<&str>)
+            MenuItem::with_id(app, format!("alarm-line-{i}"), line, true, None::<&str>)
         })
         .collect::<tauri::Result<Vec<_>>>()?;
     let sep_alarms = PredefinedMenuItem::separator(app)?;
@@ -247,7 +247,7 @@ pub fn refresh(
     let lines = status_lines(&locale, state, &breaks);
     let alarm_lines: Vec<String> = alarms
         .iter()
-        .map(|(name, time)| format!("⏰ {name} · {time}"))
+        .map(|(name, time)| format!("🔵 ⏰ {name} · {time}"))
         .collect();
 
     // Key from the exact rendered strings (+ locale), so the menu rebuilds only when a
@@ -304,7 +304,7 @@ fn status_lines(locale: &str, state: RunState, breaks: &[(String, u64)]) -> Vec<
     }
     breaks
         .iter()
-        .map(|(name, secs)| format!("☕ {name} · {}", i18n::human_dur(locale, *secs)))
+        .map(|(name, secs)| format!("🔵 ☕ {name} · {}", i18n::human_dur(locale, *secs)))
         .collect()
 }
 

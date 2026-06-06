@@ -17,11 +17,11 @@ restee uses least-privilege capabilities, scoped by window label:
   the read command `cmd_get_chimes` is allowed from settings/alarms/chimes (the chime picker).
   The native file picker for imports runs in **Rust** (tauri-plugin-dialog), so no dialog JS
   permission is needed.
-- **`overlay.json`** — break overlays (`overlay-*`) and the countdown `warning-toast`.
+- **`overlay.json`** — break overlays (`overlay-*`), the countdown `warning-toast`, and the
+  pause reminder `pause-toast`.
   **Empty** permission set: no core API access. They can still invoke app-defined
   commands (e.g. `cmd_skip`, `cmd_window_ready`) because app commands are not gated by
-  capabilities; the real restriction is the `require_settings()` caller-check in
-  `src/commands.rs`.
+  capabilities; the real restriction is the caller-label checks in `src/commands.rs`.
 
 > **Adding a new window?** Its label must be matched by one of these capability files
 > (or a new one), otherwise the window gets **no capability and its IPC is denied** —

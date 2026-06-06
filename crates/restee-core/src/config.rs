@@ -21,6 +21,8 @@ pub const CONFIG_VERSION: u32 = 1;
 /// lock the user out for an unreasonable time.
 const MAX_BREAK_SECS: u64 = 60 * 60; // 1 hour
 const MAX_WARN_SECS: u64 = 60 * 60; // 1 hour (0 = off is still allowed)
+const MIN_PAUSE_REMINDER_SECS: u64 = 60; // UI is minutes; never prompt faster than once/min.
+const MAX_PAUSE_REMINDER_SECS: u64 = 24 * 60 * 60; // 24 hours
 const MIN_INTERVAL_SECS: u64 = 5;
 const MIN_BREAK_SECS: u64 = 1;
 
@@ -126,6 +128,14 @@ pub struct SettingsDto {
     /// Defaults to on; older configs without the field default in as `true`.
     #[serde(default = "default_true")]
     pub show_quotes: bool,
+    /// While the timer is manually paused, periodically ask whether counting should resume.
+    /// Defaults off so upgrading users don't get new dialogs until they opt in.
+    #[serde(default)]
+    pub pause_reminder_enabled: bool,
+    /// Interval between pause reminder prompts, in seconds. The Settings UI presents this
+    /// as minutes, but seconds keep the TOML consistent with other durations.
+    #[serde(default = "default_pause_reminder_interval_secs")]
+    pub pause_reminder_interval_secs: u64,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -134,6 +144,10 @@ fn default_warn_seconds() -> u64 {
 
 fn default_break_display() -> BreakDisplayDto {
     BreakDisplayDto::Countdown
+}
+
+pub fn default_pause_reminder_interval_secs() -> u64 {
+    10 * 60
 }
 
 /// Optional global-hotkey accelerators (e.g. "CommandOrControl+Alt+B"). `None`
@@ -204,6 +218,8 @@ impl Default for SettingsDto {
             notifications: true,
             break_display: BreakDisplayDto::Countdown,
             show_quotes: true,
+            pause_reminder_enabled: false,
+            pause_reminder_interval_secs: default_pause_reminder_interval_secs(),
         }
     }
 }
@@ -338,6 +354,12 @@ impl ConfigFile {
             self.settings.gap_threshold_secs = 1;
             changed = true;
         }
+        clamp(
+            &mut self.settings.pause_reminder_interval_secs,
+            MIN_PAUSE_REMINDER_SECS,
+            MAX_PAUSE_REMINDER_SECS,
+            &mut changed,
+        );
         if alarm::sanitize_alarms(&mut self.alarms) {
             changed = true;
         }
@@ -515,6 +537,50 @@ mod tests {
         assert!(text.contains("show_quotes = false"));
         let parsed: ConfigFile = toml::from_str(&text).unwrap();
         assert!(!parsed.settings.show_quotes);
+    }
+
+    #[test]
+    fn pause_reminder_defaults_and_round_trips() {
+        assert!(!SettingsDto::default().pause_reminder_enabled);
+        assert_eq!(
+            SettingsDto::default().pause_reminder_interval_secs,
+            default_pause_reminder_interval_secs()
+        );
+        // Older configs without pause reminder fields deserialize to opt-out + 10 minutes.
+        let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
+        let parsed: ConfigFile = toml::from_str(older).unwrap();
+        assert!(!parsed.settings.pause_reminder_enabled);
+        assert_eq!(
+            parsed.settings.pause_reminder_interval_secs,
+            default_pause_reminder_interval_secs()
+        );
+        let mut cfg = ConfigFile::default();
+        cfg.settings.pause_reminder_enabled = true;
+        cfg.settings.pause_reminder_interval_secs = 15 * 60;
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        assert!(text.contains("pause_reminder_enabled = true"));
+        assert!(text.contains("pause_reminder_interval_secs = 900"));
+        let parsed: ConfigFile = toml::from_str(&text).unwrap();
+        assert!(parsed.settings.pause_reminder_enabled);
+        assert_eq!(parsed.settings.pause_reminder_interval_secs, 15 * 60);
+    }
+
+    #[test]
+    fn sanitize_clamps_pause_reminder_interval() {
+        let mut cfg = ConfigFile::default();
+        cfg.settings.pause_reminder_interval_secs = 0;
+        assert!(cfg.sanitize());
+        assert_eq!(
+            cfg.settings.pause_reminder_interval_secs,
+            MIN_PAUSE_REMINDER_SECS
+        );
+
+        cfg.settings.pause_reminder_interval_secs = MAX_PAUSE_REMINDER_SECS + 1;
+        assert!(cfg.sanitize());
+        assert_eq!(
+            cfg.settings.pause_reminder_interval_secs,
+            MAX_PAUSE_REMINDER_SECS
+        );
     }
 
     #[test]

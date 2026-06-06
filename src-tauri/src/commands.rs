@@ -83,6 +83,14 @@ fn require_toast(window: &WebviewWindow) -> Result<(), String> {
     gate(window.label() == crate::toast::TOAST_LABEL, "toast")
 }
 
+/// Reject pause-reminder actions invoked from any window other than the pause reminder toast.
+fn require_pause_toast(window: &WebviewWindow) -> Result<(), String> {
+    gate(
+        window.label() == crate::pause_toast::PAUSE_TOAST_LABEL,
+        "pause-toast",
+    )
+}
+
 /// Push a config's rules+settings into the live engine and apply any resulting effects.
 /// Shared by `cmd_save_config` and `cmd_set_rule_flags`; deliberately narrow — it does NOT
 /// touch hotkeys or autostart (those stay in `cmd_save_config`).
@@ -135,6 +143,28 @@ pub fn cmd_delay_break(
 }
 
 #[tauri::command]
+pub fn cmd_resume_from_pause_reminder(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_pause_toast(&window)?;
+    runtime::resume_from_pause_reminder(&app, state.inner());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cmd_stay_paused_from_reminder(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_pause_toast(&window)?;
+    runtime::stay_paused_from_reminder(&app, state.inner());
+    Ok(())
+}
+
+#[tauri::command]
 pub fn cmd_get_config(
     window: WebviewWindow,
     state: State<'_, AppState>,
@@ -157,6 +187,12 @@ pub fn cmd_close_settings(window: WebviewWindow, app: AppHandle) -> Result<(), S
     require_settings(&window)?;
     settings_window::close(&app);
     Ok(())
+}
+
+#[tauri::command]
+pub fn cmd_get_app_version(window: WebviewWindow, app: AppHandle) -> Result<String, String> {
+    require_settings(&window)?;
+    Ok(app.package_info().version.to_string())
 }
 
 /// One enabled break's countdown, for the status banners + dashboard cards.
@@ -246,6 +282,7 @@ pub fn cmd_save_config(
     }
 
     reconfigure_engine(&app, state.inner(), &config);
+    runtime::sync_pause_reminder(&app);
 
     let hotkey_errors = hotkeys::apply(&app, &config.hotkeys);
     autostart::apply(&app, config.autostart);

@@ -36,9 +36,12 @@ So for a standalone binary, always pass `--features custom-protocol` (declared i
 `src-tauri/Cargo.toml`). The release binary lands at `target/release/restee.exe`
 (workspace target dir at the repo root, not under `src-tauri/`).
 
-`npm run tauri build` also runs `npm run build` (`tsc && vite build`) to refresh
-`dist/`. If you only `cargo build --features custom-protocol`, you reuse the existing
-`dist/` — rebuild the frontend separately (`npm run build`) if `src/` changed.
+`npm run tauri build` also runs `npm run build` (`version:check && tsc && vite build`)
+to refresh `dist/`. If you only `cargo build --features custom-protocol`, you reuse the
+existing `dist/` — rebuild the frontend separately (`npm run build`) if `src/` changed.
+
+Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to update
+`package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` together.
 
 ## Notifications (platform notes)
 

@@ -73,6 +73,14 @@ const MESSAGES: Record<string, Entry> = {
     "zh-Hant": "休息前提醒（秒，0 ＝ 關閉）",
   },
   "settings.idle_threshold_label": { en: "Idle threshold (seconds)", "zh-Hant": "閒置門檻（秒）" },
+  "settings.pause_reminder_enabled": {
+    en: "When paused, ask whether to resume counting",
+    "zh-Hant": "暫停時，詢問是否恢復計時",
+  },
+  "settings.pause_reminder_interval": {
+    en: "Ask every (minutes)",
+    "zh-Hant": "每隔多久詢問（分鐘）",
+  },
   "settings.sound_label": {
     en: "Play a chime when a break starts or ends",
     "zh-Hant": "休息開始或結束時播放提示音",
@@ -230,6 +238,15 @@ const MESSAGES: Record<string, Entry> = {
   "toast.starting_in": { en: "starting in {mmss}", "zh-Hant": "{mmss} 後開始" },
   "toast.starting_soon": { en: "starting soon…", "zh-Hant": "即將開始…" },
   "toast.delay": { en: "Delay 1 min", "zh-Hant": "延後 1 分鐘" },
+
+  // --- Pause reminder toast ---
+  "pause_toast.title": { en: "Still paused?", "zh-Hant": "仍在暫停？" },
+  "pause_toast.sub": {
+    en: "Resume break counting now?",
+    "zh-Hant": "要現在恢復休息計時嗎？",
+  },
+  "pause_toast.resume": { en: "Resume counting", "zh-Hant": "恢復計時" },
+  "pause_toast.stay_paused": { en: "Stay paused", "zh-Hant": "繼續暫停" },
 };
 
 /** Translate `key` for the current window locale, substituting `{param}` placeholders. */

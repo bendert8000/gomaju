@@ -15,6 +15,8 @@ sound = true
 notifications = true
 break_display = "countdown"
 show_quotes = true
+pause_reminder_enabled = false
+pause_reminder_interval_secs = 600
 
 [hotkeys]
 

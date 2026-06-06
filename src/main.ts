@@ -29,6 +29,8 @@ interface SettingsDto {
   notifications: boolean;
   break_display: BreakDisplay;
   show_quotes: boolean;
+  pause_reminder_enabled: boolean;
+  pause_reminder_interval_secs: number;
 }
 
 interface HotkeysDto {
@@ -144,6 +146,10 @@ function render(cfg: ConfigFile): void {
   inp("away-threshold").value = String(cfg.settings.away_threshold_secs);
   inp("sound").checked = cfg.settings.sound;
   inp("show-quotes").checked = cfg.settings.show_quotes;
+  inp("pause-reminder-enabled").checked = cfg.settings.pause_reminder_enabled;
+  inp("pause-reminder-minutes").value = String(
+    Math.max(1, Math.round(cfg.settings.pause_reminder_interval_secs / 60)),
+  );
   inp("notifications").checked = cfg.settings.notifications;
   inp("autostart").checked = cfg.autostart;
   inp("hk-toggle").value = cfg.hotkeys.toggle ?? "";
@@ -170,6 +176,9 @@ function collectConfig(): ConfigFile {
         Number(inp("away-threshold").value) || current.settings.away_threshold_secs,
       sound: inp("sound").checked,
       show_quotes: inp("show-quotes").checked,
+      pause_reminder_enabled: inp("pause-reminder-enabled").checked,
+      pause_reminder_interval_secs:
+        Math.max(1, readNonNegative("pause-reminder-minutes", 10)) * 60,
       notifications: inp("notifications").checked,
     },
     hotkeys: {
@@ -279,6 +288,13 @@ async function init(): Promise<void> {
   document.title = t("title.settings");
   applyI18n(document.body);
   invoke("cmd_window_ready", { label: "settings" }).catch(() => {});
+  invoke<string>("cmd_get_app_version")
+    .then((version) => {
+      $("app-version").textContent = `v${version}`;
+    })
+    .catch(() => {
+      $("app-version").textContent = "";
+    });
   installPreviewEndedListener(); // revert a chime-picker ▶/⏸ button when its preview ends
   current = await invoke<ConfigFile>("cmd_get_config");
   await loadChimes();

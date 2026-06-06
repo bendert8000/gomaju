@@ -7,6 +7,13 @@ use restee_core::{config::ConfigFile, Engine};
 
 use crate::idle::IdleStatus;
 
+#[derive(Default)]
+pub struct PauseReminderState {
+    pub next_due: Option<Instant>,
+    pub prompt_open: bool,
+    pub generation: u64,
+}
+
 /// Application state shared between the tray, commands, and the ticker thread.
 /// The engine and config are each behind their own mutex (low contention: the
 /// ticker locks the engine ~once/second; commands lock briefly).
@@ -27,4 +34,6 @@ pub struct AppState {
     /// When the timer last (re)entered Running; `None` while paused/stopped. Used to
     /// show elapsed running time in the tray. Kept across breaks (InBreak doesn't reset).
     pub running_since: Mutex<Option<Instant>>,
+    /// Runtime-only scheduler for the "still paused?" reminder dialog.
+    pub pause_reminder: Mutex<PauseReminderState>,
 }

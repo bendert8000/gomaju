@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Restee</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="toast toast--pause">
+    <div class="toast__row">
+      <span class="toast__dot"></span>
+      <div class="toast__text">
+        <div class="toast__title" id="pause-toast-title">Still paused?</div>
+        <div class="toast__sub" id="pause-toast-sub">Resume break counting?</div>
+      </div>
+    </div>
+    <div class="toast__actions">
+      <button class="toast__delay" id="pause-toast-stay" type="button">Stay paused</button>
+      <button class="toast__delay toast__delay--primary" id="pause-toast-resume" type="button">
+        Resume counting
+      </button>
+    </div>
+    <script type="module" src="/src/pause-toast.ts"></script>
+  </body>
+</html>

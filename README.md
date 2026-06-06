@@ -121,6 +121,17 @@ In addition to the [Requirements](#requirements) above (Rust stable + Node 18+; 
 
 Then install the frontend dependencies once: `npm install`.
 
+### Versioning
+
+`package.json` is the canonical app version. Keep Tauri and Cargo metadata aligned with:
+
+```bash
+npm run version:set -- 0.2.0
+```
+
+`npm run build` checks that `package.json`, `src-tauri/tauri.conf.json`, and
+`src-tauri/Cargo.toml` all use the same version before producing `dist/`.
+
 ### Build for Windows
 
 ```powershell

@@ -1,13 +1,16 @@
 {
   "name": "restee",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run version:check && tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version:check": "node scripts/version.mjs --check",
+    "version:sync": "node scripts/version.mjs --sync",
+    "version:set": "node scripts/version.mjs --set"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

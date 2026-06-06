@@ -62,6 +62,14 @@
           <input id="away-threshold" type="number" min="1" />
         </label>
         <label class="field field--checkbox">
+          <input id="pause-reminder-enabled" type="checkbox" />
+          <span data-i18n="settings.pause_reminder_enabled">When paused, ask whether to resume counting</span>
+        </label>
+        <label class="field">
+          <span data-i18n="settings.pause_reminder_interval">Ask every (minutes)</span>
+          <input id="pause-reminder-minutes" type="number" min="1" />
+        </label>
+        <label class="field field--checkbox">
           <input id="sound" type="checkbox" />
           <span data-i18n="settings.sound_label">Play a chime when a break starts or ends</span>
         </label>
@@ -100,7 +108,10 @@
     </main>
 
     <footer class="settings-footer">
-      <span id="save-msg" class="muted"></span>
+      <div class="settings-footer__status">
+        <span id="save-msg" class="muted"></span>
+        <span id="app-version" class="muted"></span>
+      </div>
       <div class="actions">
         <button id="close-btn" type="button" class="btn-ghost" data-i18n="common.close">Close</button>
         <button id="save-btn" type="button" class="btn-primary" data-i18n="common.save">Save</button>
