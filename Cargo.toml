@@ -7,3 +7,14 @@ resolver = "2"
 # dependency tree (esp. the `windows` crate + our `staticlib`) otherwise bloat `target/`
 # to ~19 GB; this cuts it to a fraction with no loss of backtraces.
 debug = "line-tables-only"
+
+[profile.release]
+# Smaller release binary (Cargo's default release profile applies no size optimizations).
+# LTO + a single codegen unit + size-favoring opt-level do most of the work; `strip` drops
+# symbol tables (a big win on Linux/macOS; minor on Windows MSVC, where debug info lives in a
+# separate .pdb that isn't shipped). `panic = "abort"` deliberately left off — it shaves a bit
+# more but changes panic behavior, so it's an opt-in.
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
