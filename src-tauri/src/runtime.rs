@@ -163,7 +163,7 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 // over the whole screen, so a toast would be redundant.
                 if notify && *enforcement == Enforcement::Soft {
                     let body = crate::i18n::tr(&locale, "notif.soft_break").replace("{name}", name);
-                    show_notification(app, &body);
+                    show_notification(app, crate::i18n::tr(&locale, "notif.break_title"), &body);
                 }
             }
             Effect::BreakTick { rule_id, remaining } => {
@@ -577,18 +577,19 @@ fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String, u64)> {
         .collect()
 }
 
-/// Show an OS notification titled "restee" with `body`. Best-effort: on Windows the
+/// Show an OS notification with `title` (always brand-led — e.g. "Restee · Break reminder" — so
+/// it's recognizable among other system notifications) and `body`. Best-effort: on Windows the
 /// toast renders reliably only once the app is installed (has an app identity).
-pub fn show_notification(app: &AppHandle, body: &str) {
+pub fn show_notification(app: &AppHandle, title: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
     match app
         .notification()
         .builder()
-        .title("Restee")
+        .title(title)
         .body(body)
         .show()
     {
-        Ok(_) => eprintln!("restee: notification shown ({body})"),
+        Ok(_) => eprintln!("restee: notification shown ({title}: {body})"),
         Err(e) => eprintln!("restee: notification failed ({e})"),
     }
 }
@@ -608,7 +609,7 @@ pub fn show_startup_notification(app: &AppHandle, body: &str) {
             Err(e) => eprintln!("restee: WinRT startup toast failed ({e}); using plugin"),
         }
     }
-    show_notification(app, body);
+    show_notification(app, "Restee", body);
 }
 
 /// Drive the Windows toast directly and schedule its dismissal ~2s later.

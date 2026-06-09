@@ -84,6 +84,8 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         // Notifications ({name} = rule/alarm name)
         "notif.soft_break" => pick(locale, "{name} — time for a quick break", "{name} — 該休息一下了"),
         "notif.startup" => pick(locale, "Restee is running now", "Restee 已啟動"),
+        "notif.break_title" => pick(locale, "Restee · Break reminder", "Restee · 休息提醒"),
+        "notif.alarm_title" => pick(locale, "Restee · Alarm", "Restee · 鬧鐘"),
 
         // Native window titles
         "title.settings" => pick(locale, "Restee — Settings", "Restee — 設定"),

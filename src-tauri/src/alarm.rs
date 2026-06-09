@@ -101,11 +101,14 @@ pub fn spawn_scheduler(app: AppHandle) {
             let ymd = now.format("%Y-%m-%d").to_string();
 
             // Snapshot under lock, then release it before running side effects.
-            let (alarms, chimes): (Vec<AlarmDto>, Vec<restee_core::chime::ChimeDto>) = {
+            let (alarms, chimes, locale): (Vec<AlarmDto>, Vec<restee_core::chime::ChimeDto>, String) = {
                 let st = app.state::<AppState>();
-                let alarms = st.config.lock().unwrap().alarms.clone();
+                let (alarms, locale) = {
+                    let cfg = st.config.lock().unwrap();
+                    (cfg.alarms.clone(), cfg.locale.clone())
+                };
                 let chimes = st.chimes.lock().unwrap().clone();
-                (alarms, chimes)
+                (alarms, chimes, locale)
             };
 
             // Notify per alarm (names are distinct + informative), but play the tone at
@@ -118,7 +121,7 @@ pub fn spawn_scheduler(app: AppHandle) {
                     continue;
                 }
                 eprintln!("restee: alarm fired ({})", a.name);
-                runtime::show_notification(&app, &a.name);
+                runtime::show_notification(&app, crate::i18n::tr(&locale, "notif.alarm_title"), &a.name);
                 if fired_chime.is_none() {
                     fired_chime = Some((a.chime_id.clone(), a.chime_volume_pct));
                 }
