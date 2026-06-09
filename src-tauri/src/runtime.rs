@@ -594,9 +594,9 @@ pub fn show_notification(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
-/// Show the "app is running" startup notification, auto-dismissed after ~2s.
+/// Show the startup tray-reminder notification, auto-dismissed after ~3s.
 ///
-/// On Windows we drive the WinRT toast directly so we can `Hide` it after 2s — the
+/// On Windows we drive the WinRT toast directly so we can `Hide` it after 3s — the
 /// notification plugin offers no control over toast lifetime, and Windows won't show
 /// a banner for less than the OS minimum (~5s). `Hide` removes the banner *and* the
 /// Action Center entry, so the message doesn't linger. Other platforms (and any
@@ -612,7 +612,7 @@ pub fn show_startup_notification(app: &AppHandle, body: &str) {
     show_notification(app, "Restee", body);
 }
 
-/// Drive the Windows toast directly and schedule its dismissal ~2s later.
+/// Drive the Windows toast directly and schedule its dismissal ~3s later.
 #[cfg(windows)]
 fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
     use windows::core::HSTRING;
@@ -633,14 +633,14 @@ fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
     let toast = ToastNotification::CreateToastNotification(&doc)?;
     let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(&app_id))?;
     notifier.Show(&toast)?;
-    eprintln!("restee: startup toast shown ({body}); auto-dismiss in 2s");
+    eprintln!("restee: startup toast shown ({body}); auto-dismiss in 3s");
 
-    // Remove it after ~2s so it doesn't linger on screen or in the Action Center.
+    // Remove it after ~3s so it doesn't linger on screen or in the Action Center.
     // WinRT toast objects are agile (Send + Sync); hide on the main thread to keep
     // COM usage on the thread Tauri initialized.
     let app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(Duration::from_secs(3));
         let _ = app.run_on_main_thread(move || {
             if let Err(e) = notifier.Hide(&toast) {
                 eprintln!("restee: startup toast hide failed ({e})");

@@ -41,9 +41,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.break_now" => pick(locale, "Break now", "立即休息"),
         "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
-        "tray.chimes" => pick(locale, "Chimes…", "鈴聲…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
-        "tray.language" => pick(locale, "Language", "語言"),
         "tray.quit" => pick(locale, "Quit Restee", "結束 Restee"),
         "tray.tooltip" => pick(locale, "Restee — break reminder", "Restee — 休息提醒"),
         // Tray status lines
@@ -83,7 +81,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
 
         // Notifications ({name} = rule/alarm name)
         "notif.soft_break" => pick(locale, "{name} — time for a quick break", "{name} — 該休息一下了"),
-        "notif.startup" => pick(locale, "Restee is running now", "Restee 已啟動"),
+        "notif.startup" => pick(locale, "Running in the system tray", "正在系統匣中執行"),
         "notif.break_title" => pick(locale, "Restee · Break reminder", "Restee · 休息提醒"),
         "notif.alarm_title" => pick(locale, "Restee · Alarm", "Restee · 鬧鐘"),
 

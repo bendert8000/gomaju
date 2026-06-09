@@ -251,6 +251,22 @@ body {
   animation: restee-fade-in 250ms ease-out;
 }
 
+/* Pre-break countdown toast only: a mascot peeking past the right border. Scoped to
+   .toast--countdown so the pause toast (.toast--pause) keeps its plain layout. */
+.toast--countdown {
+  position: relative; /* containing block for the absolutely-positioned mascot */
+  /* Reserve room on the right so the text + snooze button + bar never sit under the eye. */
+  padding-right: 7rem;
+}
+.toast__mascot {
+  position: absolute;
+  right: 0; /* flush to the right border; the toast's rounded corner + overflow:hidden clip the peek */
+  bottom: 0;
+  height: 6.5rem; /* ~104px tall in the 112px toast */
+  width: auto; /* preserve the 160×160 (square) aspect ratio → ~104px wide */
+  pointer-events: none; /* purely decorative — never intercept the snooze click */
+}
+
 .toast__row {
   display: flex;
   align-items: center;
@@ -337,7 +353,21 @@ body {
 }
 .overlay__brand {
   margin-bottom: 0.6rem;
-  opacity: 0.4;
+  /* Bigger brand on the break screen; lay the wordmark + mascot out side by side. */
+  font-size: clamp(1.25rem, 3vw, 2rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  /* Override .brand-tag's opacity here so the mascot stays bright; the wordmark is dimmed below. */
+  opacity: 1;
+}
+.overlay__brand-text {
+  opacity: 0.4; /* keep the RESTEE wordmark an ambient eyebrow */
+}
+.overlay__brand-mascot {
+  height: 1.8em; /* scales with the brand font-size */
+  width: auto;
 }
 .toast__bar {
   height: 4px;
@@ -558,6 +588,10 @@ input.chime-volume-picker {
 .quote-locale-btn.is-active {
   background: #3b82f6;
   color: #fff;
+}
+/* App-language dropdown (Settings "Language" card) — keep the old toggle's spacing. */
+#app-locale {
+  margin: 0.5rem 0 0.1rem;
 }
 #quotes {
   display: flex;

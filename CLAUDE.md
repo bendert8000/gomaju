@@ -46,12 +46,13 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
 ## Notifications (platform notes)
 
 - Break/soft notifications use `tauri-plugin-notification` (`runtime::show_notification`).
-- The **startup** "Restee is running now" toast is special: `runtime::show_startup_notification`
-  auto-dismisses after ~2s. The plugin exposes no control over toast lifetime, and a
-  native Windows banner can't be shown for less than the OS minimum (~5s). So on
-  Windows we drive the WinRT toast directly (`windows` crate) and call
-  `ToastNotifier::Hide` after 2s, which clears both the banner and the Action Center
-  entry. Other platforms (and any WinRT failure) fall back to the plugin.
+- The **startup** "Running in the system tray" toast is special: `runtime::show_startup_notification`
+  auto-dismisses after ~3s. It fires on every cold start (gated by the `notifications`
+  setting) to remind the user the app keeps running in the tray after its windows close.
+  The plugin exposes no control over toast lifetime, and a native Windows banner can't be
+  shown for less than the OS minimum (~5s). So on Windows we drive the WinRT toast directly
+  (`windows` crate) and call `ToastNotifier::Hide` after 3s, which clears both the banner and
+  the Action Center entry. Other platforms (and any WinRT failure) fall back to the plugin.
 
 ## Alarms (clock alarms, separate from breaks)
 
@@ -83,9 +84,9 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   reconfigures the engine live. "Edit in Settings…" → `cmd_open_settings`. The dashboard
   renders its own cards (does NOT use the shared `ruleRow`); it imports only the `RuleDto`
   type.
-- The standalone window **auto-opens on every cold start** (`lib.rs` setup) and replaces the
-  "Restee is running now" startup toast (the window is the signal). Debug builds honor
-  `RESTEE_NO_OPEN_RULES` to suppress it.
+- The standalone window **auto-opens on every cold start** (`lib.rs` setup), alongside the
+  startup "Running in the system tray" toast (see Notifications). Debug builds honor
+  `RESTEE_NO_OPEN_RULES` to suppress the auto-open.
 - Each rule has a `repeat` flag (default true). A **once** rule (`repeat=false`) fires one
   break, then the engine disables it (`Effect::RuleDisabled`) and the host persists
   `enabled=false` (`runtime::persist_rule_disabled`) — same auto-disable model as alarm
@@ -121,7 +122,8 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   end chime falls back to the break-over tone). The Settings rule grid (`rule-editor.ts`) shows two
   pickers per rule (Start chime / End chime). Alarms keep the "one tone per minute" policy — if
   several fire at once, the first one's chime and volume win.
-- The **Chimes window** (`chimes.html` / `src/chimes.ts`, label `chimes`, tray "Chimes…") composes
+- The **Chimes window** (`chimes.html` / `src/chimes.ts`, label `chimes`, opened from Settings via
+  "Open chime editor" → `cmd_open_chimes`) composes
   with **musical notes** (`src/notes.ts`: Do-Re-Mi in C/G/F major → MIDI → Hz; tones stored as the
   resulting `freq_hz`). **Volume is not part of a saved chime**: `tone_source` synthesizes
   full-scale sines and playback applies the rule/alarm picker's `*_volume_pct` via

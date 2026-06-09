@@ -42,6 +42,7 @@ interface HotkeysDto {
 
 interface ConfigFile {
   version: number;
+  locale: string;
   autostart: boolean;
   settings: SettingsDto;
   hotkeys: HotkeysDto;
@@ -157,6 +158,21 @@ function render(cfg: ConfigFile): void {
   inp("hk-toggle").value = cfg.hotkeys.toggle ?? "";
   inp("hk-break").value = cfg.hotkeys.break_now ?? "";
   inp("hk-skip").value = cfg.hotkeys.skip ?? "";
+  sel("app-locale").value = cfg.locale;
+}
+
+/** Switch the whole-app UI language (the Language card). Persists + relabels the tray immediately;
+ * open windows (including this one) re-render in the new language when reopened. */
+async function setAppLocale(code: string): Promise<void> {
+  if (!code || code === current.locale) return;
+  try {
+    await invoke("cmd_set_locale", { locale: code });
+    current.locale = code; // keep the in-memory config in sync so a later Save preserves it
+    sel("app-locale").value = code; // reflect the applied locale in the dropdown
+  } catch (err) {
+    console.error("restee: set locale failed", err);
+    sel("app-locale").value = current.locale; // failed: restore the dropdown to the live locale
+  }
 }
 
 function blankToNull(v: string): string | null {
@@ -337,6 +353,10 @@ async function init(): Promise<void> {
   window.addEventListener("focus", () => {
     void onFocusRefresh();
   });
+  $("open-chimes").addEventListener("click", () => {
+    invoke("cmd_open_chimes").catch((err) => console.error("restee: open chimes failed", err));
+  });
+  sel("app-locale").addEventListener("change", () => void setAppLocale(sel("app-locale").value));
   $("save-btn").addEventListener("click", () => void save());
   $("close-btn").addEventListener("click", () => void guard.requestClose());
 }

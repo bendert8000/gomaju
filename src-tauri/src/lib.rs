@@ -172,10 +172,9 @@ pub fn run() {
             }
             autostart::apply(&handle, autostart_wanted);
 
-            // Cold start: open the break-rules window so setup is front-and-center. The
-            // visible window already signals the app started, so we skip the otherwise-
-            // redundant "Restee is running now" toast when opening it. Debug builds honor
-            // RESTEE_NO_OPEN_RULES to suppress the auto-open (handy under `tauri dev`).
+            // Cold start: open the break-rules window so setup is front-and-center. Debug
+            // builds honor RESTEE_NO_OPEN_RULES to suppress the auto-open (handy under
+            // `tauri dev`).
             #[cfg(debug_assertions)]
             let open_rules = std::env::var("RESTEE_NO_OPEN_RULES").is_err();
             #[cfg(not(debug_assertions))]
@@ -183,7 +182,12 @@ pub fn run() {
 
             if open_rules {
                 breaks_window::open(&handle);
-            } else if notify_on_start {
+            }
+
+            // Startup tray reminder: teach the user the app keeps running in the system
+            // tray after the break-rules window is closed. Respects the notifications
+            // setting; on Windows the WinRT toast auto-dismisses after ~3s.
+            if notify_on_start {
                 let loc = i18n::current_locale(&handle);
                 runtime::show_startup_notification(&handle, i18n::tr(&loc, "notif.startup"));
             }
@@ -242,6 +246,8 @@ pub fn run() {
             commands::cmd_set_rule_flags,
             commands::cmd_close_breaks,
             commands::cmd_open_settings,
+            commands::cmd_open_chimes,
+            commands::cmd_set_locale,
             commands::cmd_get_chimes,
             commands::cmd_save_chimes,
             commands::cmd_preview_chime,

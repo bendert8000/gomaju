@@ -152,7 +152,7 @@ fn default_break_display() -> BreakDisplayDto {
 }
 
 pub fn default_pause_reminder_interval_secs() -> u64 {
-    10 * 60
+    5 * 60
 }
 
 /// Optional global-hotkey accelerators (e.g. "CommandOrControl+Alt+B"). `None`
@@ -218,12 +218,12 @@ impl Default for SettingsDto {
             away_threshold_secs: 120,
             gap_threshold_secs: 30,
             escape_mode: EscapeModeDto::Friction,
-            warn_seconds: 30,
+            warn_seconds: 60,
             sound: true,
             notifications: true,
-            break_display: BreakDisplayDto::Countdown,
+            break_display: BreakDisplayDto::ProgressBar,
             show_quotes: true,
-            pause_reminder_enabled: false,
+            pause_reminder_enabled: true,
             pause_reminder_interval_secs: default_pause_reminder_interval_secs(),
             resume_prompt_enabled: true,
         }
@@ -464,7 +464,7 @@ mod tests {
         let cfg = ConfigFile::default();
         let (rules, settings) = cfg.to_engine_inputs();
         assert_eq!(rules.len(), 2);
-        assert_eq!(rules[0].interval, Duration::from_secs(1800));
+        assert_eq!(rules[0].interval, Duration::from_secs(1200));
         assert_eq!(rules[1].enforcement, Enforcement::Strict);
         assert_eq!(settings.idle_policy, IdlePolicy::Pause);
     }
@@ -474,7 +474,7 @@ mod tests {
         // Panics here if `default_config.toml` is malformed for ConfigFile.
         let mut cfg = ConfigFile::default();
         assert_eq!(cfg.rules.len(), 2);
-        assert_eq!(cfg.alarms.len(), 4);
+        assert_eq!(cfg.alarms.len(), 5);
         // The shipped default must already be valid — sanitize should change nothing.
         assert!(!cfg.sanitize());
     }
@@ -511,12 +511,12 @@ mod tests {
 
     #[test]
     fn break_display_defaults_and_round_trips() {
-        // Default is the text countdown (so older configs/behaviour are unchanged).
+        // Seed default is the progress bar (matches the shipped default_config.toml).
         assert_eq!(
             SettingsDto::default().break_display,
-            BreakDisplayDto::Countdown
+            BreakDisplayDto::ProgressBar
         );
-        // A config TOML without `break_display` (older file) deserializes to the default.
+        // A config TOML without `break_display` (older file) keeps the text countdown (backwards-compat).
         let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
         let parsed: ConfigFile = toml::from_str(older).unwrap();
         assert_eq!(parsed.settings.break_display, BreakDisplayDto::Countdown);
@@ -547,12 +547,13 @@ mod tests {
 
     #[test]
     fn pause_reminder_defaults_and_round_trips() {
-        assert!(!SettingsDto::default().pause_reminder_enabled);
+        // Seed default is on with a 5-minute interval (matches the shipped default_config.toml).
+        assert!(SettingsDto::default().pause_reminder_enabled);
         assert_eq!(
             SettingsDto::default().pause_reminder_interval_secs,
             default_pause_reminder_interval_secs()
         );
-        // Older configs without pause reminder fields deserialize to opt-out + 10 minutes.
+        // Older configs without pause reminder fields deserialize to opt-out + 5 minutes (backwards-compat).
         let older = "version = 1\nrules = []\n[settings]\nidle_policy = \"pause\"\naway_threshold_secs = 120\ngap_threshold_secs = 30\nescape_mode = \"friction\"\n";
         let parsed: ConfigFile = toml::from_str(older).unwrap();
         assert!(!parsed.settings.pause_reminder_enabled);

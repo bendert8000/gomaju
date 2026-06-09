@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager};
 
@@ -87,13 +87,6 @@ fn build_menu(
         true,
         None::<&str>,
     )?;
-    let chimes = MenuItem::with_id(
-        app,
-        "chimes",
-        i18n::tr(locale, "tray.chimes"),
-        true,
-        None::<&str>,
-    )?;
     let settings = MenuItem::with_id(
         app,
         "settings",
@@ -101,27 +94,6 @@ fn build_menu(
         true,
         None::<&str>,
     )?;
-    // Language submenu: each language shown in its own name; check reflects the current locale.
-    let lang_zh = CheckMenuItem::with_id(
-        app,
-        "lang-zh-hant",
-        "繁體中文",
-        true,
-        locale != "en",
-        None::<&str>,
-    )?;
-    let lang_en = CheckMenuItem::with_id(
-        app,
-        "lang-en",
-        "English",
-        true,
-        locale == "en",
-        None::<&str>,
-    )?;
-    let language = SubmenuBuilder::new(app, i18n::tr(locale, "tray.language"))
-        .item(&lang_zh)
-        .item(&lang_en)
-        .build()?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(
         app,
@@ -132,7 +104,7 @@ fn build_menu(
     )?;
 
     let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> =
-        Vec::with_capacity(status_items.len() + alarm_items.len() + 13);
+        Vec::with_capacity(status_items.len() + alarm_items.len() + 11);
     for it in &status_items {
         items.push(it);
     }
@@ -152,9 +124,7 @@ fn build_menu(
         &sep1,
         &rules,
         &alarms,
-        &chimes,
         &settings,
-        &language,
         &sep2,
         &quit,
     ] {
@@ -201,9 +171,6 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "breaks" => crate::breaks_window::open(app),
                 "settings" => crate::settings_window::open(app),
                 "alarms" => crate::alarms_window::open(app),
-                "chimes" => crate::chimes_window::open(app),
-                "lang-zh-hant" => runtime::set_locale(app, "zh-Hant"),
-                "lang-en" => runtime::set_locale(app, "en"),
                 "quit" => {
                     eprintln!("restee: quit requested");
                     app.exit(0);

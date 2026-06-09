@@ -54,7 +54,7 @@ fn build_toast(app: &AppHandle, info: &WarningInfo) {
         .skip_taskbar(true)
         .resizable(false)
         .focused(false) // never steal focus from the user's work
-        .inner_size(370.0, 112.0)
+        .inner_size(410.0, 112.0)
         .visible(false)
         .initialization_script(&init)
         .build()

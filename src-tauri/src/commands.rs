@@ -714,6 +714,28 @@ pub async fn cmd_open_settings(window: WebviewWindow, app: AppHandle) -> Result<
     Ok(())
 }
 
+/// Open the Chimes window from the Settings "Chimes" card's "Open chime editor" button.
+/// Async + main-thread-marshalled for the same deadlock reason as `cmd_open_settings`.
+#[tauri::command]
+pub async fn cmd_open_chimes(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_settings(&window)?;
+    chimes_window::open(&app);
+    Ok(())
+}
+
+/// Switch the whole-app UI language from the Settings "Language" card — same effect as the tray's
+/// Language menu (persist + relabel the tray). Open windows pick up the new language when reopened.
+/// Sync (creates no window), so it runs on the main thread like the tray path.
+#[tauri::command]
+pub fn cmd_set_locale(window: WebviewWindow, app: AppHandle, locale: String) -> Result<(), String> {
+    require_settings(&window)?;
+    if locale != "en" && locale != "zh-Hant" {
+        return Err(format!("unsupported locale: {locale}"));
+    }
+    runtime::set_locale(&app, &locale);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

@@ -3,20 +3,20 @@
 # tuned without touching Rust. Keep it valid + sanitize-clean — tests enforce both.
 version = 1
 locale = "zh-Hant"
-autostart = false
+autostart = true
 
 [settings]
 idle_policy = "pause"
 away_threshold_secs = 120
 gap_threshold_secs = 30
 escape_mode = "friction"
-warn_seconds = 30
+warn_seconds = 60
 sound = true
 notifications = true
-break_display = "countdown"
+break_display = "progress_bar"
 show_quotes = true
-pause_reminder_enabled = false
-pause_reminder_interval_secs = 600
+pause_reminder_enabled = true
+pause_reminder_interval_secs = 300
 resume_prompt_enabled = true
 
 [hotkeys]
@@ -24,15 +24,16 @@ resume_prompt_enabled = true
 [[rules]]
 id = "eye-rest"
 name = "眼睛休息喔!"
-interval_secs = 1800
-break_secs = 120
+interval_secs = 1200
+break_secs = 60
 enforcement = "soft"
 enabled = true
 repeat = true
 note = """
-- 視線離開螢幕，注視20呎（約6公尺）外景物20秒以上。（20-20-20法則）
+- 每20分鐘視線離開螢幕，注視20呎（約6公尺）外景物20秒以上。（20-20-20法則）
 - 坐直，下巴微收，將頭部向兩側傾斜至微酸感，各15秒。
 - 雙肩向上聳起至耳際，停留3秒後瞬間放鬆下沉，x5次。"""
+end_chime_id = "gentle-bell"
 
 [[rules]]
 id = "long-break"
@@ -46,44 +47,58 @@ note = """
 - 離開座位，步行3至5分鐘前往不同空間（如茶水間），轉換視覺對焦。
 - 飲用250至300毫升飲用水，促進代謝。
 - 站立單手扶牆，一腳向後勾起由同側手抓住腳踝，伸展大腿前側，各30秒。"""
+end_chime_id = "westminster-quarters"
 
 [[alarms]]
-id = "lunch"
-name = "Ready to eat lunch na"
+id = "74739ce0-7a20-4bca-8f31-d35c4c3504df"
+name = "吃午飯啦!"
 time = "11:30"
 repeat = "daily"
 weekdays = []
 day_of_month = 0
 month = 0
 enabled = true
+chime_id = "westminster-quarters"
 
 [[alarms]]
-id = "off-work"
-name = "Off work"
+id = "461636ad-216d-455e-a36e-07004e1d34e9"
+name = "下班"
 time = "17:45"
 repeat = "weekly"
 weekdays = [0, 1, 2, 3, 4]
 day_of_month = 0
 month = 0
 enabled = true
+chime_id = "928b24b5-c945-4a28-af66-271420544f20"
 
 [[alarms]]
-id = "work-begins"
-name = "Work begins"
+id = "e7045cfc-84d4-4012-8550-92ef7554978d"
+name = "開始上班"
 time = "08:58"
 repeat = "weekly"
 weekdays = [0, 1, 2, 3, 4]
 day_of_month = 0
 month = 0
 enabled = true
+chime_id = "roc-reveille"
 
 [[alarms]]
-id = "sat-work-begins"
-name = "Sat work begins"
+id = "20ac23a8-6c15-4a1d-9fac-a5129244971d"
+name = "隔周六上班"
 time = "08:58"
 repeat = "biweekly"
 weekdays = [5]
 day_of_month = 0
 month = 0
 date = "2026-01-01"
+enabled = true
+
+[[alarms]]
+id = "2319fced-32ed-4e3c-a61f-eb9b2b1ff184"
+name = "公司報銷 (26前)"
+time = "08:00"
+repeat = "monthly"
+weekdays = []
+day_of_month = 25
+month = 0
 enabled = true

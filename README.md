@@ -29,8 +29,8 @@
 - **休息畫面長怎樣你決定** — 可以是大大的 `MM:SS` 倒數，也可以是慢慢減少的進度條。
 - **休息小語** — 想要的話，休息畫面可以顯示一句勵志小語，每次隨機挑一句，而且**分語言**（繁體中文、英文各一份清單）。這些都能在**設定 → 語錄**卡片裡編，也能整個關掉。
 - **安全底線** — 強制休息時間一到一定會自動解開，而且還偷偷藏了一個「長按 Esc」的緊急出口，所以你絕對不會真的被鎖在外面。
-- **就待在系統匣** — 沒有主視窗。*開始／暫停*、*重設休息計時器*、*立即休息*、*Breaks…*、*Alarms…*、*Chimes…*、*Settings…*、*語言*、*結束* — 通通從系統匣那顆圖示點開來用，圖示上也會即時顯示每條規則還剩多久。要的話也能自己設全域快捷鍵來 切換／立即休息／略過。
-- **雙語介面** — 內建**繁體中文（預設）**跟**英文**，在系統匣的*語言*選單就能切。
+- **就待在系統匣** — 沒有主視窗。*開始／暫停*、*重設休息計時器*、*立即休息*、*Breaks…*、*Alarms…*、*Settings…*、*結束* — 通通從系統匣那顆圖示點開來用，圖示上也會即時顯示每條規則還剩多久。要的話也能自己設全域快捷鍵來 切換／立即休息／略過。
+- **雙語介面** — 內建**繁體中文（預設）**跟**英文**，在**設定**裡就能切。
 - 還有**開機自動啟動**、同一時間只會跑一個、以及壞了會自己修好的 TOML 設定檔。
 
 > **老實說一個限制：**真正「完全逃不掉」的鎖定其實做不到（Ctrl+Alt+Del、Cmd+Opt+Esc 這些永遠是作業系統保留的）。強制休息是很強力的螢幕*遮蓋*，但它不是作業系統層級的鎖定。
@@ -221,7 +221,7 @@ Built with **Tauri v2** (Rust core + TypeScript/HTML/CSS UI): tiny binaries, low
   notification) and *strict* (opaque cover on **all monitors**). Strict breaks honor a
   configurable escape: **hold-to-skip**, **easy** one-click skip, or **no easy escape**.
 - **Custom chimes** — craft your own break and alarm sounds in the **Chimes** window
-  (*Chimes…* in the tray): **compose a melody** from musical notes (Do-Re-Mi in C / G / F major,
+  (open it from **Settings → Open chime editor**): **compose a melody** from musical notes (Do-Re-Mi in C / G / F major,
   with octave and note length) or **import an audio file** (wav / mp3 / ogg / flac). Preview as you go
   (▶ Preview ⇄ ⏸ Pause; each note also sounds as
   you add it) and drag notes to reorder. Then each break rule can pick a **start** and an **end**
@@ -239,10 +239,10 @@ Built with **Tauri v2** (Rust core + TypeScript/HTML/CSS UI): tiny binaries, low
 - **Safety floor** — strict breaks always auto-release at the end, and a hidden hold-Esc
   emergency exit means you can never be truly locked out.
 - **Tray-resident** — no main window. *Start / Pause*, *Reset break timer*, *Break now*,
-  *Breaks…*, *Alarms…*, *Chimes…*, *Settings…*, *Language*, *Quit* — all from the tray icon, which
+  *Breaks…*, *Alarms…*, *Settings…*, *Quit* — all from the tray icon, which
   also shows a live per-rule countdown. Optional global hotkeys for toggle / break-now / skip.
 - **Localized** — ships **Traditional Chinese (default)** and **English**, switched from the
-  tray's *Language* menu.
+  **Settings** window.
 - **Launch at login**, single-instance, self-healing TOML config.
 
 > **Honest limitation:** a *truly* unescapable lockout is impossible (the OS always

@@ -103,6 +103,21 @@
       </section>
 
       <section class="card">
+        <h2 data-i18n="settings.chimes_heading">Chimes</h2>
+        <p class="muted" data-i18n="settings.chimes_desc">Custom sounds for breaks and alarms — compose a melody from notes or import an audio file, then pick them per rule or alarm.</p>
+        <button id="open-chimes" type="button" class="btn-ghost" data-i18n="settings.open_chimes">Open chime editor</button>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="settings.language_heading">Language</h2>
+        <select class="app-locale-select" id="app-locale" aria-label="App language">
+          <option value="en" data-i18n="settings.lang_opt_en">English</option>
+          <option value="zh-Hant" data-i18n="settings.lang_opt_zh">繁體中文</option>
+        </select>
+        <p class="muted" data-i18n="settings.language_hint">Switches the whole app's language. Open windows update their language when reopened.</p>
+      </section>
+
+      <section class="card">
         <h2><span data-i18n="settings.hotkeys_heading">Break global hotkeys</span> <span class="muted" data-i18n="settings.hotkeys_optional">(optional)</span></h2>
         <p class="muted"><span data-i18n="settings.hotkeys_eg">e.g. </span><code>CommandOrControl+Alt+B</code><span data-i18n="settings.hotkeys_unbind">. Leave blank to unbind.</span></p>
         <label class="field"><span data-i18n="settings.hk_toggle">Start / pause</span><input id="hk-toggle" type="text" placeholder="unset" data-i18n-ph="settings.hk_placeholder" /></label>

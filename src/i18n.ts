@@ -104,6 +104,22 @@ const MESSAGES: Record<string, Entry> = {
     "zh-Hant": "柔性休息時顯示通知",
   },
   "settings.autostart_label": { en: "Launch at login", "zh-Hant": "登入時啟動" },
+  "settings.chimes_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
+  "settings.chimes_desc": {
+    en: "Custom sounds for breaks and alarms — compose a melody from notes or import an audio file, then pick them per rule or alarm.",
+    "zh-Hant": "休息與鬧鐘的自訂音效 — 用音符編一段旋律，或匯入音檔，再到各規則／鬧鐘挑選。",
+  },
+  "settings.open_chimes": { en: "Open chime editor", "zh-Hant": "開啟鈴聲編輯器" },
+  "settings.language_heading": { en: "Language / 語言", "zh-Hant": "語言 / Language" },
+  "settings.language_hint": {
+    en: "Switches the whole app's language. Open windows update their language when reopened. / 切換整個應用程式的語言。已開啟的視窗會在重新開啟時更新語言。",
+    "zh-Hant": "切換整個應用程式的語言。已開啟的視窗會在重新開啟時更新語言。 / Switches the whole app's language. Open windows update their language when reopened.",
+  },
+  "settings.lang_opt_en": { en: "English / 英文", "zh-Hant": "英文 / English" },
+  "settings.lang_opt_zh": {
+    en: "Traditional Chinese / 繁體中文",
+    "zh-Hant": "繁體中文 / Traditional Chinese",
+  },
   "settings.hotkeys_heading": { en: "Break global hotkeys", "zh-Hant": "休息全域快速鍵" },
   "settings.hotkeys_optional": { en: "(optional)", "zh-Hant": "（選用）" },
   "settings.hotkeys_eg": { en: "e.g. ", "zh-Hant": "例如 " },
