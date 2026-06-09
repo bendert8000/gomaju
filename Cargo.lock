@@ -3198,7 +3198,7 @@ dependencies = [
 
 [[package]]
 name = "restee"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "chrono",
  "restee-core",
