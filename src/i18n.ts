@@ -81,6 +81,10 @@ const MESSAGES: Record<string, Entry> = {
     en: "Ask every (minutes)",
     "zh-Hant": "每隔多久詢問（分鐘）",
   },
+  "settings.resume_prompt_enabled": {
+    en: "On startup, ask whether to resume the last break progress",
+    "zh-Hant": "啟動時，詢問是否恢復上次的休息進度",
+  },
   "settings.sound_label": {
     en: "Play a chime when a break starts or ends",
     "zh-Hant": "休息開始或結束時播放提示音",
@@ -204,6 +208,7 @@ const MESSAGES: Record<string, Entry> = {
   "chime.start_label": { en: "Start chime", "zh-Hant": "開始鈴聲" },
   "chime.end_label": { en: "End chime", "zh-Hant": "結束鈴聲" },
   "chime.default": { en: "Default", "zh-Hant": "預設" },
+  "chime.none": { en: "None (silent)", "zh-Hant": "無（靜音）" },
 
   // --- Rule editor (Settings rules grid) ---
   "editor.new_break": { en: "New break", "zh-Hant": "新休息" },
@@ -247,6 +252,10 @@ const MESSAGES: Record<string, Entry> = {
   },
   "pause_toast.resume": { en: "Resume counting", "zh-Hant": "恢復計時" },
   "pause_toast.stay_paused": { en: "Stay paused", "zh-Hant": "繼續暫停" },
+  "pause_toast.hint": {
+    en: "If you stay paused, the next reminder is in {minutes} minutes. Set up the time or turn off in Settings.",
+    "zh-Hant": "若繼續暫停，下次提醒將在 {minutes} 分鐘後出現。可於設定中設定時間或關閉。",
+  },
 };
 
 /** Translate `key` for the current window locale, substituting `{param}` placeholders. */

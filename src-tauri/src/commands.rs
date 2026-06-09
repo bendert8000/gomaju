@@ -584,9 +584,16 @@ pub async fn cmd_import_chime_file(
         .map(|p| p.join("chimes"))
         .ok_or("no config dir")?;
 
+    // Brand the native picker so the user can tell it's Restee asking. Read the locale in a short
+    // scope so the config lock is released before the (blocking) dialog opens.
+    let title = {
+        let cfg = state.config.lock().unwrap();
+        crate::i18n::tr(&cfg.locale, "dialog.import_chime_title").to_string()
+    };
     let picked = app
         .dialog()
         .file()
+        .set_title(title)
         .add_filter("Audio", &["wav", "mp3", "ogg", "flac"])
         .blocking_pick_file();
     let Some(src) = picked.and_then(|fp| fp.into_path().ok()) else {

@@ -32,9 +32,14 @@ export interface ChimeOption {
   name: string;
 }
 
-/** Populate a chime `<select>` with a "Default" option (value "") plus one per saved chime, and
- * select `selected`. Names are set via `textContent` (never interpolated), so a chime name can't
- * inject markup. Shared by the rules editor and the alarms window. */
+/** Reserved chime-picker value meaning "play no sound" — distinct from "" (the built-in default
+ * tone). Must stay in sync with `NONE_CHIME_ID` in `src-tauri/src/audio.rs`. */
+export const NONE_CHIME = "__none__";
+
+/** Populate a chime `<select>` with "Default" (value ""), "None" (silent), then one option per saved
+ * chime, and select `selected`. Names are set via `textContent` (never interpolated), so a chime
+ * name can't inject markup. Shared by the rules editor and the alarms window — so adding the "None"
+ * option here covers every chime picker in the app. */
 export function fillChimeSelect(
   sel: HTMLSelectElement,
   chimes: ChimeOption[],
@@ -45,6 +50,10 @@ export function fillChimeSelect(
   def.value = "";
   def.textContent = t("chime.default");
   sel.appendChild(def);
+  const none = document.createElement("option");
+  none.value = NONE_CHIME;
+  none.textContent = t("chime.none");
+  sel.appendChild(none);
   for (const c of chimes) {
     const opt = document.createElement("option");
     opt.value = c.id;

@@ -31,6 +31,7 @@ interface SettingsDto {
   show_quotes: boolean;
   pause_reminder_enabled: boolean;
   pause_reminder_interval_secs: number;
+  resume_prompt_enabled: boolean;
 }
 
 interface HotkeysDto {
@@ -150,6 +151,7 @@ function render(cfg: ConfigFile): void {
   inp("pause-reminder-minutes").value = String(
     Math.max(1, Math.round(cfg.settings.pause_reminder_interval_secs / 60)),
   );
+  inp("resume-prompt-enabled").checked = cfg.settings.resume_prompt_enabled;
   inp("notifications").checked = cfg.settings.notifications;
   inp("autostart").checked = cfg.autostart;
   inp("hk-toggle").value = cfg.hotkeys.toggle ?? "";
@@ -179,6 +181,7 @@ function collectConfig(): ConfigFile {
       pause_reminder_enabled: inp("pause-reminder-enabled").checked,
       pause_reminder_interval_secs:
         Math.max(1, readNonNegative("pause-reminder-minutes", 10)) * 60,
+      resume_prompt_enabled: inp("resume-prompt-enabled").checked,
       notifications: inp("notifications").checked,
     },
     hotkeys: {

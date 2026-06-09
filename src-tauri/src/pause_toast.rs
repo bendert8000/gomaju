@@ -2,6 +2,8 @@ use tauri::{
     AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
+use crate::app_state::AppState;
+
 /// Label of the pause reminder toast. Commands gate on this label so only this webview can
 /// answer the reminder prompt.
 pub const PAUSE_TOAST_LABEL: &str = "pause-toast";
@@ -26,7 +28,14 @@ pub fn close(app: &AppHandle) {
 }
 
 fn build_pause_toast(app: &AppHandle) {
-    let init = crate::webview::locale_init(&crate::i18n::current_locale(app));
+    // Inject the configured interval (in whole minutes) so the toast hint can name it,
+    // plus the locale — same pattern as the pre-break countdown toast.
+    let payload = format!("{{\"minutes\":{}}}", pause_reminder_minutes(app));
+    let init = format!(
+        "{}{}",
+        crate::webview::guarded_init("__RESTEE_PAUSE__", &payload),
+        crate::webview::locale_init(&crate::i18n::current_locale(app)),
+    );
     match WebviewWindowBuilder::new(
         app,
         PAUSE_TOAST_LABEL,
@@ -39,7 +48,7 @@ fn build_pause_toast(app: &AppHandle) {
     .skip_taskbar(true)
     .resizable(false)
     .focused(false)
-    .inner_size(370.0, 124.0)
+    .inner_size(370.0, 198.0)
     .visible(false)
     .initialization_script(&init)
     .build()
@@ -50,6 +59,19 @@ fn build_pause_toast(app: &AppHandle) {
         }
         Err(e) => eprintln!("restee: failed to create pause reminder toast: {e}"),
     }
+}
+
+/// The reminder interval rounded to whole minutes (the Settings UI is minute-granular),
+/// never below 1 — matches how `main.ts` renders the same value.
+fn pause_reminder_minutes(app: &AppHandle) -> u64 {
+    let secs = app
+        .state::<AppState>()
+        .config
+        .lock()
+        .unwrap()
+        .settings
+        .pause_reminder_interval_secs;
+    ((secs + 30) / 60).max(1)
 }
 
 fn position_bottom_right(app: &AppHandle, window: &WebviewWindow) {

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::progress::RuleProgress;
 use crate::rule::{Enforcement, Rule};
 use crate::settings::{EscapeMode, IdlePolicy, Settings};
 
@@ -229,6 +230,37 @@ impl Engine {
         vec![]
     }
 
+    /// Snapshot every rule's accumulated work, keyed by stable rule id — for persisting break
+    /// progress across restarts (the host writes it to `session.toml`).
+    pub fn snapshot_progress(&self) -> Vec<RuleProgress> {
+        self.rules
+            .iter()
+            .map(|rs| RuleProgress {
+                rule_id: rs.rule.id.clone(),
+                work_secs: rs.work.as_secs(),
+            })
+            .collect()
+    }
+
+    /// Restore saved per-rule work by id — the cold-start "resume" path. Matches on `rule.id`
+    /// and clamps to the current interval (same rule as `reconfigure`); unknown ids are ignored
+    /// and rules without a saved entry keep their current (zero) work. Emits no effects.
+    pub fn restore_progress(&mut self, saved: &[RuleProgress]) {
+        for sp in saved {
+            if let Some(rs) = self.rules.iter_mut().find(|rs| rs.rule.id == sp.rule_id) {
+                rs.work = Duration::from_secs(sp.work_secs).min(rs.rule.interval);
+            }
+        }
+    }
+
+    /// Whether any **enabled** rule has at least `min_secs` of accumulated work — the host's
+    /// "is there meaningful progress worth resuming?" gate (ignores disabled/removed rules).
+    pub fn any_enabled_progress(&self, min_secs: u64) -> bool {
+        self.rules
+            .iter()
+            .any(|rs| rs.rule.enabled && rs.work.as_secs() >= min_secs)
+    }
+
     /// Restart every rule's countdown (e.g. the user took a break on their own), so
     /// the next break is a full interval away. Cancels any pending warning. Does not
     /// change run state or an active break.
@@ -281,13 +313,15 @@ impl Engine {
         effects
     }
 
-    /// Immediately start the highest-priority enabled rule's break (the "break now"
-    /// action). No-op if already in a break or no rule is enabled.
+    /// Immediately start the soonest-due enabled rule's break (the "break now" action) — the
+    /// same break the pre-break toast and tray count down to, so a manual break starts the
+    /// break you're watching, not merely the highest-priority one. No-op if already in a break
+    /// or no rule is enabled.
     pub fn break_now(&mut self) -> Vec<Effect> {
         if self.state == RunState::InBreak {
             return vec![];
         }
-        match self.pick_highest_priority_enabled() {
+        match self.pick_soonest_enabled() {
             Some(idx) => self.fire_break(idx),
             None => vec![],
         }
@@ -449,9 +483,33 @@ impl Engine {
         self.best_enabled_by_priority(|rs| rs.work >= rs.rule.interval)
     }
 
-    /// Highest-priority enabled rule regardless of accumulated work.
-    fn pick_highest_priority_enabled(&self) -> Option<usize> {
-        self.best_enabled_by_priority(|_| true)
+    /// Enabled rule that comes due soonest (smallest remaining), tie-broken by priority then
+    /// list order — the same "next break" ordering `pick_imminent_warning` and the tray use.
+    /// This is what "break now" fires, so a manual break starts the imminent break rather than
+    /// the highest-priority one.
+    fn pick_soonest_enabled(&self) -> Option<usize> {
+        let mut best: Option<usize> = None;
+        for (i, rs) in self.rules.iter().enumerate() {
+            if !rs.rule.enabled {
+                continue;
+            }
+            best = Some(match best {
+                None => i,
+                Some(b) => {
+                    let remaining = rs.remaining();
+                    let best_remaining = self.rules[b].remaining();
+                    if remaining < best_remaining
+                        || (remaining == best_remaining
+                            && higher_priority(&rs.rule, &self.rules[b].rule))
+                    {
+                        i
+                    } else {
+                        b
+                    }
+                }
+            });
+        }
+        best
     }
 
     /// Start the break for `idx`. Resets the firing rule, every rule with a shorter interval
@@ -786,7 +844,10 @@ mod tests {
     }
 
     #[test]
-    fn break_now_immediately_starts_the_highest_priority_break() {
+    fn break_now_starts_the_soonest_due_break() {
+        // "Break now" must fire the break you're watching count down — the soonest-due rule —
+        // not merely the highest-priority one. "eye" comes due first (interval 1800 vs 2700)
+        // even though "long" is strict with a longer break, so the sooner "eye" wins.
         let rules = vec![
             rule("eye", 1800, 60, Enforcement::Soft),
             rule("long", 2700, 600, Enforcement::Strict),
@@ -796,10 +857,67 @@ mod tests {
         let fire = engine.break_now();
         assert_eq!(
             started_rule(&fire).as_deref(),
-            Some("long"),
-            "break_now should pick the highest-priority (strict) rule"
+            Some("eye"),
+            "break_now should fire the soonest-due rule, not the highest-priority one"
         );
         assert_eq!(engine.state(), RunState::InBreak);
+    }
+
+    #[test]
+    fn snapshot_and_restore_round_trip_work() {
+        let mut engine = Engine::new(
+            vec![
+                rule("eye", 100, 5, Enforcement::Soft),
+                rule("walk", 200, 10, Enforcement::Soft),
+            ],
+            Settings::default(),
+        );
+        engine.start();
+        for _ in 0..30 {
+            engine.tick(secs(1), secs(0)); // both accrue work = 30
+        }
+        let snap = engine.snapshot_progress();
+
+        // A fresh engine starts at zero; restoring the snapshot reinstates the remaining time.
+        let mut fresh = Engine::new(
+            vec![
+                rule("eye", 100, 5, Enforcement::Soft),
+                rule("walk", 200, 10, Enforcement::Soft),
+            ],
+            Settings::default(),
+        );
+        fresh.restore_progress(&snap);
+        let st = fresh.status();
+        let rem = |id: &str| st.all.iter().find(|n| n.rule_id == id).unwrap().remaining_secs;
+        assert_eq!(rem("eye"), 70); // 100 - 30
+        assert_eq!(rem("walk"), 170); // 200 - 30
+    }
+
+    #[test]
+    fn restore_clamps_to_interval_and_ignores_unknown_ids() {
+        let mut engine = Engine::new(vec![rule("eye", 50, 5, Enforcement::Soft)], Settings::default());
+        engine.restore_progress(&[
+            RuleProgress { rule_id: "eye".into(), work_secs: 999 }, // clamps to interval 50
+            RuleProgress { rule_id: "ghost".into(), work_secs: 30 }, // unknown id -> ignored
+        ]);
+        let st = engine.status();
+        assert_eq!(st.all.iter().find(|n| n.rule_id == "eye").unwrap().remaining_secs, 0);
+    }
+
+    #[test]
+    fn any_enabled_progress_ignores_disabled_rules() {
+        let mut disabled = rule("eye", 100, 5, Enforcement::Soft);
+        disabled.enabled = false;
+        let mut engine = Engine::new(
+            vec![disabled, rule("walk", 100, 5, Enforcement::Soft)],
+            Settings::default(),
+        );
+        engine.restore_progress(&[
+            RuleProgress { rule_id: "eye".into(), work_secs: 90 }, // disabled -> must not count
+            RuleProgress { rule_id: "walk".into(), work_secs: 30 },
+        ]);
+        assert!(engine.any_enabled_progress(20)); // walk has 30 >= 20
+        assert!(!engine.any_enabled_progress(40)); // walk 30 < 40; eye is disabled
     }
 
     #[test]

@@ -39,6 +39,10 @@
           </select>
         </label>
         <label class="field">
+          <span data-i18n="settings.idle_threshold_label">Idle threshold (seconds)</span>
+          <input id="away-threshold" type="number" min="1" />
+        </label>
+        <label class="field">
           <span data-i18n="settings.escape_label">Strict-break escape</span>
           <select id="escape-mode">
             <option value="friction" data-i18n="settings.escape_friction">Hold to skip</option>
@@ -57,10 +61,6 @@
           <span data-i18n="settings.warn_label">Warn before break (seconds, 0 = off)</span>
           <input id="warn-seconds" type="number" min="0" />
         </label>
-        <label class="field">
-          <span data-i18n="settings.idle_threshold_label">Idle threshold (seconds)</span>
-          <input id="away-threshold" type="number" min="1" />
-        </label>
         <label class="field field--checkbox">
           <input id="pause-reminder-enabled" type="checkbox" />
           <span data-i18n="settings.pause_reminder_enabled">When paused, ask whether to resume counting</span>
@@ -68,6 +68,10 @@
         <label class="field">
           <span data-i18n="settings.pause_reminder_interval">Ask every (minutes)</span>
           <input id="pause-reminder-minutes" type="number" min="1" />
+        </label>
+        <label class="field field--checkbox">
+          <input id="resume-prompt-enabled" type="checkbox" />
+          <span data-i18n="settings.resume_prompt_enabled">On startup, ask whether to resume the last break progress</span>
         </label>
         <label class="field field--checkbox">
           <input id="sound" type="checkbox" />

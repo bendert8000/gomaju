@@ -15,6 +15,7 @@ export function confirmUnsaved(): Promise<CloseChoice> {
     // Static scaffolding only; all text is set via textContent below (no interpolation, no XSS).
     overlay.innerHTML = `
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="brand-tag">Restee</div>
         <h2 id="modal-title" class="modal__title"></h2>
         <p class="modal__msg"></p>
         <div class="modal__actions">
@@ -75,6 +76,7 @@ export function confirmQuotesConflict(): Promise<QuotesConflictChoice> {
     // Static scaffolding only; all text is set via textContent below (no interpolation, no XSS).
     overlay.innerHTML = `
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qc-title">
+        <div class="brand-tag">Restee</div>
         <h2 id="qc-title" class="modal__title"></h2>
         <p class="modal__msg"></p>
         <div class="modal__actions">

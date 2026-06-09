@@ -169,9 +169,14 @@ fn play_default_tone(what: &'static str, fill: fn(&Sink), volume_pct: u8) {
     });
 }
 
+/// Reserved chime-picker value meaning "play no sound" — distinct from an empty id, which means the
+/// built-in default tone. Must stay in sync with `NONE_CHIME` in `src/rule-editor.ts`.
+pub const NONE_CHIME_ID: &str = "__none__";
+
 /// Play the chime referenced by `chime_id` (looked up in `chimes`) at `volume_pct`, falling back to
 /// the given built-in tone when it's unassigned, missing, or malformed. `chimes_dir` is where
 /// imported files live; file names are re-checked with `is_safe_filename` and joined only under it.
+/// `NONE_CHIME_ID` plays nothing.
 fn play_assigned_or(
     chime_id: &str,
     volume_pct: u8,
@@ -180,6 +185,9 @@ fn play_assigned_or(
     default_what: &'static str,
     default: fn(&Sink),
 ) {
+    if chime_id == NONE_CHIME_ID {
+        return; // explicit "None" -> silence
+    }
     if !chime_id.is_empty() {
         if let Some(c) = chimes.iter().find(|c| c.id == chime_id) {
             match c.kind {
@@ -397,6 +405,9 @@ pub fn preview_assigned_or(
     chimes_dir: &Path,
     tone: DefaultTone,
 ) -> u64 {
+    if chime_id == NONE_CHIME_ID {
+        return 0; // explicit "None" -> nothing to preview (the picker button stays idle)
+    }
     if !chime_id.is_empty() {
         if let Some(c) = chimes.iter().find(|c| c.id == chime_id) {
             match c.kind {

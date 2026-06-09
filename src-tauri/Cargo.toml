@@ -1,6 +1,6 @@
 [package]
 name = "restee"
-version = "0.1.1"
+version = "1.0.2"
 description = "restee — a cross-platform break reminder for engineers"
 authors = ["you"]
 edition = "2021"

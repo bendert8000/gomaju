@@ -8,6 +8,7 @@ pub mod alarm;
 pub mod chime;
 pub mod config;
 mod engine;
+pub mod progress;
 pub mod quotes;
 mod rule;
 mod settings;

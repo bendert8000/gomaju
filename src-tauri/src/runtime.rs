@@ -17,11 +17,17 @@ struct BreakTickPayload {
     remaining_secs: u64,
 }
 
+/// How often the ticker autosaves break progress to `session.toml` (seconds). Frequent enough
+/// that a forced/ungraceful kill (e.g. a Windows-Update reboot) loses at most this much progress,
+/// coarse enough to stay cheap.
+const PROGRESS_SAVE_INTERVAL_SECS: u64 = 60;
+
 /// Spawn the once-per-second ticker on a dedicated OS thread (no async runtime
 /// needed). It reads idle time, advances the engine, and applies the effects.
 pub fn spawn_ticker(app: AppHandle, idle: Box<dyn IdleSource>) {
     std::thread::spawn(move || {
         let mut last = Instant::now();
+        let mut last_save = Instant::now();
         loop {
             std::thread::sleep(Duration::from_secs(1));
             let now = Instant::now();
@@ -40,8 +46,31 @@ pub fn spawn_ticker(app: AppHandle, idle: Box<dyn IdleSource>) {
             // Keep the tray's elapsed time fresh (no-op unless the rendered text changed).
             refresh_tray(&app, state);
             maybe_show_pause_reminder(&app, state);
+            // Periodically persist break progress. Runs in every state (incl. InBreak, so the
+            // post-fire_break reset is captured) — the lock is already released above, so the
+            // snapshot-then-write helper can re-lock safely.
+            if last_save.elapsed() >= Duration::from_secs(PROGRESS_SAVE_INTERVAL_SECS) {
+                persist_progress(&app);
+                last_save = Instant::now();
+            }
         }
     });
+}
+
+/// Snapshot per-rule break progress and write it to `session.toml`. Best-effort: a failed write is
+/// logged, not fatal. Takes the engine lock only to snapshot, then releases it **before** the disk
+/// I/O so it never blocks the ticker/commands or self-deadlocks the non-reentrant engine mutex.
+pub fn persist_progress(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let rules = st.engine.lock().unwrap().snapshot_progress();
+    let file = restee_core::progress::ProgressFile {
+        version: restee_core::progress::PROGRESS_VERSION,
+        saved_at: chrono::Utc::now().timestamp(),
+        rules,
+    };
+    if let Err(e) = restee_core::progress::save_progress(&st.session_path, &file) {
+        eprintln!("restee: failed to persist break progress ({e})");
+    }
 }
 
 /// Interpret engine effects: emit events for the UI and create/destroy overlays.
@@ -190,6 +219,14 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
             }
         }
     }
+
+    // A break just started: `fire_break` reset the fired (+ shorter/co-due) rules' work before
+    // entering InBreak. Persist immediately (the engine lock is already released by callers) so a
+    // forced reboot mid-break resumes the post-reset state and won't re-fire the same break,
+    // rather than the stale pre-break snapshot the 60s autosave might not have caught yet.
+    if effects.iter().any(|e| matches!(e, Effect::StartBreak { .. })) {
+        persist_progress(app);
+    }
 }
 
 /// Persist a fired "once" rule as `enabled = false` so it doesn't re-arm on restart. The
@@ -243,6 +280,12 @@ pub fn action_reset(app: &AppHandle, state: &AppState) {
     apply_effects(app, &fx);
 }
 
+/// A native-dialog title prefixed with the app name, so an OS popup is identifiable as Restee's
+/// (matches the "Restee — …" window-title convention).
+fn restee_dialog_title(loc: &str, key: &str) -> String {
+    format!("Restee — {}", crate::i18n::tr(loc, key))
+}
+
 /// Ask the user to confirm before wiping the countdown, then reset on "Reset".
 ///
 /// Shared by the tray "Reset timer" item and the Settings "Reset" button. Uses the
@@ -255,7 +298,7 @@ pub fn confirm_then_reset(app: &AppHandle) {
     let handle = app.clone();
     app.dialog()
         .message(crate::i18n::tr(&loc, "dialog.reset_timer_msg"))
-        .title(crate::i18n::tr(&loc, "dialog.reset_timer_title"))
+        .title(restee_dialog_title(&loc, "dialog.reset_timer_title"))
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(
             crate::i18n::tr(&loc, "dialog.reset").to_string(),
@@ -267,6 +310,45 @@ pub fn confirm_then_reset(app: &AppHandle) {
                 action_reset(&handle, state.inner());
             } else {
                 eprintln!("restee: timer reset cancelled");
+            }
+        });
+}
+
+/// Cold-start prompt: a recent saved break-progress snapshot exists — ask whether to resume it or
+/// start every countdown from zero. Non-blocking (callback form), like `confirm_then_reset`. The
+/// engine is left **Stopped** until the user answers; the callback no-ops if the user already
+/// started it via the tray, so it never clobbers their action.
+pub fn confirm_resume_break_progress(app: &AppHandle, age_secs: u64) {
+    let loc = crate::i18n::current_locale(app);
+    let age = crate::i18n::human_dur(&loc, age_secs);
+    let handle = app.clone();
+    app.dialog()
+        .message(crate::i18n::tr(&loc, "dialog.resume_progress_msg").replace("{age}", &age))
+        .title(restee_dialog_title(&loc, "dialog.resume_progress_title"))
+        .kind(MessageDialogKind::Info)
+        // OK / default (Enter) = Resume (the safe, non-destructive path); the other button —
+        // and Esc/close, which a bool dialog can't distinguish — = Start fresh.
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            crate::i18n::tr(&loc, "dialog.resume").to_string(),
+            crate::i18n::tr(&loc, "dialog.start_fresh").to_string(),
+        ))
+        .show(move |resume| {
+            let st = handle.state::<AppState>();
+            // If the user already started/changed state from the tray, don't override them; just
+            // make sure their current progress is on disk.
+            let already_acted = st.engine.lock().unwrap().state() != RunState::Stopped;
+            if already_acted {
+                persist_progress(&handle);
+                return;
+            }
+            if resume {
+                // Keep the restored work; start() emits StateChanged so apply_effects updates
+                // running_since, the state-changed event, pause reminders, and the tray.
+                action_start(&handle, st.inner());
+            } else {
+                action_reset(&handle, st.inner()); // zero every rule's work
+                action_start(&handle, st.inner());
+                persist_progress(&handle); // overwrite session.toml now so a crash can't re-prompt
             }
         });
 }
@@ -285,7 +367,7 @@ pub fn confirm_then_reset_one(app: &AppHandle, rule_id: String) {
     let handle = app.clone();
     app.dialog()
         .message(crate::i18n::tr(&loc, "dialog.reset_break_msg").replace("{name}", &name))
-        .title(crate::i18n::tr(&loc, "dialog.reset_break_title"))
+        .title(restee_dialog_title(&loc, "dialog.reset_break_title"))
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(
             crate::i18n::tr(&loc, "dialog.reset").to_string(),
@@ -467,13 +549,14 @@ pub fn refresh_tray(app: &AppHandle, state: RunState) {
     );
 }
 
-/// Enabled alarms whose next fire is still ahead **today**, as `(name, "HH:MM")` soonest
-/// first. Reuses the tested `alarm::next_fire` and keeps only fires landing on today's date.
-fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String)> {
-    use chrono::{Local, Timelike};
+/// Enabled alarms whose next fire is still ahead **today**, as `(name, "HH:MM", secs_until)`
+/// soonest first. Reuses the tested `alarm::next_fire` and keeps only fires landing on today's
+/// date; the seconds-until-fire drive the tray's live (minute-granular) countdown.
+fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String, u64)> {
+    use chrono::Local;
     let now = Local::now();
     let today = now.date_naive();
-    let mut list: Vec<(u32, String, String)> = st
+    let mut list: Vec<(u64, String, String)> = st
         .config
         .lock()
         .unwrap()
@@ -482,17 +565,15 @@ fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String)> {
         .filter_map(|a| {
             let when = crate::alarm::next_fire(a, now)?;
             (when.date_naive() == today).then(|| {
-                (
-                    when.hour() * 60 + when.minute(),
-                    a.name.clone(),
-                    when.format("%H:%M").to_string(),
-                )
+                // next_fire guarantees when > now; max(0) defends against a 1s clock advance.
+                let secs = (when - now).num_seconds().max(0) as u64;
+                (secs, a.name.clone(), when.format("%H:%M").to_string())
             })
         })
         .collect();
-    list.sort_by_key(|(mins, _, _)| *mins);
+    list.sort_by_key(|(secs, _, _)| *secs);
     list.into_iter()
-        .map(|(_, name, time)| (name, time))
+        .map(|(secs, name, time)| (name, time, secs))
         .collect()
 }
 
@@ -539,10 +620,10 @@ fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
 
     let app_id = win_toast_app_id(app);
 
-    // Minimal ToastGeneric payload: title "restee" plus the body line.
+    // Minimal ToastGeneric payload: title "Restee" plus the body line.
     let xml = format!(
         "<toast duration=\"short\"><visual><binding template=\"ToastGeneric\">\
-         <text>restee</text><text>{}</text></binding></visual></toast>",
+         <text>Restee</text><text>{}</text></binding></visual></toast>",
         xml_escape(body)
     );
 

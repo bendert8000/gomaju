@@ -320,6 +320,25 @@ body {
   justify-content: flex-end;
   gap: 0.5rem;
 }
+.toast__hint {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  opacity: 0.5;
+  white-space: normal;
+}
+/* Small "RESTEE" eyebrow so every custom prompt/alert (toasts, overlay, in-page modals) is
+   identifiable as coming from the app. Inherits the surrounding text color via opacity. */
+.brand-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+.overlay__brand {
+  margin-bottom: 0.6rem;
+  opacity: 0.4;
+}
 .toast__bar {
   height: 4px;
   border-radius: 999px;

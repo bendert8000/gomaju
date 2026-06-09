@@ -136,6 +136,11 @@ pub struct SettingsDto {
     /// as minutes, but seconds keep the TOML consistent with other durations.
     #[serde(default = "default_pause_reminder_interval_secs")]
     pub pause_reminder_interval_secs: u64,
+    /// On cold start, when a recent saved break-progress snapshot exists, ask whether to resume it
+    /// (vs. start every countdown fresh). Off = never ask, always start fresh. Defaults on so the
+    /// resume prompt keeps working for configs written before this field existed.
+    #[serde(default = "default_true")]
+    pub resume_prompt_enabled: bool,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -220,6 +225,7 @@ impl Default for SettingsDto {
             show_quotes: true,
             pause_reminder_enabled: false,
             pause_reminder_interval_secs: default_pause_reminder_interval_secs(),
+            resume_prompt_enabled: true,
         }
     }
 }

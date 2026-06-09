@@ -227,7 +227,7 @@ pub fn refresh(
     state: RunState,
     running_secs: u64,
     breaks: Vec<(String, u64)>,
-    alarms: Vec<(String, String)>,
+    alarms: Vec<(String, String, u64)>,
 ) {
     let Some(menu) = app.try_state::<TrayMenu>() else {
         return;
@@ -247,7 +247,9 @@ pub fn refresh(
     let lines = status_lines(&locale, state, &breaks);
     let alarm_lines: Vec<String> = alarms
         .iter()
-        .map(|(name, time)| format!("🔵 ⏰ {name} · {time}"))
+        .map(|(name, time, secs)| {
+            format!("🟢 ⏰ {name} · {time} · {}", i18n::human_countdown(&locale, *secs))
+        })
         .collect();
 
     // Key from the exact rendered strings (+ locale), so the menu rebuilds only when a
@@ -304,7 +306,7 @@ fn status_lines(locale: &str, state: RunState, breaks: &[(String, u64)]) -> Vec<
     }
     breaks
         .iter()
-        .map(|(name, secs)| format!("🔵 ☕ {name} · {}", i18n::human_dur(locale, *secs)))
+        .map(|(name, secs)| format!("🟢 ☕ {name} · {}", i18n::human_dur(locale, *secs)))
         .collect()
 }
 

@@ -68,6 +68,19 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "dialog.reset" => pick(locale, "Reset", "重設"),
         "dialog.cancel" => pick(locale, "Cancel", "取消"),
 
+        // Cold-start "resume previous break progress?" dialog ({age} = how long ago it was saved)
+        "dialog.resume_progress_title" => pick(locale, "Resume break progress?", "恢復休息進度？"),
+        "dialog.resume_progress_msg" => pick(
+            locale,
+            "Resume your previous break progress? It was saved {age} ago. Choose Start fresh to begin every countdown from zero.",
+            "要恢復先前的休息進度嗎？上次儲存於 {age} 前。選擇「重新開始」則所有倒數從零計算。",
+        ),
+        "dialog.resume" => pick(locale, "Resume", "恢復"),
+        "dialog.start_fresh" => pick(locale, "Start fresh", "重新開始"),
+        "dialog.import_chime_title" => {
+            pick(locale, "Restee — Import chime sound", "Restee — 匯入鈴聲音檔")
+        }
+
         // Notifications ({name} = rule/alarm name)
         "notif.soft_break" => pick(locale, "{name} — time for a quick break", "{name} — 該休息一下了"),
         "notif.startup" => pick(locale, "Restee is running now", "Restee 已啟動"),
@@ -107,5 +120,35 @@ pub fn human_dur(locale: &str, secs: u64) -> String {
         format!("{}h {}m", m / 60, m % 60)
     } else {
         format!("{} 時 {} 分", m / 60, m % 60)
+    }
+}
+
+/// A localized "time until" countdown for the tray's upcoming-alarm lines, e.g. `in 2h 15m`
+/// (en) / `2 時 15 分後` (zh-Hant). Reuses `human_dur` for the body so granularity and
+/// localization stay in one place; minute-granular by design (no per-second menu churn).
+pub fn human_countdown(locale: &str, secs: u64) -> String {
+    let dur = human_dur(locale, secs);
+    if locale == "en" {
+        format!("in {dur}")
+    } else {
+        format!("{dur}後")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn human_countdown_en_prefixes_in() {
+        assert_eq!(human_countdown("en", 2 * 3600 + 15 * 60), "in 2h 15m");
+        assert_eq!(human_countdown("en", 19 * 60), "in 19m");
+        assert_eq!(human_countdown("en", 30), "in <1m");
+    }
+
+    #[test]
+    fn human_countdown_zh_suffixes_after() {
+        assert_eq!(human_countdown("zh-Hant", 2 * 3600 + 15 * 60), "2 時 15 分後");
+        assert_eq!(human_countdown("zh-Hant", 30), "<1 分後");
     }
 }

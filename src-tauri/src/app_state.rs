@@ -29,6 +29,9 @@ pub struct AppState {
     /// Path to `quotes.toml` (break quotes, separate from config.toml, next to it in the config
     /// dir). Read live on each break by `quotes::pick`; the Settings "Quotes" card edits it.
     pub quotes_path: PathBuf,
+    /// Path to `session.toml` (persisted per-rule break progress, next to `config.toml`). The
+    /// ticker autosaves it (+ a final save on clean quit); cold start reads it to offer "resume".
+    pub session_path: PathBuf,
     /// Health of the idle backend, decided once at startup.
     pub idle_status: IdleStatus,
     /// When the timer last (re)entered Running; `None` while paused/stopped. Used to

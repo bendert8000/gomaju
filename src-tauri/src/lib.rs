@@ -89,15 +89,56 @@ pub fn run() {
                 }
             };
 
+            // Persisted break progress lives in its own session.toml next to config.toml. The
+            // ticker autosaves it; cold start reads it to offer "resume previous progress?".
+            let session_path: PathBuf = config_path
+                .parent()
+                .map(|dir| dir.join("session.toml"))
+                .unwrap_or_else(|| PathBuf::from("session.toml"));
+
             let cfg = outcome.config;
             let autostart_wanted = cfg.autostart;
             let hotkeys_cfg = cfg.hotkeys.clone();
             let notify_on_start = cfg.settings.notifications;
 
+            // Only offer to resume if a saved snapshot is recent (not stale/future-dated) and holds
+            // meaningful work for a still-enabled rule. Constants are single-source + easy to tune.
+            const SESSION_MAX_AGE_SECS: i64 = 12 * 3600;
+            const MEANINGFUL_WORK_SECS: u64 = 60;
+
             let (rules, settings) = cfg.to_engine_inputs();
+            let saved = restee_core::progress::read_progress(&session_path);
+            let now_unix = chrono::Utc::now().timestamp();
+            // Off in Settings -> never ask, always start fresh.
+            let should_prompt = cfg.settings.resume_prompt_enabled
+                && saved.as_ref().is_some_and(|s| {
+                let age = now_unix - s.saved_at;
+                if !(0..=SESSION_MAX_AGE_SECS).contains(&age) {
+                    return false;
+                }
+                let enabled: std::collections::HashSet<&str> =
+                    rules.iter().filter(|r| r.enabled).map(|r| r.id.as_str()).collect();
+                s.rules.iter().any(|rp| {
+                    rp.work_secs >= MEANINGFUL_WORK_SECS && enabled.contains(rp.rule_id.as_str())
+                })
+            });
+
             let mut engine = Engine::new(rules, settings);
-            // Begin counting on launch; the user can pause from the tray.
-            let _ = engine.start();
+            let running_since;
+            let mut resume_age_secs = 0u64;
+            if should_prompt {
+                // Restore the saved work but leave the engine Stopped until the user answers the
+                // resume dialog (so a due rule can't fire a break before they decide).
+                let s = saved.as_ref().unwrap();
+                engine.restore_progress(&s.rules);
+                resume_age_secs = (now_unix - s.saved_at).max(0) as u64;
+                running_since = None;
+            } else {
+                // No prompt: begin counting on launch (fresh, work stays zero); the user can pause.
+                let _ = engine.start();
+                running_since = Some(std::time::Instant::now());
+            }
+            let initial_state = engine.state();
 
             let idle = idle::detect();
             let idle_status = idle.status();
@@ -110,14 +151,16 @@ pub fn run() {
                 chimes: Mutex::new(chimes),
                 chimes_path,
                 quotes_path,
+                session_path,
                 idle_status,
-                // The engine starts Running, so the clock is already ticking.
-                running_since: Mutex::new(Some(std::time::Instant::now())),
+                // `Some` when we started counting now; `None` while the resume prompt is pending.
+                running_since: Mutex::new(running_since),
                 pause_reminder: Mutex::new(Default::default()),
             });
 
             tray::build_tray(&handle)?;
-            runtime::refresh_tray(&handle, restee_core::RunState::Running);
+            // Reflect the actual boot state (Stopped while the resume prompt is pending).
+            runtime::refresh_tray(&handle, initial_state);
             runtime::spawn_ticker(handle.clone(), idle);
             // Wall-clock alarms run on their own thread, independent of the break engine.
             alarm::spawn_scheduler(handle.clone());
@@ -143,6 +186,13 @@ pub fn run() {
             } else if notify_on_start {
                 let loc = i18n::current_locale(&handle);
                 runtime::show_startup_notification(&handle, i18n::tr(&loc, "notif.startup"));
+            }
+
+            // A recent saved snapshot exists: ask whether to resume it or start fresh. Shown after
+            // the windows are up (layers over the breaks window); the engine stays Stopped until
+            // answered, so nothing fires in the meantime.
+            if should_prompt {
+                runtime::confirm_resume_break_progress(&handle, resume_age_secs);
             }
 
             // Test/demo aids, compiled only into debug builds (dev / `tauri dev`).
@@ -203,7 +253,7 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building the restee application")
-        .run(|_app, event| {
+        .run(|app, event| {
             // No persistent window: keep the app alive (tray-resident) when an
             // overlay/settings window closes (`code == None`). But honor an explicit
             // quit — `app.exit(code)` arrives here with `code == Some(_)`, and must
@@ -211,6 +261,10 @@ pub fn run() {
             if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
                 if code.is_none() {
                     api.prevent_exit();
+                } else {
+                    // Clean quit (tray "Quit" -> app.exit(0)): final break-progress save. A forced
+                    // OS reboot won't run this — the ticker's periodic autosave is the safety net.
+                    runtime::persist_progress(app);
                 }
             }
         });
