@@ -2,9 +2,9 @@
 
 > 語言 / Language：**繁體中文** ｜ [English](#english)
 
-跨平台、常駐系統匣的**工程師休息提醒工具** — 同時也是一個輕量的**時鐘鬧鐘**工具。它會依你自訂的間隔，提醒你讓眼睛休息、起身離開（溫和的*軟性*休息，或在你需要更強約束時，用覆蓋整個螢幕的*強制*休息），並能同時觸發實際時鐘的鬧鐘（每日、每週、每兩週……）。
+一款跨平台、常駐在系統匣的**工程師休息提醒工具**，順手也能拿來當**時鐘鬧鐘**。它會照你設定的間隔，提醒你讓眼睛歇一下、起來走動走動 — 可以是溫和、按一下就略過的*軟性*休息；需要更狠一點的時候，也能用蓋住整個螢幕的*強制*休息把你從螢幕前拉開。順帶一提，它也能照實際時間響鬧鐘（每天、每週、每兩週……都行）。
 
-以 **Tauri v2** 打造（Rust 核心 + TypeScript/HTML/CSS 介面）：極小的執行檔、極低的閒置記憶體用量（約數十 MB），且不使用 Electron。
+用 **Tauri v2** 做的（Rust 核心 + TypeScript/HTML/CSS 介面），所以執行檔很小、閒置時也只吃幾十 MB 記憶體，而且完全沒用到 Electron。
 
 ## 螢幕截圖
 
@@ -20,25 +20,25 @@
 
 ## 功能特色
 
-- **休息規則** — 數量不限，每條都有各自的間隔、休息時長與強制等級（軟性／強制）。規則可以**重複**，或只觸發**一次**（之後自動停用）。每條規則可附帶一段選用的多行備註，顯示在休息畫面上。可在完整的**設定**表格中編輯，或從獨立的**休息規則儀表板**（系統匣的 *Breaks…*）快速開關 — 大型卡片附有 開／關 與 重複／單次 切換，儲存後即時重新設定執行中的計時器。
-- **時鐘鬧鐘** — 名稱 + 時間 + 重複方式：**單次、每日、每週、每兩週、每月、每年**。每週與每兩週可挑選星期；每兩週從起始日期起每隔一週觸發；每月會夾到當月最後一天；每年則是月 + 日。鬧鐘會以獨特的音調與通知響起 — 即使休息計時器已暫停、或休息畫面正顯示中也一樣 — 但僅在 Restee 執行時（錯過的分鐘不會補觸發）。在專屬的**鬧鐘**視窗中管理。
-- **兩種強制等級** — *軟性*（平靜、可略過的全螢幕覆蓋 + 提示音 + 選用通知）與*強制*（覆蓋**所有螢幕**的不透明遮蓋）。強制休息支援可設定的脫離方式：**長按略過**、**輕鬆**一鍵略過，或**無輕鬆脫離**。
-- **自訂提示音** — 在**鈴聲**視窗（系統匣的 *Chimes…*）打造你自己的休息與鬧鐘音效：用音符**編寫旋律**（C／G／F 大調的 Do-Re-Mi，含八度與音長），或**匯入音訊檔**（wav／mp3／ogg／flac）。可邊做邊預覽（▶ 預覽 ⇄ ⏸ 暫停；每個音符加入時也會發聲），並拖曳音符重新排序。接著每條休息規則可分別挑選**開始**與**結束**鈴聲，每個鬧鐘也有自己的，音量可逐一設定 — 未設定則使用內建的預設音調。已儲存的預設集存放於各自的 `chimes.toml`。
-- **預先提醒** — 休息開始前數秒、不搶焦點的選用倒數提示（可設定；`0` ＝ 關閉）。
-- **感知活動狀態** — 在你閒置時自動暫停。預設的*暫停*策略只是凍結倒數；*計入*策略則會把離開的時間**計入**為一次完成的休息，讓你回來時不會立刻被打擾。
-- **可選的休息顯示方式** — 大型 `MM:SS` 倒數，或逐漸減少的進度條。
-- **休息語錄** — 可選擇在休息畫面顯示一句勵志語錄，每次休息隨機挑選並**在地化**（繁體中文／英文各自一份清單）。可在**設定 → 語錄**卡片中編輯及開關。
-- **安全底線** — 強制休息結束時一律自動解除，並有隱藏的長按 Esc 緊急脫離，確保你永遠不會被真正鎖死。
-- **常駐系統匣** — 沒有主視窗。*開始／暫停*、*重設休息計時器*、*立即休息*、*Breaks…*、*Alarms…*、*Chimes…*、*Settings…*、*語言*、*結束* — 全部從系統匣圖示操作，圖示也會顯示每條規則的即時倒數。並有選用的全域快捷鍵供 切換／立即休息／略過 使用。
-- **多語介面** — 內建**繁體中文（預設）**與**英文**，可從系統匣的*語言*選單切換。
-- **開機自動啟動**、單一執行個體、可自我修復的 TOML 設定檔。
+- **休息規則** — 想設幾條都行，每條都有自己的間隔、要休息多久、還有強度（軟性／強制）。規則可以**一直重複**，也可以只響**一次**（響完就自動關掉）。每條還能寫一段備註（可以多行），休息的時候就顯示在畫面上。要細調就到完整的**設定**表格裡改；想快速開開關關，就用獨立的**休息規則儀表板**（系統匣的 *Breaks…*）— 一張張大卡片，點一下切 開／關 跟 重複／單次，存檔後馬上套到正在跑的計時器上。
+- **時鐘鬧鐘** — 給它名稱 + 時間 + 重複方式：**單次、每日、每週、每兩週、每月、每年**。每週、每兩週可以勾要哪幾天；每兩週是從你指定的那一週開始、每隔一週響一次；每月碰到沒有的日子（像 31 號）會自動改成當月最後一天；每年就看月 + 日。時間一到就用一個特別的音效加通知提醒你 — 就算休息計時器暫停了、或正在休息中，照樣會響 — 不過只有 Restee 開著的時候才算數（沒開的那段時間錯過就錯過，不會補響）。這些通通在專屬的**鬧鐘**視窗裡管。
+- **兩種強度** — *軟性*：溫和、隨時可以略過的全螢幕畫面，加上提示音和（可選的）通知；*強制*：把**每一個螢幕**都用不透明的畫面蓋住。強制休息要怎麼脫身也能自己挑：**長按才放你走**、**一鍵輕鬆略過**，或者乾脆**不留輕鬆的後門**。
+- **自訂提示音** — 在**鈴聲**視窗（系統匣的 *Chimes…*）做你自己的休息和鬧鐘音效：可以用音符**自己編一段旋律**（C／G／F 大調的 Do-Re-Mi，還能調八度跟音長），或乾脆**匯入音檔**（wav／mp3／ogg／flac）。一邊做一邊聽（▶ 預覽 ⇄ ⏸ 暫停；每加一個音符也會立刻發聲），音符還能拖來拖去重新排。編好之後，每條休息規則可以各自挑**開始**跟**結束**的鈴聲，每個鬧鐘也能挑自己的，音量還能一個一個設 — 沒特別設就用內建的預設音。存好的鈴聲都放在各自的 `chimes.toml` 裡。
+- **事先提醒** — 休息開始前幾秒，會先跳一個不搶焦點的小倒數（要提前幾秒可以自己設；填 `0` 就是不要）。
+- **會看你有沒有在用** — 你人離開、閒置的時候會自動暫停。預設的*暫停*作法只是把倒數先停住；改成*計入*的話，會把你離開的那段時間**當成已經休息過了**，這樣你一回來才不會馬上又被叫去休息。
+- **休息畫面長怎樣你決定** — 可以是大大的 `MM:SS` 倒數，也可以是慢慢減少的進度條。
+- **休息小語** — 想要的話，休息畫面可以顯示一句勵志小語，每次隨機挑一句，而且**分語言**（繁體中文、英文各一份清單）。這些都能在**設定 → 語錄**卡片裡編，也能整個關掉。
+- **安全底線** — 強制休息時間一到一定會自動解開，而且還偷偷藏了一個「長按 Esc」的緊急出口，所以你絕對不會真的被鎖在外面。
+- **就待在系統匣** — 沒有主視窗。*開始／暫停*、*重設休息計時器*、*立即休息*、*Breaks…*、*Alarms…*、*Chimes…*、*Settings…*、*語言*、*結束* — 通通從系統匣那顆圖示點開來用，圖示上也會即時顯示每條規則還剩多久。要的話也能自己設全域快捷鍵來 切換／立即休息／略過。
+- **雙語介面** — 內建**繁體中文（預設）**跟**英文**，在系統匣的*語言*選單就能切。
+- 還有**開機自動啟動**、同一時間只會跑一個、以及壞了會自己修好的 TOML 設定檔。
 
-> **誠實的限制：**真正無法脫離的鎖定是不可能的（作業系統永遠保留 Ctrl+Alt+Del、Cmd+Opt+Esc 等）。強制休息是強力的螢幕*遮蓋*，並非作業系統層級的鎖定。
+> **老實說一個限制：**真正「完全逃不掉」的鎖定其實做不到（Ctrl+Alt+Del、Cmd+Opt+Esc 這些永遠是作業系統保留的）。強制休息是很強力的螢幕*遮蓋*，但它不是作業系統層級的鎖定。
 
 ## 系統需求
 
-- [Rust](https://rustup.rs/)（stable）與 [Node.js](https://nodejs.org/) 18+。
-- 平台 webview：Windows 已預先安裝 WebView2；macOS 使用 WKWebView；Linux 需要 `webkit2gtk`（見 Tauri 的[前置需求](https://v2.tauri.app/start/prerequisites/)）。
+- [Rust](https://rustup.rs/)（stable）跟 [Node.js](https://nodejs.org/) 18+。
+- 系統的 webview：Windows 本來就裝好 WebView2 了；macOS 用的是 WKWebView；Linux 要自己裝 `webkit2gtk`（細節看 Tauri 的[前置需求](https://v2.tauri.app/start/prerequisites/)）。
 
 ## 開發
 
@@ -47,13 +47,13 @@ npm install
 npm run tauri dev
 ```
 
-App 會在系統匣啟動（無視窗）。用**系統匣 → Break now** 預覽休息、**系統匣 → Breaks…** 開關規則，或**系統匣 → Settings…** 編輯所有設定。
+App 會直接縮在系統匣裡（不會跳視窗）。想看看休息長怎樣就點**系統匣 → Break now**、要開關規則就點**系統匣 → Breaks…**，所有設定則在**系統匣 → Settings…** 裡面。
 
-方便的測試掛鉤（環境變數，debug build）：
-- `RESTEE_BREAK_ON_START=1` — 啟動後約 2 秒觸發一次休息。
-- `RESTEE_OPEN_SETTINGS=1` — 啟動時開啟設定視窗。
-- `RESTEE_OPEN_ALARMS=1` — 啟動時開啟鬧鐘視窗。
-- `RESTEE_NO_OPEN_RULES=1` — 抑制每次啟動原本都會開啟的休息規則視窗。
+幾個測試很方便的小開關（環境變數，只有 debug build 才有）：
+- `RESTEE_BREAK_ON_START=1` — 啟動後大約 2 秒就先跳一次休息。
+- `RESTEE_OPEN_SETTINGS=1` — 一啟動就把設定視窗打開。
+- `RESTEE_OPEN_ALARMS=1` — 一啟動就把鬧鐘視窗打開。
+- `RESTEE_NO_OPEN_RULES=1` — 本來每次啟動都會跳出休息規則視窗，設了這個就不跳。
 
 ## 測試
 
@@ -62,33 +62,33 @@ cargo test -p restee-core     # 純引擎 + 設定 + 鬧鐘週期的單元／屬
 cargo clippy --workspace --all-targets
 ```
 
-計時／優先序／閒置邏輯與鬧鐘週期比對器都位於不依賴外部套件的 `restee-core` crate，因此無需編譯 Tauri，遠在一秒內就能測完。
+計時、優先序、閒置這些邏輯，加上鬧鐘的週期判斷，全都放在不依賴任何外部套件的 `restee-core` crate 裡，所以根本不用編譯 Tauri，一秒不到就測完了。
 
 ## 從原始碼建置
 
-請在你要發佈的目標作業系統上建置 — Tauri 會為各平台打包**原生**安裝程式，因此你無法在 macOS 上交叉建置 Windows 的 `.exe`（反之亦然）。CI 會一次建置所有平台 — 見 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
+要發哪個系統的版本，就在那個系統上建 — Tauri 打包的是各平台的**原生**安裝程式，所以你沒辦法在 macOS 上做出 Windows 的 `.exe`（反過來也一樣）。想一次把所有平台都建好的話，交給 CI 就行 — 見 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
 
-所有產物都會落在 `target/release/bundle/` 下（工作區根目錄的 `target/`，**不是**在 `src-tauri/` 底下）。
+所有產出都會放在 `target/release/bundle/` 底下（注意是工作區根目錄那個 `target/`，**不是** `src-tauri/` 裡面的那個）。
 
 ### 前置需求
 
-除了上述[系統需求](#系統需求)（Rust stable + Node 18+；CI 使用 Node 20）外：
+除了上面[系統需求](#系統需求)那些（Rust stable + Node 18+；CI 跑的是 Node 20）以外，還要：
 
-- **Windows** — [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（*Desktop development with C++* 工作負載），供 Rust 的 MSVC 工具鏈使用。Windows 10/11 已預先安裝 WebView2。
-- **macOS** — Xcode Command Line Tools：`xcode-select --install`。若要跨架構或通用（universal）建置，請加上 Rust 目標：`rustup target add aarch64-apple-darwin x86_64-apple-darwin`。
-- **Linux** — `webkit2gtk` 及相關套件（[`release.yml`](.github/workflows/release.yml) 中列出的 `apt` 套件）。
+- **Windows** — [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（裝 *Desktop development with C++* 那個工作負載），給 Rust 的 MSVC 工具鏈用。Windows 10/11 本來就有 WebView2 了。
+- **macOS** — Xcode Command Line Tools：`xcode-select --install`。如果要做跨架構或通用（universal）的版本，記得補上 Rust 目標：`rustup target add aarch64-apple-darwin x86_64-apple-darwin`。
+- **Linux** — `webkit2gtk` 那一票套件（就是 [`release.yml`](.github/workflows/release.yml) 裡列的那些 `apt` 套件）。
 
-接著安裝一次前端相依套件：`npm install`。
+接著前端的相依套件裝一次就好：`npm install`。
 
 ### 版本管理
 
-`package.json` 是權威的 app 版本。請用以下指令讓 Tauri 與 Cargo 的中繼資料保持一致：
+app 版本以 `package.json` 為準。用下面這個指令，就能讓 Tauri 跟 Cargo 那邊的版本資訊一起跟著對齊：
 
 ```bash
 npm run version:set -- 0.2.0
 ```
 
-`npm run build` 在產出 `dist/` 之前，會檢查 `package.json`、`src-tauri/tauri.conf.json` 與 `src-tauri/Cargo.toml` 使用相同版本。
+`npm run build` 在產生 `dist/` 之前，會先檢查 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 這三個的版本有沒有對上。
 
 ### 在 Windows 建置
 
@@ -96,12 +96,12 @@ npm run version:set -- 0.2.0
 npm run tauri build
 ```
 
-安裝程式會落在 `target\release\bundle\`：
+安裝程式會放在 `target\release\bundle\`：
 
-- `msi\` — WiX 安裝程式，例如 `Restee_0.1.0_x64_en-US.msi`
-- `nsis\` — NSIS 安裝 `.exe`，例如 `Restee_0.1.0_x64-setup.exe`
+- `msi\` — WiX 包的安裝程式，例如 `Restee_0.1.0_x64_en-US.msi`
+- `nsis\` — NSIS 的安裝 `.exe`，例如 `Restee_0.1.0_x64-setup.exe`
 
-若想要免安裝的執行檔，見下方的「獨立執行檔（免安裝）」。
+如果你想要那種免安裝、點兩下就跑的檔案，往下看「獨立執行檔（免安裝）」。
 
 ### 在 macOS 建置
 
@@ -111,9 +111,9 @@ npm run tauri build -- --target universal-apple-darwin    # 通用（需兩個 R
 # 單一架構：--target aarch64-apple-darwin | --target x86_64-apple-darwin
 ```
 
-輸出：`macos/Restee.app` + `dmg/Restee_<ver>_<arch>.dmg`。
+產出會是：`macos/Restee.app` 加上 `dmg/Restee_<ver>_<arch>.dmg`。
 
-此建置**未簽署**，因此 Gatekeeper 會阻擋雙擊開啟。請對 app 按右鍵 → **打開**（確認一次），或清除隔離旗標：
+這個版本**沒有簽章**，所以直接雙擊會被 Gatekeeper 擋下來。改成對著 app 按右鍵 → **打開**（確認一次就好），或者把隔離旗標清掉：
 
 ```bash
 xattr -dr com.apple.quarantine /path/to/Restee.app
@@ -125,20 +125,20 @@ xattr -dr com.apple.quarantine /path/to/Restee.app
 npm run tauri build   # 先安裝上方前置需求中的 apt 套件
 ```
 
-會產生 `deb/`、`rpm/` 與 `appimage/` 套件（AppImage 最具可攜性，對系統匣也最可靠）。
+會做出 `deb/`、`rpm/`、`appimage/` 這幾種（其中 AppImage 最好帶著走，系統匣也是它跑起來最穩）。
 
 ### 獨立執行檔（免安裝）
 
-若想要免安裝、可直接執行的執行檔（方便本機測試）：
+想要一個免安裝、直接點下去就能跑的執行檔（本機測試很方便）：
 
 ```bash
 cargo build --release --features custom-protocol   # → target/release/restee.exe（Windows）| restee（macOS/Linux）
 ```
 
-> **請勿**用裸的 `cargo build`／`cargo build --release` 建置可執行的 app。
-> 少了 `custom-protocol` feature，Tauri 會以 **dev 模式**編譯，於是每個視窗都會嘗試從 Vite 開發伺服器（`http://localhost:1420`）載入前端。沒有開發伺服器在跑時，你會看到空白視窗／`ERR_CONNECTION_REFUSED`。`npm run tauri dev` 與 `npm run tauri build` 會自動啟用此 feature；裸的 `cargo build` 不會。
+> **千萬不要**直接拿 `cargo build`／`cargo build --release` 去建可執行的 app。
+> 少了 `custom-protocol` 這個 feature，Tauri 會用 **dev 模式**編譯，結果每個視窗都會跑去 Vite 開發伺服器（`http://localhost:1420`）抓前端 — 開發伺服器沒開的話，你看到的就是一片空白視窗／`ERR_CONNECTION_REFUSED`。`npm run tauri dev` 跟 `npm run tauri build` 會自動幫你開這個 feature；單純 `cargo build` 不會。
 
-這會重用既有的 `dist/`；若你改動了 `src/` 下的任何內容，請先用 `npm run build` 重新產生。在 **Windows** 上，建置前請先停止任何執行中的執行個體 — 執行中的系統匣 app 會鎖住執行檔，否則建置會以 `Access denied (os error 5)` 失敗：
+它會直接沿用現成的 `dist/`；要是你動過 `src/` 裡的東西，記得先 `npm run build` 重新產一份。在 **Windows** 上，建置之前先把還在跑的那個關掉 — 因為系統匣 app 跑著的時候會把執行檔鎖住，不然建置會以 `Access denied (os error 5)` 失敗：
 
 ```powershell
 Stop-Process -Name restee -Force
@@ -146,24 +146,24 @@ Stop-Process -Name restee -Force
 
 ### 簽署（後續）
 
-目前的建置**未簽署**。若要發佈：
-- **Windows** — 以 Authenticode 憑證簽署安裝程式。
-- **macOS** — 程式碼簽署 + 公證（Gatekeeper 必需；任何未來的輸入抑制功能也需要）。Windows 的快顯通知，在 app 以正式身分安裝後也最能可靠呈現。
+目前的版本都**還沒簽章**。之後要正式發佈的話：
+- **Windows** — 用 Authenticode 憑證把安裝程式簽起來。
+- **macOS** — 程式碼簽章 + 公證（要過 Gatekeeper 一定要，將來想做輸入抑制之類的功能也會用到）。另外 Windows 的快顯通知，也是要等 app 用正式身分安裝之後，才最會乖乖出現。
 
 ## 設定
 
-所有狀態都存放在作業系統設定目錄中一個可自我修復的 TOML 檔：
+所有狀態都存在作業系統設定目錄裡的一個 TOML 檔，而且這個檔壞了還會自己修好：
 
 - **Windows** — `%APPDATA%\com.restee.app\config.toml`
 - **macOS** — `~/Library/Application Support/com.restee.app/config.toml`
 - **Linux** — `~/.config/com.restee.app/config.toml`
 
-它保存設定、休息**規則**與**鬧鐘**（以及所選語言）。可在 app 內透過 **Settings／Breaks…／Alarms…** 編輯，或手動編輯。損毀的檔案會被備份（`config.toml.bak`）並還原為預設值。隨附的預設值即內嵌的 [`crates/restee-core/default_config.toml`](crates/restee-core/default_config.toml)。
+裡面放的是各種設定、休息**規則**、**鬧鐘**（還有你選的語言）。你可以在 app 裡用 **Settings／Breaks…／Alarms…** 改，也可以直接手動編。萬一檔案壞了，它會先備份一份（`config.toml.bak`）再還原成預設值；而預設值就是內建的那份 [`crates/restee-core/default_config.toml`](crates/restee-core/default_config.toml)。
 
-有兩樣東西存放在 `config.toml` **旁邊**各自的檔案中（首次執行時建立，可即時編輯）：
+另外有兩樣東西不放在 `config.toml` 裡，而是擺在它**隔壁**各自的檔案（第一次跑的時候會建好，之後隨時可以改）：
 
-- **已儲存的鈴聲** — `chimes/chimes.toml`（與任何匯入的音訊檔放在一起），在 **Chimes…** 視窗編輯。規則／鬧鐘透過 `config.toml` 中的 id 參照鈴聲。
-- **休息語錄** — `quotes.<locale>.txt`（`quotes.en.txt`／`quotes.zh-Hant.txt`），在 **設定 → 語錄**卡片編輯；休息畫面會從目前語言的清單中取用。
+- **存好的鈴聲** — `chimes/chimes.toml`（跟你匯入的音檔放在一起），在 **Chimes…** 視窗裡編。規則和鬧鐘是靠 `config.toml` 裡的 id 去對應到某個鈴聲。
+- **休息小語** — `quotes.<locale>.txt`（`quotes.en.txt`／`quotes.zh-Hant.txt`），在 **設定 → 語錄**卡片裡編；休息畫面會從你目前語言的那份清單裡抽。
 
 ## 專案結構
 
@@ -175,7 +175,7 @@ src/                 # 前端（Vite，原生 TS）：index.html（設定）、b
 src-tauri/           # Tauri 主程式：系統匣、閒置、覆蓋層、快捷鍵、開機自啟、音訊、通知、鬧鐘排程器
 ```
 
-不依賴外部套件的 Rust 核心決定*何時*休息（以及鬧鐘是否到期）；Tauri 層把這些決策轉化為視窗、聲音、通知與系統匣介面。
+那個不依賴外部套件的 Rust 核心，負責決定*什麼時候*該休息（還有鬧鐘到了沒）；Tauri 層則把這些決定變成實際的視窗、聲音、通知和系統匣介面。
 
 ---
 
