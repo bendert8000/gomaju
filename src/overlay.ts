@@ -20,7 +20,7 @@ interface BreakInfo {
 
 // Injected by the Rust side via an initialization script, so the overlay renders
 // correctly without depending on event timing.
-const info = readInjected<BreakInfo>("__RESTEE_BREAK__", {
+const info = readInjected<BreakInfo>("__GOMAJU_BREAK__", {
   kind: "soft",
   name: "Break",
   duration_secs: 60,
@@ -91,7 +91,7 @@ async function skip(): Promise<void> {
   try {
     await invoke("cmd_skip");
   } catch (err) {
-    console.error("restee: skip failed", err);
+    console.error("gomaju: skip failed", err);
   }
 }
 

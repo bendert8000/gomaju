@@ -13,7 +13,7 @@ let guard!: UnsavedGuard;
 // Saved chimes (for each alarm's chime picker), loaded once in init().
 let chimes: ChimeOption[] = [];
 
-// --- Types mirroring restee_core::alarm DTOs ---
+// --- Types mirroring gomaju_core::alarm DTOs ---
 
 type Repeat = "once" | "daily" | "weekly" | "biweekly" | "monthly" | "yearly";
 
@@ -219,17 +219,18 @@ function fmtFire(epochSecs: number): string {
   });
 }
 
-/** Compact countdown to the next fire: 2d 3h / 14h 23m / 23m / 45s. */
+/** Compact, localized countdown to the next fire: 2d 3h / 14h 23m / 23m / 45s
+ *  (zh-Hant: 2天3小時 / 14小時23分 / 23分鐘 / 45秒). Unit text comes from the i18n catalog. */
 function fmtCountdown(secs: number): string {
   const total = Math.max(0, Math.floor(secs));
   const d = Math.floor(total / 86400);
   const h = Math.floor((total % 86400) / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${s}s`;
+  if (d > 0) return t("dur.dh", { d, h });
+  if (h > 0) return t("dur.hm", { h, m });
+  if (m > 0) return t("dur.m", { m });
+  return t("dur.s", { s });
 }
 
 /** Refresh each enabled alarm's "in <countdown> — <next fire>" line from the backend. Polled
@@ -330,5 +331,5 @@ async function init(): Promise<void> {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  init().catch((err) => console.error("restee alarms init failed", err));
+  init().catch((err) => console.error("gomaju alarms init failed", err));
 });

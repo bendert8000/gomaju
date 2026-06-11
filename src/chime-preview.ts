@@ -58,7 +58,7 @@ export function resetActivePreview(): void {
   const wasPlaying = previewBtn !== null;
   setPreviewIdle();
   if (wasPlaying) {
-    invoke("cmd_stop_preview").catch((err) => console.error("restee: stop preview failed", err));
+    invoke("cmd_stop_preview").catch((err) => console.error("gomaju: stop preview failed", err));
   }
 }
 
@@ -84,7 +84,7 @@ async function toggle(
   if (btn === previewBtn) {
     // This button is playing — the icon is ⏸, so stop it.
     setPreviewIdle();
-    invoke("cmd_stop_preview").catch((err) => console.error("restee: stop preview failed", err));
+    invoke("cmd_stop_preview").catch((err) => console.error("gomaju: stop preview failed", err));
     return;
   }
   setPreviewIdle(); // revert any other active button; the backend stops its audio when we start
@@ -100,6 +100,6 @@ async function toggle(
     setPlayingLabel(btn);
   } catch (err) {
     setPreviewIdle();
-    console.error("restee: chime preview failed", err);
+    console.error("gomaju: chime preview failed", err);
   }
 }

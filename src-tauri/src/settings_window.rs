@@ -34,9 +34,9 @@ pub fn open(app: &AppHandle) {
         {
             Ok(window) => {
                 let _ = window.set_focus();
-                eprintln!("restee: settings window opened");
+                crate::rlog!("gomaju: settings window opened");
             }
-            Err(e) => eprintln!("restee: failed to open settings window: {e}"),
+            Err(e) => crate::rlog!("gomaju: failed to open settings window: {e}"),
         }
     });
 }

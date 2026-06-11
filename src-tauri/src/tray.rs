@@ -4,12 +4,17 @@ use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem}
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager};
 
-use restee_core::RunState;
+use gomaju_core::RunState;
 
 use crate::app_state::AppState;
 use crate::{i18n, runtime};
 
-const TRAY_ID: &str = "restee-tray";
+const TRAY_ID: &str = "gomaju-tray";
+
+/// Menu-item id prefix for a clickable break line: `break:<rule_id>`. Clicking one prompts
+/// "take this break now?" and, on confirm, fires that rule's break (see `on_menu_event`).
+/// Distinct from the exact-match control ids (and from `break_now`, which has no colon).
+const BREAK_ITEM_PREFIX: &str = "break:";
 
 /// Caches the last rendered menu key so the ticker only rebuilds the tray menu when a
 /// visible value actually changes. The menu items themselves are not stored: a
@@ -29,13 +34,21 @@ fn build_menu(
     started: bool,
     paused: bool,
     start_text: &str,
-    lines: &[String],
+    lines: &[(String, Option<String>)],
     alarm_lines: &[String],
 ) -> tauri::Result<Menu<tauri::Wry>> {
+    // A break line (carrying a rule_id) becomes a clickable `break:<id>` item; a plain status
+    // line ("On a break now" / "No breaks enabled") stays a no-op `status-{i}` info item.
     let status_items: Vec<MenuItem<tauri::Wry>> = lines
         .iter()
         .enumerate()
-        .map(|(i, line)| MenuItem::with_id(app, format!("status-{i}"), line, true, None::<&str>))
+        .map(|(i, (text, rule_id))| {
+            let id = match rule_id {
+                Some(rid) => format!("{BREAK_ITEM_PREFIX}{rid}"),
+                None => format!("status-{i}"),
+            };
+            MenuItem::with_id(app, id, text, true, None::<&str>)
+        })
         .collect::<tauri::Result<Vec<_>>>()?;
     // Today's upcoming alarms — disabled info lines shown in their own section below the breaks.
     let alarm_items: Vec<MenuItem<tauri::Wry>> = alarm_lines
@@ -140,7 +153,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     // English); the immediate `refresh_tray` in setup swaps in live data. The control items
     // carry stable ids so `on_menu_event` routes across later rebuilds.
     let locale = i18n::current_locale(app);
-    let placeholder = [i18n::tr(&locale, "tray.placeholder").to_string()];
+    let placeholder = [(i18n::tr(&locale, "tray.placeholder").to_string(), None::<String>)];
     let menu = build_menu(
         app,
         &locale,
@@ -172,10 +185,15 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "settings" => crate::settings_window::open(app),
                 "alarms" => crate::alarms_window::open(app),
                 "quit" => {
-                    eprintln!("restee: quit requested");
+                    crate::rlog!("gomaju: quit requested");
                     app.exit(0);
                 }
-                _ => {} // disabled status-* info lines never fire
+                // A break line was clicked: prompt, then take that specific break on confirm.
+                id if id.starts_with(BREAK_ITEM_PREFIX) => {
+                    let rule_id = id[BREAK_ITEM_PREFIX.len()..].to_string();
+                    runtime::confirm_then_break_one(app, rule_id);
+                }
+                _ => {} // status-* placeholder info lines never fire
             }
         })
         .build(app)?;
@@ -193,7 +211,7 @@ pub fn refresh(
     app: &AppHandle,
     state: RunState,
     running_secs: u64,
-    breaks: Vec<(String, u64)>,
+    breaks: Vec<(String, String, u64)>,
     alarms: Vec<(String, String, u64)>,
 ) {
     let Some(menu) = app.try_state::<TrayMenu>() else {
@@ -221,9 +239,15 @@ pub fn refresh(
 
     // Key from the exact rendered strings (+ locale), so the menu rebuilds only when a
     // rendered line actually changes (break countdowns, today's alarms, checks, or language).
+    // Fold each break line's rule_id into the key too, so a rebuild also happens if the clickable
+    // target changes while the visible text somehow doesn't.
+    let lines_key = lines
+        .iter()
+        .map(|(text, id)| format!("{text}\u{1e}{}", id.as_deref().unwrap_or("")))
+        .collect::<Vec<_>>()
+        .join("\u{1f}");
     let key = format!(
-        "{locale}|{started}|{paused}|{start_text}|{}|{}",
-        lines.join("\u{1f}"),
+        "{locale}|{started}|{paused}|{start_text}|{lines_key}|{}",
         alarm_lines.join("\u{1f}")
     );
     {
@@ -250,12 +274,12 @@ pub fn refresh(
             Ok(menu) => match handle.tray_by_id(TRAY_ID) {
                 Some(tray) => {
                     if let Err(e) = tray.set_menu(Some(menu)) {
-                        eprintln!("restee: tray set_menu failed ({e})");
+                        crate::rlog!("gomaju: tray set_menu failed ({e})");
                     }
                 }
-                None => eprintln!("restee: tray icon not found; skipped menu update"),
+                None => crate::rlog!("gomaju: tray icon not found; skipped menu update"),
             },
-            Err(e) => eprintln!("restee: tray build_menu failed ({e})"),
+            Err(e) => crate::rlog!("gomaju: tray build_menu failed ({e})"),
         }
     });
 }
@@ -264,16 +288,25 @@ pub fn refresh(
 /// `human_dur`) to avoid per-second OS-menu churn. State takes precedence over the list:
 /// a break in progress shows "On a break now", never pending countdowns. Paused state is
 /// already conveyed by the Pause check, so the lines stay plain.
-fn status_lines(locale: &str, state: RunState, breaks: &[(String, u64)]) -> Vec<String> {
+fn status_lines(
+    locale: &str,
+    state: RunState,
+    breaks: &[(String, String, u64)],
+) -> Vec<(String, Option<String>)> {
     if state == RunState::InBreak {
-        return vec![i18n::tr(locale, "status.on_break").to_string()];
+        return vec![(i18n::tr(locale, "status.on_break").to_string(), None)];
     }
     if breaks.is_empty() {
-        return vec![i18n::tr(locale, "status.no_breaks").to_string()];
+        return vec![(i18n::tr(locale, "status.no_breaks").to_string(), None)];
     }
     breaks
         .iter()
-        .map(|(name, secs)| format!("🟢 ☕ {name} · {}", i18n::human_dur(locale, *secs)))
+        .map(|(id, name, secs)| {
+            (
+                format!("🟢 ☕ {name} · {}", i18n::human_dur(locale, *secs)),
+                Some(id.clone()),
+            )
+        })
         .collect()
 }
 

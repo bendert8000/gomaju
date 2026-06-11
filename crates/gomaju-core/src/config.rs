@@ -451,7 +451,7 @@ mod tests {
     use super::*;
 
     fn temp_path(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join("restee-config-tests");
+        let dir = std::env::temp_dir().join("gomaju-config-tests");
         let _ = fs::create_dir_all(&dir);
         let p = dir.join(format!("{name}.toml"));
         let _ = fs::remove_file(&p);

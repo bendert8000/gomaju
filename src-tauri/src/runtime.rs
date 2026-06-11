@@ -4,7 +4,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
-use restee_core::{config, Effect, Enforcement, RunState};
+use gomaju_core::{config, Effect, Enforcement, RunState};
 
 use crate::app_state::AppState;
 use crate::idle::IdleSource;
@@ -63,13 +63,13 @@ pub fn spawn_ticker(app: AppHandle, idle: Box<dyn IdleSource>) {
 pub fn persist_progress(app: &AppHandle) {
     let st = app.state::<AppState>();
     let rules = st.engine.lock().unwrap().snapshot_progress();
-    let file = restee_core::progress::ProgressFile {
-        version: restee_core::progress::PROGRESS_VERSION,
+    let file = gomaju_core::progress::ProgressFile {
+        version: gomaju_core::progress::PROGRESS_VERSION,
         saved_at: chrono::Utc::now().timestamp(),
         rules,
     };
-    if let Err(e) = restee_core::progress::save_progress(&st.session_path, &file) {
-        eprintln!("restee: failed to persist break progress ({e})");
+    if let Err(e) = gomaju_core::progress::save_progress(&st.session_path, &file) {
+        crate::rlog!("gomaju: failed to persist break progress ({e})");
     }
 }
 
@@ -236,20 +236,19 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
 /// rule for this session, so a write failure only costs restart-survival.
 fn persist_rule_disabled(app: &AppHandle, rule_id: &str) {
     let st = app.state::<AppState>();
-    let mut guard = st.config.lock().unwrap();
-    if !guard.rules.iter().any(|r| r.id == rule_id && r.enabled) {
-        return; // already disabled / gone — nothing to persist
-    }
-    let mut snapshot = guard.clone();
-    if let Some(r) = snapshot.rules.iter_mut().find(|r| r.id == rule_id) {
-        r.enabled = false;
-    }
-    match config::save(&st.config_path, &snapshot) {
-        Ok(()) => {
-            *guard = snapshot;
-            eprintln!("restee: once-rule '{rule_id}' disabled after firing");
+    let result = st.with_config_write(|cur| {
+        match cur.rules.iter_mut().find(|r| r.id == rule_id && r.enabled) {
+            Some(r) => {
+                r.enabled = false;
+                true
+            }
+            None => false, // already disabled / gone — nothing to persist
         }
-        Err(e) => eprintln!("restee: failed to persist once-rule disable ({e})"),
+    });
+    match result {
+        Ok(Some(_)) => crate::rlog!("gomaju: once-rule '{rule_id}' disabled after firing"),
+        Ok(None) => {}
+        Err(e) => crate::rlog!("gomaju: failed to persist once-rule disable ({e})"),
     }
 }
 
@@ -275,15 +274,21 @@ pub fn action_break_now(app: &AppHandle, state: &AppState) {
     apply_effects(app, &fx);
 }
 
+/// Take a **specific** rule's break immediately (the tray "click a break line" action).
+pub fn action_break_now_rule(app: &AppHandle, state: &AppState, rule_id: &str) {
+    let fx = state.engine.lock().unwrap().break_now_rule(rule_id);
+    apply_effects(app, &fx);
+}
+
 pub fn action_reset(app: &AppHandle, state: &AppState) {
     let fx = state.engine.lock().unwrap().reset_timers();
     apply_effects(app, &fx);
 }
 
-/// A native-dialog title prefixed with the app name, so an OS popup is identifiable as Restee's
-/// (matches the "Restee — …" window-title convention).
-fn restee_dialog_title(loc: &str, key: &str) -> String {
-    format!("Restee — {}", crate::i18n::tr(loc, key))
+/// A native-dialog title prefixed with the app name, so an OS popup is identifiable as Gomaju's
+/// (matches the "Gomaju — …" window-title convention).
+fn gomaju_dialog_title(loc: &str, key: &str) -> String {
+    format!("Gomaju — {}", crate::i18n::tr(loc, key))
 }
 
 /// Ask the user to confirm before wiping the countdown, then reset on "Reset".
@@ -298,7 +303,7 @@ pub fn confirm_then_reset(app: &AppHandle) {
     let handle = app.clone();
     app.dialog()
         .message(crate::i18n::tr(&loc, "dialog.reset_timer_msg"))
-        .title(restee_dialog_title(&loc, "dialog.reset_timer_title"))
+        .title(gomaju_dialog_title(&loc, "dialog.reset_timer_title"))
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(
             crate::i18n::tr(&loc, "dialog.reset").to_string(),
@@ -309,7 +314,7 @@ pub fn confirm_then_reset(app: &AppHandle) {
                 let state = handle.state::<AppState>();
                 action_reset(&handle, state.inner());
             } else {
-                eprintln!("restee: timer reset cancelled");
+                crate::rlog!("gomaju: timer reset cancelled");
             }
         });
 }
@@ -324,7 +329,7 @@ pub fn confirm_resume_break_progress(app: &AppHandle, age_secs: u64) {
     let handle = app.clone();
     app.dialog()
         .message(crate::i18n::tr(&loc, "dialog.resume_progress_msg").replace("{age}", &age))
-        .title(restee_dialog_title(&loc, "dialog.resume_progress_title"))
+        .title(gomaju_dialog_title(&loc, "dialog.resume_progress_title"))
         .kind(MessageDialogKind::Info)
         // OK / default (Enter) = Resume (the safe, non-destructive path); the other button —
         // and Esc/close, which a bool dialog can't distinguish — = Start fresh.
@@ -367,7 +372,7 @@ pub fn confirm_then_reset_one(app: &AppHandle, rule_id: String) {
     let handle = app.clone();
     app.dialog()
         .message(crate::i18n::tr(&loc, "dialog.reset_break_msg").replace("{name}", &name))
-        .title(restee_dialog_title(&loc, "dialog.reset_break_title"))
+        .title(gomaju_dialog_title(&loc, "dialog.reset_break_title"))
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(
             crate::i18n::tr(&loc, "dialog.reset").to_string(),
@@ -379,7 +384,38 @@ pub fn confirm_then_reset_one(app: &AppHandle, rule_id: String) {
                 let fx = st.engine.lock().unwrap().reset_timer(&rule_id);
                 apply_effects(&handle, &fx);
             } else {
-                eprintln!("restee: break reset cancelled ({rule_id})");
+                crate::rlog!("gomaju: break reset cancelled ({rule_id})");
+            }
+        });
+}
+
+/// Tray "take this break" prompt: confirm, then immediately start just this rule's break.
+/// Names the break in the dialog. Mirrors [`confirm_then_reset_one`] (non-blocking callback
+/// form, safe from the tray's main-thread menu handler). No-op if the rule id is gone.
+pub fn confirm_then_break_one(app: &AppHandle, rule_id: String) {
+    let (name, loc) = {
+        let st = app.state::<AppState>();
+        let cfg = st.config.lock().unwrap();
+        match cfg.rules.iter().find(|r| r.id == rule_id) {
+            Some(r) => (r.name.clone(), cfg.locale.clone()),
+            None => return,
+        }
+    };
+    let handle = app.clone();
+    app.dialog()
+        .message(crate::i18n::tr(&loc, "dialog.break_now_msg").replace("{name}", &name))
+        .title(gomaju_dialog_title(&loc, "dialog.break_now_title"))
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            crate::i18n::tr(&loc, "dialog.break_now_ok").to_string(),
+            crate::i18n::tr(&loc, "dialog.cancel").to_string(),
+        ))
+        .show(move |confirmed| {
+            if confirmed {
+                let st = handle.state::<AppState>();
+                action_break_now_rule(&handle, st.inner(), &rule_id);
+            } else {
+                crate::rlog!("gomaju: take-break cancelled ({rule_id})");
             }
         });
 }
@@ -388,24 +424,24 @@ pub fn confirm_then_reset_one(app: &AppHandle, rule_id: String) {
 /// immediately. Open windows pick up the new language when reopened (the locale is injected
 /// at window creation), so no window event is emitted.
 pub fn set_locale(app: &AppHandle, code: &str) {
-    {
-        let st = app.state::<AppState>();
-        let mut guard = st.config.lock().unwrap();
-        if guard.locale == code {
-            return; // already this language
+    let st = app.state::<AppState>();
+    match st.with_config_write(|cur| {
+        if cur.locale == code {
+            return false; // already this language
         }
-        let mut snapshot = guard.clone();
-        snapshot.locale = code.to_string();
-        if let Err(e) = config::save(&st.config_path, &snapshot) {
-            eprintln!("restee: failed to persist locale ({e})");
+        cur.locale = code.to_string();
+        true
+    }) {
+        Ok(Some(_)) => crate::rlog!("gomaju: locale set to {code}"),
+        Ok(None) => return, // unchanged
+        Err(e) => {
+            crate::rlog!("gomaju: failed to persist locale ({e})");
             return;
         }
-        *guard = snapshot;
-        eprintln!("restee: locale set to {code}");
     }
     // Read the run state under the engine lock and drop it before refresh_tray (which
     // re-locks the engine — don't nest). Clear the tray cache + update the tooltip first.
-    let state = app.state::<AppState>().engine.lock().unwrap().state();
+    let state = st.engine.lock().unwrap().state();
     crate::tray::invalidate_for_locale(app, code);
     refresh_tray(app, state);
 }
@@ -531,14 +567,16 @@ pub fn refresh_tray(app: &AppHandle, state: RunState) {
         .map(|since| since.elapsed().as_secs())
         .unwrap_or(0);
     // Re-lock the engine (released by callers before refresh) for the per-rule countdowns.
-    let breaks: Vec<(String, u64)> = st
+    // Carry the rule_id alongside name + remaining so the tray can make each line a clickable
+    // "take this break" item (routed by id back to confirm_then_break_one).
+    let breaks: Vec<(String, String, u64)> = st
         .engine
         .lock()
         .unwrap()
         .status()
         .all
         .into_iter()
-        .map(|n| (n.rule_name, n.remaining_secs))
+        .map(|n| (n.rule_id, n.rule_name, n.remaining_secs))
         .collect();
     crate::tray::refresh(
         app,
@@ -577,7 +615,7 @@ fn todays_upcoming_alarms(st: &AppState) -> Vec<(String, String, u64)> {
         .collect()
 }
 
-/// Show an OS notification with `title` (always brand-led — e.g. "Restee · Break reminder" — so
+/// Show an OS notification with `title` (always brand-led — e.g. "Gomaju · Break reminder" — so
 /// it's recognizable among other system notifications) and `body`. Best-effort: on Windows the
 /// toast renders reliably only once the app is installed (has an app identity).
 pub fn show_notification(app: &AppHandle, title: &str, body: &str) {
@@ -589,8 +627,8 @@ pub fn show_notification(app: &AppHandle, title: &str, body: &str) {
         .body(body)
         .show()
     {
-        Ok(_) => eprintln!("restee: notification shown ({title}: {body})"),
-        Err(e) => eprintln!("restee: notification failed ({e})"),
+        Ok(_) => crate::rlog!("gomaju: notification shown ({title}: {body})"),
+        Err(e) => crate::rlog!("gomaju: notification failed ({e})"),
     }
 }
 
@@ -606,10 +644,10 @@ pub fn show_startup_notification(app: &AppHandle, body: &str) {
     {
         match win_startup_toast(app, body) {
             Ok(()) => return,
-            Err(e) => eprintln!("restee: WinRT startup toast failed ({e}); using plugin"),
+            Err(e) => crate::rlog!("gomaju: WinRT startup toast failed ({e}); using plugin"),
         }
     }
-    show_notification(app, "Restee", body);
+    show_notification(app, "Gomaju", body);
 }
 
 /// Drive the Windows toast directly and schedule its dismissal ~3s later.
@@ -621,10 +659,10 @@ fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
 
     let app_id = win_toast_app_id(app);
 
-    // Minimal ToastGeneric payload: title "Restee" plus the body line.
+    // Minimal ToastGeneric payload: title "Gomaju" plus the body line.
     let xml = format!(
         "<toast duration=\"short\"><visual><binding template=\"ToastGeneric\">\
-         <text>Restee</text><text>{}</text></binding></visual></toast>",
+         <text>Gomaju</text><text>{}</text></binding></visual></toast>",
         xml_escape(body)
     );
 
@@ -633,7 +671,7 @@ fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
     let toast = ToastNotification::CreateToastNotification(&doc)?;
     let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(&app_id))?;
     notifier.Show(&toast)?;
-    eprintln!("restee: startup toast shown ({body}); auto-dismiss in 3s");
+    crate::rlog!("gomaju: startup toast shown ({body}); auto-dismiss in 3s");
 
     // Remove it after ~3s so it doesn't linger on screen or in the Action Center.
     // WinRT toast objects are agile (Send + Sync); hide on the main thread to keep
@@ -643,7 +681,7 @@ fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
         std::thread::sleep(Duration::from_secs(3));
         let _ = app.run_on_main_thread(move || {
             if let Err(e) = notifier.Hide(&toast) {
-                eprintln!("restee: startup toast hide failed ({e})");
+                crate::rlog!("gomaju: startup toast hide failed ({e})");
             }
         });
     });

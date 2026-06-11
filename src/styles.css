@@ -44,7 +44,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
-  animation: restee-fade-in 600ms ease-out;
+  animation: gomaju-fade-in 600ms ease-out;
 }
 
 .overlay__name {
@@ -91,7 +91,7 @@ body {
   font-weight: 200;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  animation: restee-breathe 4s ease-in-out infinite;
+  animation: gomaju-breathe 4s ease-in-out infinite;
 }
 
 /* Progress-bar break display (alternative to the big timer). The fill drains
@@ -206,7 +206,7 @@ body {
   background: rgba(255, 255, 255, 0.65);
 }
 
-@keyframes restee-fade-in {
+@keyframes gomaju-fade-in {
   from {
     opacity: 0;
     transform: translateY(12px);
@@ -217,7 +217,7 @@ body {
   }
 }
 
-@keyframes restee-breathe {
+@keyframes gomaju-breathe {
   0%,
   100% {
     opacity: 0.85;
@@ -248,7 +248,7 @@ body {
   user-select: none;
   cursor: default;
   overflow: hidden;
-  animation: restee-fade-in 250ms ease-out;
+  animation: gomaju-fade-in 250ms ease-out;
 }
 
 /* Pre-break countdown toast only: a mascot peeking past the right border. Scoped to
@@ -342,7 +342,7 @@ body {
   opacity: 0.5;
   white-space: normal;
 }
-/* Small "RESTEE" eyebrow so every custom prompt/alert (toasts, overlay, in-page modals) is
+/* Small "GOMAJU" eyebrow so every custom prompt/alert (toasts, overlay, in-page modals) is
    identifiable as coming from the app. Inherits the surrounding text color via opacity. */
 .brand-tag {
   font-size: 0.62rem;
@@ -363,7 +363,7 @@ body {
   opacity: 1;
 }
 .overlay__brand-text {
-  opacity: 0.4; /* keep the RESTEE wordmark an ambient eyebrow */
+  opacity: 0.4; /* keep the GOMAJU wordmark an ambient eyebrow */
 }
 .overlay__brand-mascot {
   height: 1.8em; /* scales with the brand font-size */
@@ -1145,7 +1145,7 @@ input.chime-volume-picker {
   border-radius: 12px;
   padding: 1.25rem 1.25rem 1rem;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  animation: restee-fade-in 140ms ease;
+  animation: gomaju-fade-in 140ms ease;
 }
 .modal__title {
   margin: 0 0 0.5rem;

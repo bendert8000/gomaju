@@ -1,4 +1,4 @@
-//! Pure timer/state engine for restee.
+//! Pure timer/state engine for gomaju.
 //!
 //! This crate has no Tauri, OS, clock, or I/O dependencies. The host feeds it
 //! `(delta, idle)` each tick and interprets the [`Effect`]s it returns. That keeps

@@ -119,7 +119,7 @@ function card(rule: RuleDto, index: number): HTMLElement {
   (item.querySelector(".rule-card__reset") as HTMLButtonElement).addEventListener("click", () => {
     // Backend pops a Reset/Cancel confirm; the live poll reflects the reset.
     void invoke("cmd_reset_timer", { ruleId: rule.id }).catch((err) =>
-      console.error("restee: reset failed", err),
+      console.error("gomaju: reset failed", err),
     );
   });
   const repeatBtn = item.querySelector(".rule-repeat") as HTMLButtonElement;
@@ -185,5 +185,5 @@ async function init(): Promise<void> {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  init().catch((err) => console.error("restee rules init failed", err));
+  init().catch((err) => console.error("gomaju rules init failed", err));
 });

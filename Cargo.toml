@@ -1,5 +1,5 @@
 [workspace]
-members = ["src-tauri", "crates/restee-core"]
+members = ["src-tauri", "crates/gomaju-core"]
 resolver = "2"
 
 [profile.dev]

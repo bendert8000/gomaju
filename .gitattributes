@@ -1,0 +1,19 @@
+# Normalize line endings: store LF in the repo and check out LF everywhere, so Windows
+# (core.autocrlf=true) doesn't introduce CRLF churn in source diffs.
+* text=auto eol=lf
+
+# Binary assets — never normalize their bytes.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.wav   binary
+*.mp3   binary
+*.ogg   binary
+*.flac  binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary

@@ -6,7 +6,7 @@ use rodio::source::{SineWave, Source};
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 use tauri::{AppHandle, Emitter};
 
-use restee_core::chime::{is_safe_filename, ChimeDto, ChimeKindDto, ToneStep};
+use gomaju_core::chime::{is_safe_filename, ChimeDto, ChimeKindDto, ToneStep};
 
 /// Play a sound on a detached thread: acquire the default output + a sink, let `fill`
 /// enqueue its tones, then block that thread until playback ends. Audio is best-effort —
@@ -20,14 +20,14 @@ where
         let (_stream, handle) = match OutputStream::try_default() {
             Ok(out) => out,
             Err(e) => {
-                eprintln!("restee: no audio output device ({e})");
+                crate::rlog!("gomaju: no audio output device ({e})");
                 return;
             }
         };
         let sink = match Sink::try_new(&handle) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("restee: could not create audio sink ({e})");
+                crate::rlog!("gomaju: could not create audio sink ({e})");
                 return;
             }
         };
@@ -37,7 +37,7 @@ where
 
         // Keep `_stream` alive until playback finishes.
         sink.sleep_until_end();
-        eprintln!("restee: {what} played");
+        crate::rlog!("gomaju: {what} played");
     });
 }
 
@@ -155,9 +155,9 @@ pub fn play_chime_file(path: PathBuf, volume_pct: u8) {
         match std::fs::File::open(&path) {
             Ok(file) => match rodio::Decoder::new(std::io::BufReader::new(file)) {
                 Ok(source) => sink.append(source),
-                Err(e) => eprintln!("restee: could not decode chime {} ({e})", path.display()),
+                Err(e) => crate::rlog!("gomaju: could not decode chime {} ({e})", path.display()),
             },
-            Err(e) => eprintln!("restee: could not open chime {} ({e})", path.display()),
+            Err(e) => crate::rlog!("gomaju: could not open chime {} ({e})", path.display()),
         }
     });
 }
@@ -303,7 +303,7 @@ where
         let (_stream, handle) = match OutputStream::try_default() {
             Ok(out) => out,
             Err(e) => {
-                eprintln!("restee: no audio output device ({e})");
+                crate::rlog!("gomaju: no audio output device ({e})");
                 finish_preview(&app, gen);
                 return;
             }
@@ -311,7 +311,7 @@ where
         let sink = match Sink::try_new(&handle) {
             Ok(s) => Arc::new(s),
             Err(e) => {
-                eprintln!("restee: could not create audio sink ({e})");
+                crate::rlog!("gomaju: could not create audio sink ({e})");
                 finish_preview(&app, gen);
                 return;
             }
@@ -359,9 +359,9 @@ pub fn preview_chime_file(app: AppHandle, path: PathBuf, volume_pct: u8) -> u64 
         match std::fs::File::open(&path) {
             Ok(file) => match rodio::Decoder::new(std::io::BufReader::new(file)) {
                 Ok(source) => sink.append(source),
-                Err(e) => eprintln!("restee: could not decode chime {} ({e})", path.display()),
+                Err(e) => crate::rlog!("gomaju: could not decode chime {} ({e})", path.display()),
             },
-            Err(e) => eprintln!("restee: could not open chime {} ({e})", path.display()),
+            Err(e) => crate::rlog!("gomaju: could not open chime {} ({e})", path.display()),
         }
     })
 }

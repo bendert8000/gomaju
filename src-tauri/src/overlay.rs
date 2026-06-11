@@ -48,13 +48,13 @@ fn create_overlays(app: &AppHandle, info: &BreakInfo) {
     // One combined init script (payload + locale); Tauri's multi-script append isn't relied on.
     let init = format!(
         "{}{}",
-        crate::webview::guarded_init("__RESTEE_BREAK__", &json),
+        crate::webview::guarded_init("__GOMAJU_BREAK__", &json),
         crate::webview::locale_init(&crate::i18n::current_locale(app)),
     );
 
     let monitors = app.available_monitors().unwrap_or_default();
-    eprintln!(
-        "restee: creating overlays for {} monitor(s)",
+    crate::rlog!(
+        "gomaju: creating overlays for {} monitor(s)",
         monitors.len()
     );
     if monitors.is_empty() {
@@ -76,7 +76,7 @@ fn build_one(
 ) {
     let label = format!("{OVERLAY_LABEL_PREFIX}{index}");
     let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("overlay.html".into()))
-        .title("Restee")
+        .title("Gomaju")
         .decorations(false)
         .always_on_top(true)
         .visible_on_all_workspaces(true)
@@ -97,6 +97,6 @@ fn build_one(
             let _ = window.show();
             let _ = window.set_focus();
         }
-        Err(e) => eprintln!("restee: failed to create overlay {label}: {e}"),
+        Err(e) => crate::rlog!("gomaju: failed to create overlay {label}: {e}"),
     }
 }

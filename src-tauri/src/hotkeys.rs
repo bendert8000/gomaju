@@ -3,7 +3,7 @@ use std::str::FromStr;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-use restee_core::{config::HotkeysDto, RunState};
+use gomaju_core::{config::HotkeysDto, RunState};
 
 use crate::app_state::AppState;
 use crate::runtime;

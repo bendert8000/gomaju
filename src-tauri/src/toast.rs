@@ -43,11 +43,11 @@ fn build_toast(app: &AppHandle, info: &WarningInfo) {
     // One combined init script (payload + locale).
     let init = format!(
         "{}{}",
-        crate::webview::guarded_init("__RESTEE_WARNING__", &json),
+        crate::webview::guarded_init("__GOMAJU_WARNING__", &json),
         crate::webview::locale_init(&crate::i18n::current_locale(app)),
     );
     match WebviewWindowBuilder::new(app, TOAST_LABEL, WebviewUrl::App("toast.html".into()))
-        .title("Restee")
+        .title("Gomaju")
         .decorations(false)
         .always_on_top(true)
         .visible_on_all_workspaces(true)
@@ -63,7 +63,7 @@ fn build_toast(app: &AppHandle, info: &WarningInfo) {
             position_bottom_right(app, &window);
             let _ = window.show();
         }
-        Err(e) => eprintln!("restee: failed to create warning toast: {e}"),
+        Err(e) => crate::rlog!("gomaju: failed to create warning toast: {e}"),
     }
 }
 

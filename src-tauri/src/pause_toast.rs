@@ -33,7 +33,7 @@ fn build_pause_toast(app: &AppHandle) {
     let payload = format!("{{\"minutes\":{}}}", pause_reminder_minutes(app));
     let init = format!(
         "{}{}",
-        crate::webview::guarded_init("__RESTEE_PAUSE__", &payload),
+        crate::webview::guarded_init("__GOMAJU_PAUSE__", &payload),
         crate::webview::locale_init(&crate::i18n::current_locale(app)),
     );
     match WebviewWindowBuilder::new(
@@ -41,7 +41,7 @@ fn build_pause_toast(app: &AppHandle) {
         PAUSE_TOAST_LABEL,
         WebviewUrl::App("pause-toast.html".into()),
     )
-    .title("Restee")
+    .title("Gomaju")
     .decorations(false)
     .always_on_top(true)
     .visible_on_all_workspaces(true)
@@ -57,7 +57,7 @@ fn build_pause_toast(app: &AppHandle) {
             position_bottom_right(app, &window);
             let _ = window.show();
         }
-        Err(e) => eprintln!("restee: failed to create pause reminder toast: {e}"),
+        Err(e) => crate::rlog!("gomaju: failed to create pause reminder toast: {e}"),
     }
 }
 

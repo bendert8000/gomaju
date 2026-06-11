@@ -1,8 +1,8 @@
 [package]
-name = "restee-core"
+name = "gomaju-core"
 version = "0.1.0"
 edition = "2021"
-description = "Pure, OS-free timer/state engine for restee. No Tauri or platform dependencies."
+description = "Pure, OS-free timer/state engine for gomaju. No Tauri or platform dependencies."
 
 [dependencies]
 # Kept minimal and OS-free so tests compile and run fast. serde/toml are pure.

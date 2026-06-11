@@ -1,7 +1,7 @@
 [package]
-name = "restee"
-version = "1.0.6"
-description = "restee — a cross-platform break reminder for engineers"
+name = "gomaju"
+version = "1.0.7"
+description = "gomaju — a cross-platform break reminder for engineers"
 authors = ["you"]
 edition = "2021"
 
@@ -11,7 +11,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "restee_lib"
+name = "gomaju_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -23,7 +23,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 thiserror = "2"
-restee-core = { path = "../crates/restee-core" }
+gomaju-core = { path = "../crates/gomaju-core" }
 user-idle = "0.6"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"

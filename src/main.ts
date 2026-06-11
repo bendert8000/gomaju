@@ -170,7 +170,7 @@ async function setAppLocale(code: string): Promise<void> {
     current.locale = code; // keep the in-memory config in sync so a later Save preserves it
     sel("app-locale").value = code; // reflect the applied locale in the dropdown
   } catch (err) {
-    console.error("restee: set locale failed", err);
+    console.error("gomaju: set locale failed", err);
     sel("app-locale").value = current.locale; // failed: restore the dropdown to the live locale
   }
 }
@@ -239,7 +239,7 @@ async function onFocusRefresh(): Promise<void> {
 }
 
 // Persist every locale's quote rows, guarding against an edit made to quotes.toml
-// outside Restee since this editor last synced. The visible locale's rows are captured first. Each
+// outside Gomaju since this editor last synced. The visible locale's rows are captured first. Each
 // locale's disk is compared to its baseline; if any diverged, the user gets one prompt: overwrite
 // (our lists win) or keep-disk (adopt the on-disk version for the *conflicted* locales, discarding
 // those local edits — no write). Non-conflicted locales are written normally. A real read/write
@@ -354,7 +354,7 @@ async function init(): Promise<void> {
     void onFocusRefresh();
   });
   $("open-chimes").addEventListener("click", () => {
-    invoke("cmd_open_chimes").catch((err) => console.error("restee: open chimes failed", err));
+    invoke("cmd_open_chimes").catch((err) => console.error("gomaju: open chimes failed", err));
   });
   sel("app-locale").addEventListener("change", () => void setAppLocale(sel("app-locale").value));
   $("save-btn").addEventListener("click", () => void save());
@@ -362,5 +362,5 @@ async function init(): Promise<void> {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  init().catch((err) => console.error("restee settings init failed", err));
+  init().catch((err) => console.error("gomaju settings init failed", err));
 });

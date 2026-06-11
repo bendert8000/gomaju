@@ -2,9 +2,9 @@ use serde::Serialize;
 use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 
-use restee_core::alarm::{self, AlarmDto};
-use restee_core::chime::{self, ChimeDto, ChimesFile};
-use restee_core::config::{self, ConfigFile, RuleDto};
+use gomaju_core::alarm::{self, AlarmDto};
+use gomaju_core::chime::{self, ChimeDto, ChimesFile};
+use gomaju_core::config::{self, ConfigFile, RuleDto};
 
 use crate::alarms_window::{self, ALARMS_LABEL};
 use crate::app_state::AppState;
@@ -246,7 +246,7 @@ pub fn cmd_window_ready(label: String) {
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(32)
         .collect();
-    eprintln!("restee: window content loaded: {safe}");
+    crate::rlog!("gomaju: window content loaded: {safe}");
 }
 
 /// Result of saving config: the (possibly sanitized) config echoed back, plus any
@@ -268,18 +268,18 @@ pub fn cmd_save_config(
 ) -> Result<SaveOutcome, String> {
     require_settings(&window)?;
     config.sanitize();
-    {
-        // Hold the lock across the disk write AND the cache update so the ticker's
-        // once-rule auto-disable (runtime::persist_rule_disabled) can't interleave a stale
-        // snapshot between them. On a write error the guard drops with the cache untouched.
-        let mut guard = state.config.lock().unwrap();
-        // Locale is backend-owned (only the tray changes it). The Settings form never edits
-        // it, and an incoming payload without the field would serde-default to "zh-Hant" —
-        // so preserve the stored value rather than let a Save clobber a language switch.
-        config.locale = guard.locale.clone();
-        config::save(&state.config_path, &config).map_err(|e| e.to_string())?;
-        *guard = config.clone();
-    }
+    // Replace the persisted config under one held lock (write+swap atomic vs. the ticker's
+    // once-disable). Locale is backend-owned (only the tray / Language card changes it). The
+    // Settings form never edits it, and an incoming payload without the field would serde-default
+    // to "zh-Hant" — so preserve the stored value rather than let a Save clobber a language switch.
+    let config = state
+        .with_config_write(move |cur| {
+            let locale = cur.locale.clone();
+            *cur = config;
+            cur.locale = locale;
+            true
+        })?
+        .expect("save always writes");
 
     reconfigure_engine(&app, state.inner(), &config);
     runtime::sync_pause_reminder(&app);
@@ -305,7 +305,7 @@ pub fn cmd_get_quotes(
     locale: String,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let file = restee_core::quotes::read_quotes(&state.quotes_path);
+    let file = gomaju_core::quotes::read_quotes(&state.quotes_path);
     Ok(file.get(&locale).to_vec())
 }
 
@@ -323,10 +323,10 @@ pub fn cmd_save_quotes(
     quotes: Vec<String>,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let mut file = restee_core::quotes::read_quotes(&state.quotes_path);
+    let mut file = gomaju_core::quotes::read_quotes(&state.quotes_path);
     file.set(&locale, quotes);
     file.sanitize();
-    restee_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
+    gomaju_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
     Ok(file.get(&locale).to_vec())
 }
 
@@ -383,20 +383,18 @@ pub fn cmd_save_alarms(
 ) -> Result<Vec<AlarmDto>, String> {
     require_alarms(&window)?;
 
-    let mut config = state.config.lock().unwrap().clone();
-    config.alarms = alarms;
-    // Only the alarms changed here, so validate just those (rules/settings in the cached
-    // config were already sanitized at load / their own save).
-    alarm::sanitize_alarms(&mut config.alarms);
-    let sanitized = config.alarms.clone();
-
-    // Hold the lock across save + cache swap, and re-read the backend-owned locale so a
-    // language switch made since the clone above isn't lost.
-    let mut guard = state.config.lock().unwrap();
-    config.locale = guard.locale.clone();
-    config::save(&state.config_path, &config).map_err(|e| e.to_string())?;
-    *guard = config;
-    Ok(sanitized)
+    // Swap in the new alarms on a clone taken *inside* the held lock, so a concurrent ticker
+    // once-disable (or a language switch) between the clone and the write can't be clobbered.
+    // Only the alarms changed here, so validate just those (rules/settings were already sanitized
+    // at load / their own save); the cached locale rides along untouched.
+    let config = state
+        .with_config_write(move |cur| {
+            cur.alarms = alarms;
+            alarm::sanitize_alarms(&mut cur.alarms);
+            true
+        })?
+        .expect("save always writes");
+    Ok(config.alarms)
 }
 
 #[tauri::command]
@@ -457,7 +455,7 @@ fn prune_orphan_chime_files(state: &AppState, chimes: &[ChimeDto]) {
     };
     let referenced: std::collections::HashSet<&str> = chimes
         .iter()
-        .filter(|c| matches!(c.kind, restee_core::chime::ChimeKindDto::File))
+        .filter(|c| matches!(c.kind, gomaju_core::chime::ChimeKindDto::File))
         .map(|c| c.file.as_str())
         .collect();
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -499,10 +497,10 @@ pub fn cmd_preview_chime(
         return Ok(0); // sanitized away (e.g. tones with no steps) — nothing to play
     };
     let gen = match chime.kind {
-        restee_core::chime::ChimeKindDto::Tones => {
+        gomaju_core::chime::ChimeKindDto::Tones => {
             crate::audio::preview_chime_spec(app, chime.steps, config::default_chime_volume())
         }
-        restee_core::chime::ChimeKindDto::File => {
+        gomaju_core::chime::ChimeKindDto::File => {
             match state.config_path.parent().map(|p| p.join("chimes")) {
                 Some(dir) => crate::audio::preview_chime_file(
                     app,
@@ -584,7 +582,7 @@ pub async fn cmd_import_chime_file(
         .map(|p| p.join("chimes"))
         .ok_or("no config dir")?;
 
-    // Brand the native picker so the user can tell it's Restee asking. Read the locale in a short
+    // Brand the native picker so the user can tell it's Gomaju asking. Read the locale in a short
     // scope so the config lock is released before the (blocking) dialog opens.
     let title = {
         let cfg = state.config.lock().unwrap();
@@ -676,21 +674,21 @@ pub fn cmd_set_rule_flags(
 ) -> Result<(), String> {
     require_breaks(&window)?;
 
-    let config = {
-        let mut guard = state.config.lock().unwrap();
-        let mut config = guard.clone();
-        let Some(rule) = config.rules.iter_mut().find(|r| r.id == rule_id) else {
-            return Ok(()); // rule no longer exists (e.g. deleted in Settings) — no-op
+    // Merge the flag change onto a fresh in-lock clone (so it can never clobber Settings detail
+    // edits or a concurrent once-disable), then write+swap under the held lock.
+    let written = state.with_config_write(|cur| {
+        let Some(rule) = cur.rules.iter_mut().find(|r| r.id == rule_id) else {
+            return false; // rule no longer exists (e.g. deleted in Settings) — no-op
         };
         rule.enabled = enabled;
         rule.repeat = repeat;
-        config::sanitize_rules(&mut config.rules);
-        config::save(&state.config_path, &config).map_err(|e| e.to_string())?;
-        *guard = config.clone();
-        config
-    };
+        config::sanitize_rules(&mut cur.rules);
+        true
+    })?;
 
-    reconfigure_engine(&app, state.inner(), &config);
+    if let Some(config) = written {
+        reconfigure_engine(&app, state.inner(), &config);
+    }
     Ok(())
 }
 

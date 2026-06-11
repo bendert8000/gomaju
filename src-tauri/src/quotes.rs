@@ -1,5 +1,5 @@
 //! Host-side break-quote selection. The TOML model, validation, storage, and `.txt` migration live
-//! in `restee_core::quotes` (pure + unit-tested). This module keeps only the wall-clock random pick
+//! in `gomaju_core::quotes` (pure + unit-tested). This module keeps only the wall-clock random pick
 //! — the pure engine is clock-free, so the host owns anything that reads the clock.
 
 use std::path::Path;
@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// has no quotes — there is no cross-locale fallback. Re-reads the file each break (no cache), so
 /// edits take effect live; the read never writes.
 pub fn pick(quotes_path: &Path, locale: &str) -> Option<String> {
-    let file = restee_core::quotes::read_quotes(quotes_path);
+    let file = gomaju_core::quotes::read_quotes(quotes_path);
     let quotes = file.get(locale);
     if quotes.is_empty() {
         return None;
@@ -29,10 +29,10 @@ fn pseudo_random_index(len: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use restee_core::quotes::{save_quotes, QuotesFile};
+    use gomaju_core::quotes::{save_quotes, QuotesFile};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("restee-host-quotes-{name}"));
+        let dir = std::env::temp_dir().join(format!("gomaju-host-quotes-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("quotes.toml")

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Restee",
-  "version": "1.0.6",
-  "identifier": "com.restee.app",
+  "productName": "Gomaju",
+  "version": "1.0.7",
+  "identifier": "com.gomaju.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -19,11 +19,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "publisher": "Restee",
-    "copyright": "Copyright © 2026 Restee",
+    "publisher": "Gomaju",
+    "copyright": "Copyright © 2026 Gomaju",
     "category": "Productivity",
     "shortDescription": "A break reminder for engineers.",
-    "longDescription": "Restee is a cross-platform, tray-resident break reminder. It nudges you to rest your eyes and step away on customizable intervals, with gentle soft breaks and screen-covering strict breaks.",
+    "longDescription": "Gomaju is a cross-platform, tray-resident break reminder. It nudges you to rest your eyes and step away on customizable intervals, with gentle soft breaks and screen-covering strict breaks.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

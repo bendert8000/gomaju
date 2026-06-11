@@ -6,13 +6,13 @@
 
 ## Background / current state
 
-Break quotes are shown on the break overlay, picked from the **active locale's** set. Today they are stored as **plain-text, one-quote-per-line** files next to `config.toml` in the OS config dir (`<config_dir>` = `%APPDATA%\com.restee.app\` on Windows):
+Break quotes are shown on the break overlay, picked from the **active locale's** set. Today they are stored as **plain-text, one-quote-per-line** files next to `config.toml` in the OS config dir (`<config_dir>` = `%APPDATA%\com.gomaju.app\` on Windows):
 
 - `quotes.en.txt`
 - `quotes.zh-Hant.txt`
 - (legacy `quotes.txt`, pre-localization, migrated into the English set on first run if `quotes.en.txt` is absent)
 
-All quote logic lives host-side in `src-tauri/src/quotes.rs` (no `restee-core` involvement) because plain text needs no serde. The embedded seed defaults are `src-tauri/default_quotes.en.txt` / `default_quotes.zh-Hant.txt`. The only quote-related field in `config.toml` is the `settings.show_quotes` boolean (unchanged by this work).
+All quote logic lives host-side in `src-tauri/src/quotes.rs` (no `gomaju-core` involvement) because plain text needs no serde. The embedded seed defaults are `src-tauri/default_quotes.en.txt` / `default_quotes.zh-Hant.txt`. The only quote-related field in `config.toml` is the `settings.show_quotes` boolean (unchanged by this work).
 
 Relevant touchpoints:
 - `src-tauri/src/quotes.rs` — `parse`, `sanitize`, `seed_if_missing`, `save`, `load`, `pick`, `pseudo_random_index`, `canonical_locale`, `quotes_path`.
@@ -37,7 +37,7 @@ en = [
 ]
 ```
 
-This makes quote storage consistent with `chimes.toml` (a single file separate from `config.toml`), and moves the validated model into `restee-core` for pure unit testing.
+This makes quote storage consistent with `chimes.toml` (a single file separate from `config.toml`), and moves the validated model into `gomaju-core` for pure unit testing.
 
 ### Non-goals
 
@@ -48,9 +48,9 @@ This makes quote storage consistent with `chimes.toml` (a single file separate f
 
 ## Design
 
-### 1. Data model in `restee-core` (mirrors `chime.rs`)
+### 1. Data model in `gomaju-core` (mirrors `chime.rs`)
 
-New module `crates/restee-core/src/quotes.rs`:
+New module `crates/gomaju-core/src/quotes.rs`:
 
 ```rust
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,9 +66,9 @@ pub struct QuotesFile {
 - `get(&self, locale: &str) -> &[String]` and `set(&mut self, locale: &str, quotes: Vec<String>)` canonicalize `"en" → en`, anything else `→ zh_hant` (matching `i18n::pick` / current `canonical_locale`).
 - **Unknown-key policy:** the two fields are the only supported locales. Serde's default (ignore unknown fields) is intentional — a hand-edited extra key (e.g. `fr = [...]`) is read without error and simply dropped on the next save round-trip. We do **not** use `deny_unknown_fields` (that would push such a file into corrupt-recovery and discard both real locales). The drop-on-resave behavior is documented, not a bug.
 - `sanitize(&mut self) -> bool` — per locale: trim each, drop empty and `#`-comment-leading lines; idempotent (`sanitize(sanitize(x)) == sanitize(x)`). Returns whether anything changed (so callers persist the corrected file). Mirrors `sanitize_chimes`. **Behavior preserved:** a quote starting with `#` is still dropped, so the existing editor (which also drops `#`/blank rows) needs no change. (In TOML `#` inside a quoted string is not a comment, but we keep the rule to preserve current UX and round-trip safety.)
-- Embedded default: `pub const DEFAULT_QUOTES_TOML: &str = include_str!("../default_quotes.toml");`, file at `crates/restee-core/default_quotes.toml` (alongside `default_chimes.toml` / `default_config.toml`). Content = the current English + Traditional Chinese default quote sets.
+- Embedded default: `pub const DEFAULT_QUOTES_TOML: &str = include_str!("../default_quotes.toml");`, file at `crates/gomaju-core/default_quotes.toml` (alongside `default_chimes.toml` / `default_config.toml`). Content = the current English + Traditional Chinese default quote sets.
 
-### 2. Load / seed / migrate (in `restee-core`, mirrors `load_chimes`)
+### 2. Load / seed / migrate (in `gomaju-core`, mirrors `load_chimes`)
 
 ```rust
 pub fn load_quotes(path: &Path) -> std::io::Result<QuotesFile>
@@ -105,7 +105,7 @@ pub fn pick(quotes_path: &Path, locale: &str) -> Option<String>
 fn pseudo_random_index(len: usize) -> usize   // unchanged (SystemTime-seeded)
 ```
 
-- `pick` → `restee_core::quotes::read_quotes(quotes_path)`, take `get(locale)`, random-pick. `None` if that locale's set is empty (no cross-locale fallback, as today). Still **re-read each break, no cache**.
+- `pick` → `gomaju_core::quotes::read_quotes(quotes_path)`, take `get(locale)`, random-pick. `None` if that locale's set is empty (no cross-locale fallback, as today). Still **re-read each break, no cache**.
 - All `parse`/`sanitize`/`save`/`load`/`seed_if_missing`/`canonical_locale`/`quotes_path` move to / are replaced by the core module.
 
 ### 4. Commands & frontend — no signature changes
@@ -121,21 +121,21 @@ fn pseudo_random_index(len: usize) -> usize   // unchanged (SystemTime-seeded)
 ### 5. Startup + `AppState`
 
 - Add `pub quotes_path: PathBuf` to `AppState` (mirrors `chimes_path`); set it to `<config_dir>/quotes.toml`.
-- `lib.rs` setup: replace `quotes::seed_if_missing(dir)` with `restee_core::quotes::load_quotes(&quotes_path)` (seeds + migrates + self-heals). No content cache stored (pick re-reads).
+- `lib.rs` setup: replace `quotes::seed_if_missing(dir)` with `gomaju_core::quotes::load_quotes(&quotes_path)` (seeds + migrates + self-heals). No content cache stored (pick re-reads).
 - `runtime.rs:92`: `quotes::pick(&st.quotes_path, &cfg.locale)`.
 - `commands.rs`: read `state.quotes_path` instead of deriving the dir.
 
 ### 6. Removals, comments, docs
 
-- Delete `src-tauri/default_quotes.en.txt` and `src-tauri/default_quotes.zh-Hant.txt` (replaced by one `crates/restee-core/default_quotes.toml`).
+- Delete `src-tauri/default_quotes.en.txt` and `src-tauri/default_quotes.zh-Hant.txt` (replaced by one `crates/gomaju-core/default_quotes.toml`).
 - Fix stale comments that reference `quotes.txt` / `quotes.<locale>.txt`:
   - Rust: `commands.rs:246`, `config.rs:113`.
   - Frontend (per Codex review): `src/main.ts:74,204,212,252` and `src/quotes-editor.ts:2-3` ("quotes persist to `quotes.txt`"). Comments only — no behavior change, since the command signatures are preserved.
-- Update CLAUDE.md "Break quotes + pre-break toast" section to describe `quotes.toml` (single file, `restee-core` model, migration-from-`.txt`, delete-after-migrate).
+- Update CLAUDE.md "Break quotes + pre-break toast" section to describe `quotes.toml` (single file, `gomaju-core` model, migration-from-`.txt`, delete-after-migrate).
 
 ## Testing
 
-Core unit tests in `crates/restee-core/src/quotes.rs` (mirroring `chime.rs` / `config.rs`):
+Core unit tests in `crates/gomaju-core/src/quotes.rs` (mirroring `chime.rs` / `config.rs`):
 
 - `QuotesFile` round-trips through `toml::to_string_pretty` → `from_str` with both locales populated (incl. CJK).
 - `sanitize` trims, drops blank + `#`-comment lines, is idempotent, per locale.
@@ -150,7 +150,7 @@ Host test in `src-tauri/src/quotes.rs`:
 
 - `pick` returns a quote from the active locale; `None` when that locale is empty; no cross-locale fallback; `pseudo_random_index` in range.
 
-`cargo test -p restee-core` stays the fast path; the host test runs under the Tauri crate's tests.
+`cargo test -p gomaju-core` stays the fast path; the host test runs under the Tauri crate's tests.
 
 ## Risks / edge cases
 

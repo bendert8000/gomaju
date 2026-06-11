@@ -1,6 +1,6 @@
 //! Clock alarms: TOML-friendly DTOs plus a pure, clock-free recurrence matcher.
 //!
-//! Like the rest of `restee-core`, this module has no clock or OS dependency: the
+//! Like the rest of `gomaju-core`, this module has no clock or OS dependency: the
 //! host (the Tauri layer) reads the current local time, extracts its components, and
 //! asks [`alarm_is_due`] whether a given alarm should fire this minute. That keeps the
 //! recurrence logic fully unit-testable in isolation.

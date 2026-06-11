@@ -327,6 +327,24 @@ impl Engine {
         }
     }
 
+    /// Immediately start a **specific** enabled rule's break (the tray "take this break" action) —
+    /// like [`break_now`](Self::break_now) but targets the chosen rule rather than the soonest-due
+    /// one. No-op if already in a break, or if `rule_id` isn't an enabled rule (e.g. it was just
+    /// disabled or deleted). Like `break_now`, this fires from Stopped/Paused too.
+    pub fn break_now_rule(&mut self, rule_id: &str) -> Vec<Effect> {
+        if self.state == RunState::InBreak {
+            return vec![];
+        }
+        match self
+            .rules
+            .iter()
+            .position(|rs| rs.rule.id == rule_id && rs.rule.enabled)
+        {
+            Some(idx) => self.fire_break(idx),
+            None => vec![],
+        }
+    }
+
     /// Advance time by `delta`, given the current `idle` duration reported by the OS.
     pub fn tick(&mut self, delta: Duration, idle: Duration) -> Vec<Effect> {
         match self.state {
@@ -861,6 +879,53 @@ mod tests {
             "break_now should fire the soonest-due rule, not the highest-priority one"
         );
         assert_eq!(engine.state(), RunState::InBreak);
+    }
+
+    #[test]
+    fn break_now_rule_fires_the_chosen_rule_not_the_soonest() {
+        // The tray "take this break" action targets the clicked rule. "eye" is soonest-due, but
+        // the user picks "long" — break_now_rule must fire "long", not the soonest.
+        let rules = vec![
+            rule("eye", 1800, 60, Enforcement::Soft),
+            rule("long", 2700, 600, Enforcement::Strict),
+        ];
+        let mut engine = Engine::new(rules, Settings::default());
+
+        let fire = engine.break_now_rule("long");
+        assert_eq!(
+            started_rule(&fire).as_deref(),
+            Some("long"),
+            "break_now_rule should fire the chosen rule, not the soonest-due one"
+        );
+        assert_eq!(engine.state(), RunState::InBreak);
+    }
+
+    #[test]
+    fn break_now_rule_is_a_noop_for_unknown_or_disabled_rules() {
+        let mut engine = Engine::new(
+            vec![
+                rule("eye", 1800, 60, Enforcement::Soft),
+                Rule {
+                    enabled: false,
+                    ..rule("off", 1800, 60, Enforcement::Soft)
+                },
+            ],
+            Settings::default(),
+        );
+
+        assert!(
+            engine.break_now_rule("ghost").is_empty(),
+            "an unknown id fires nothing"
+        );
+        assert!(
+            engine.break_now_rule("off").is_empty(),
+            "a disabled rule fires nothing"
+        );
+        assert_eq!(
+            engine.state(),
+            RunState::Stopped,
+            "a no-op must not change run state"
+        );
     }
 
     #[test]

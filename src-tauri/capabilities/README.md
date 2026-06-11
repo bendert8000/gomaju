@@ -1,6 +1,6 @@
 # Capabilities
 
-restee uses least-privilege capabilities, scoped by window label:
+gomaju uses least-privilege capabilities, scoped by window label:
 
 - **`settings.json`** — the `settings` window. Gets `core:default`.
 - **`breaks.json`** — the `breaks` (break-rules dashboard) window. **Empty** permission set

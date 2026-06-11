@@ -39,9 +39,9 @@ pub fn open(app: &AppHandle) {
         {
             Ok(window) => {
                 let _ = window.set_focus();
-                eprintln!("restee: chimes window opened");
+                crate::rlog!("gomaju: chimes window opened");
             }
-            Err(e) => eprintln!("restee: failed to open chimes window: {e}"),
+            Err(e) => crate::rlog!("gomaju: failed to open chimes window: {e}"),
         }
     });
 }

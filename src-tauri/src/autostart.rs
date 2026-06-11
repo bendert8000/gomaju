@@ -15,6 +15,6 @@ pub fn apply(app: &AppHandle, enabled: bool) {
         manager.disable()
     };
     if let Err(e) = result {
-        eprintln!("restee: failed to set autostart={enabled}: {e}");
+        crate::rlog!("gomaju: failed to set autostart={enabled}: {e}");
     }
 }

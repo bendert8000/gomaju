@@ -4,17 +4,17 @@
 
 **Goal:** Replace the per-locale plain-text `quotes.<locale>.txt` break-quote files with one structured `quotes.toml`, with a first-run migration that folds the old files in and deletes them.
 
-**Architecture:** Move the quote data model + validation + storage into the dependency-free `restee-core` crate (a new `quotes` module mirroring `chime.rs`); the Tauri host keeps only the wall-clock random `pick`. Commands keep their existing signatures so the frontend is untouched; `cmd_save_quotes` becomes load-modify-write so saving one locale never clobbers the other.
+**Architecture:** Move the quote data model + validation + storage into the dependency-free `gomaju-core` crate (a new `quotes` module mirroring `chime.rs`); the Tauri host keeps only the wall-clock random `pick`. Commands keep their existing signatures so the frontend is untouched; `cmd_save_quotes` becomes load-modify-write so saving one locale never clobbers the other.
 
-**Tech Stack:** Rust (serde + `toml` 0.8, already deps of `restee-core`), Tauri v2 host, TypeScript/HTML frontend (comment-only edits).
+**Tech Stack:** Rust (serde + `toml` 0.8, already deps of `gomaju-core`), Tauri v2 host, TypeScript/HTML frontend (comment-only edits).
 
 **Spec:** `docs/superpowers/specs/2026-06-05-quotes-toml-storage-design.md` (Codex-reviewed).
 
 **TDD note for the executor:** within each task, write the test(s) **first** and run them to watch them fail (a compile error for a not-yet-defined symbol counts as red) **before** writing the implementation. The steps below group test and implementation code for readability, but follow strict red→green order.
 
 **Conventions in this codebase:**
-- Core engine tests run with `cargo test -p restee-core` (fast, no Tauri).
-- Host crate builds/tests need the Tauri toolchain; a quick check is `cargo build -p restee --features custom-protocol` (workspace target dir at repo root). Full app: `npm run tauri build`.
+- Core engine tests run with `cargo test -p gomaju-core` (fast, no Tauri).
+- Host crate builds/tests need the Tauri toolchain; a quick check is `cargo build -p gomaju --features custom-protocol` (workspace target dir at repo root). Full app: `npm run tauri build`.
 - Lint: `cargo clippy --workspace --all-targets`.
 - Mirror the existing `chime.rs` patterns (atomic temp+rename writes, self-healing load, embedded default via `include_str!`, `sanitize` returns `bool` "changed").
 
@@ -23,17 +23,17 @@
 ## File Structure
 
 **Create:**
-- `crates/restee-core/src/quotes.rs` — `QuotesFile` DTO, `get`/`set`/`sanitize`, `parse_text`, `read_quotes`, `save_quotes`, `load_quotes`, migration helpers, embedded default, unit tests.
-- `crates/restee-core/default_quotes.toml` — embedded seed (both locales), `include_str!`'d by the module.
+- `crates/gomaju-core/src/quotes.rs` — `QuotesFile` DTO, `get`/`set`/`sanitize`, `parse_text`, `read_quotes`, `save_quotes`, `load_quotes`, migration helpers, embedded default, unit tests.
+- `crates/gomaju-core/default_quotes.toml` — embedded seed (both locales), `include_str!`'d by the module.
 
 **Modify:**
-- `crates/restee-core/src/lib.rs` — add `pub mod quotes;`.
+- `crates/gomaju-core/src/lib.rs` — add `pub mod quotes;`.
 - `src-tauri/src/quotes.rs` — shrink to the host `pick` + `pseudo_random_index` (delete `parse`/`sanitize`/`save`/`load`/`seed_if_missing`/`canonical_locale`/`quotes_path`).
 - `src-tauri/src/app_state.rs` — add `quotes_path: PathBuf`.
-- `src-tauri/src/lib.rs` — compute `quotes_path`, call `restee_core::quotes::load_quotes`, manage it in `AppState`.
+- `src-tauri/src/lib.rs` — compute `quotes_path`, call `gomaju_core::quotes::load_quotes`, manage it in `AppState`.
 - `src-tauri/src/runtime.rs:88-96` — `pick` via `state.quotes_path`.
 - `src-tauri/src/commands.rs:246-279` — `cmd_get_quotes` → `read_quotes`; `cmd_save_quotes` → load-modify-write; fix the section comment.
-- `crates/restee-core/src/config.rs:113`, `src/main.ts:74,204,212,252`, `src/quotes-editor.ts:2` — stale comments (`quotes.txt`/`quotes.<locale>.txt` → `quotes.toml`).
+- `crates/gomaju-core/src/config.rs:113`, `src/main.ts:74,204,212,252`, `src/quotes-editor.ts:2` — stale comments (`quotes.txt`/`quotes.<locale>.txt` → `quotes.toml`).
 - `CLAUDE.md` — rewrite the "Break quotes + pre-break toast" storage description.
 
 **Delete:**
@@ -41,16 +41,16 @@
 
 ---
 
-## Task 1: `restee-core` quotes module — model, get/set, sanitize
+## Task 1: `gomaju-core` quotes module — model, get/set, sanitize
 
 **Files:**
-- Create: `crates/restee-core/src/quotes.rs`
-- Modify: `crates/restee-core/src/lib.rs` (add module export)
-- Test: inline `#[cfg(test)]` in `crates/restee-core/src/quotes.rs`
+- Create: `crates/gomaju-core/src/quotes.rs`
+- Modify: `crates/gomaju-core/src/lib.rs` (add module export)
+- Test: inline `#[cfg(test)]` in `crates/gomaju-core/src/quotes.rs`
 
 - [ ] **Step 1: Create the module with the model + helpers (no embedded default yet)**
 
-Create `crates/restee-core/src/quotes.rs`:
+Create `crates/gomaju-core/src/quotes.rs`:
 
 ```rust
 //! User-editable break quotes, stored as a single `quotes.toml` (separate from `config.toml`).
@@ -129,7 +129,7 @@ fn sanitize_list(quotes: &[String]) -> Vec<String> {
 
 - [ ] **Step 2: Export the module**
 
-Modify `crates/restee-core/src/lib.rs` — add `pub mod quotes;` in the module list (alphabetical, after `mod engine;`/before `mod rule;` is fine; keep the `pub mod` ones grouped). Resulting top:
+Modify `crates/gomaju-core/src/lib.rs` — add `pub mod quotes;` in the module list (alphabetical, after `mod engine;`/before `mod rule;` is fine; keep the `pub mod` ones grouped). Resulting top:
 
 ```rust
 pub mod alarm;
@@ -141,7 +141,7 @@ mod rule;
 mod settings;
 ```
 
-- [ ] **Step 3: Write the tests** (append to `crates/restee-core/src/quotes.rs`)
+- [ ] **Step 3: Write the tests** (append to `crates/gomaju-core/src/quotes.rs`)
 
 ```rust
 #[cfg(test)]
@@ -205,13 +205,13 @@ mod tests {
 
 - [ ] **Step 4: Run tests**
 
-Run: `cargo test -p restee-core quotes::tests`
+Run: `cargo test -p gomaju-core quotes::tests`
 Expected: all 5 PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add crates/restee-core/src/quotes.rs crates/restee-core/src/lib.rs
+git add crates/gomaju-core/src/quotes.rs crates/gomaju-core/src/lib.rs
 git commit -m "feat(core): QuotesFile model + sanitize for quotes.toml"
 ```
 
@@ -220,15 +220,15 @@ git commit -m "feat(core): QuotesFile model + sanitize for quotes.toml"
 ## Task 2: Embedded `default_quotes.toml`
 
 **Files:**
-- Create: `crates/restee-core/default_quotes.toml`
-- Modify: `crates/restee-core/src/quotes.rs` (add const + `embedded_default_quotes`)
+- Create: `crates/gomaju-core/default_quotes.toml`
+- Modify: `crates/gomaju-core/src/quotes.rs` (add const + `embedded_default_quotes`)
 - Test: inline
 
-- [ ] **Step 1: Create `crates/restee-core/default_quotes.toml`** (content = the current shipped defaults, now in one TOML file)
+- [ ] **Step 1: Create `crates/gomaju-core/default_quotes.toml`** (content = the current shipped defaults, now in one TOML file)
 
 ```toml
 # Default break quotes seeded on first run (one entry per quote). The user's quotes.toml lives in
-# the OS config dir next to config.toml; Restee never overwrites it after seeding/migration.
+# the OS config dir next to config.toml; Gomaju never overwrites it after seeding/migration.
 
 en = [
   "Rest is not idleness, and to lie sometimes on the grass is by no means a waste of time.",
@@ -257,7 +257,7 @@ en = [
 ]
 ```
 
-- [ ] **Step 2: Add the embedded const** (in `crates/restee-core/src/quotes.rs`, after `sanitize_list`)
+- [ ] **Step 2: Add the embedded const** (in `crates/gomaju-core/src/quotes.rs`, after `sanitize_list`)
 
 ```rust
 /// The starter quotes a fresh install is seeded with — editable TOML, embedded at compile time, so
@@ -282,13 +282,13 @@ pub const DEFAULT_QUOTES_TOML: &str = include_str!("../default_quotes.toml");
 
 - [ ] **Step 4: Run tests**
 
-Run: `cargo test -p restee-core quotes::tests::embedded_default_quotes_parse_and_are_clean`
+Run: `cargo test -p gomaju-core quotes::tests::embedded_default_quotes_parse_and_are_clean`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add crates/restee-core/default_quotes.toml crates/restee-core/src/quotes.rs
+git add crates/gomaju-core/default_quotes.toml crates/gomaju-core/src/quotes.rs
 git commit -m "feat(core): embedded default_quotes.toml seed"
 ```
 
@@ -297,10 +297,10 @@ git commit -m "feat(core): embedded default_quotes.toml seed"
 ## Task 3: `save_quotes` + `read_quotes`
 
 **Files:**
-- Modify: `crates/restee-core/src/quotes.rs`
+- Modify: `crates/gomaju-core/src/quotes.rs`
 - Test: inline
 
-- [ ] **Step 1: Implement both functions** (in `crates/restee-core/src/quotes.rs`, after `embedded_default_quotes`)
+- [ ] **Step 1: Implement both functions** (in `crates/gomaju-core/src/quotes.rs`, after `embedded_default_quotes`)
 
 ```rust
 /// Atomically write `quotes.toml` (temp + rename), creating its parent dir. Mirrors
@@ -338,7 +338,7 @@ pub fn read_quotes(path: &Path) -> QuotesFile {
 
 ```rust
     fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("restee-quotes-{name}"));
+        let dir = std::env::temp_dir().join(format!("gomaju-quotes-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -382,13 +382,13 @@ pub fn read_quotes(path: &Path) -> QuotesFile {
 
 - [ ] **Step 3: Run tests**
 
-Run: `cargo test -p restee-core quotes::tests`
+Run: `cargo test -p gomaju-core quotes::tests`
 Expected: all PASS.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add crates/restee-core/src/quotes.rs
+git add crates/gomaju-core/src/quotes.rs
 git commit -m "feat(core): atomic save_quotes + best-effort read_quotes"
 ```
 
@@ -397,10 +397,10 @@ git commit -m "feat(core): atomic save_quotes + best-effort read_quotes"
 ## Task 4: Migration helpers (`.txt` → `QuotesFile`, then delete)
 
 **Files:**
-- Modify: `crates/restee-core/src/quotes.rs`
+- Modify: `crates/gomaju-core/src/quotes.rs`
 - Test: inline
 
-- [ ] **Step 1: Implement the helpers** (in `crates/restee-core/src/quotes.rs`, after `read_quotes`)
+- [ ] **Step 1: Implement the helpers** (in `crates/gomaju-core/src/quotes.rs`, after `read_quotes`)
 
 ```rust
 /// Parse the embedded `default_quotes.toml` into a `QuotesFile` (first-run seed + corrupt-recovery
@@ -450,8 +450,8 @@ fn delete_legacy_txt(config_dir: &Path) {
         let p = config_dir.join(name);
         if p.exists() {
             match fs::remove_file(&p) {
-                Ok(()) => eprintln!("restee: removed migrated quote file {}", p.display()),
-                Err(e) => eprintln!("restee: could not remove {} ({e})", p.display()),
+                Ok(()) => eprintln!("gomaju: removed migrated quote file {}", p.display()),
+                Err(e) => eprintln!("gomaju: could not remove {} ({e})", p.display()),
             }
         }
     }
@@ -508,13 +508,13 @@ fn delete_legacy_txt(config_dir: &Path) {
 
 - [ ] **Step 3: Run tests**
 
-Run: `cargo test -p restee-core quotes::tests`
+Run: `cargo test -p gomaju-core quotes::tests`
 Expected: all PASS.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add crates/restee-core/src/quotes.rs
+git add crates/gomaju-core/src/quotes.rs
 git commit -m "feat(core): quotes migration helpers (.txt -> quotes.toml, then delete)"
 ```
 
@@ -523,10 +523,10 @@ git commit -m "feat(core): quotes migration helpers (.txt -> quotes.toml, then d
 ## Task 5: `load_quotes` (self-healing + migrate-on-missing)
 
 **Files:**
-- Modify: `crates/restee-core/src/quotes.rs`
+- Modify: `crates/gomaju-core/src/quotes.rs`
 - Test: inline
 
-- [ ] **Step 1: Implement `load_quotes`** (in `crates/restee-core/src/quotes.rs`, after `delete_legacy_txt`)
+- [ ] **Step 1: Implement `load_quotes`** (in `crates/gomaju-core/src/quotes.rs`, after `delete_legacy_txt`)
 
 ```rust
 /// Load `quotes.toml`, self-healing like `chime::load_chimes`:
@@ -652,13 +652,13 @@ pub fn load_quotes(path: &Path) -> std::io::Result<QuotesFile> {
 
 - [ ] **Step 3: Run tests**
 
-Run: `cargo test -p restee-core quotes`
-Expected: all PASS. Also run the whole crate: `cargo test -p restee-core` → green.
+Run: `cargo test -p gomaju-core quotes`
+Expected: all PASS. Also run the whole crate: `cargo test -p gomaju-core` → green.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add crates/restee-core/src/quotes.rs
+git add crates/gomaju-core/src/quotes.rs
 git commit -m "feat(core): self-healing load_quotes with first-run .txt migration"
 ```
 
@@ -676,7 +676,7 @@ This task is **one atomic change/commit**: the `pick` signature change and the r
 
 ```rust
 //! Host-side break-quote selection. The TOML model, validation, storage, and `.txt` migration live
-//! in `restee_core::quotes` (pure + unit-tested). This module keeps only the wall-clock random pick
+//! in `gomaju_core::quotes` (pure + unit-tested). This module keeps only the wall-clock random pick
 //! — the pure engine is clock-free, so the host owns anything that reads the clock.
 
 use std::path::Path;
@@ -686,7 +686,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// has no quotes — there is no cross-locale fallback. Re-reads the file each break (no cache), so
 /// edits take effect live; the read never writes.
 pub fn pick(quotes_path: &Path, locale: &str) -> Option<String> {
-    let file = restee_core::quotes::read_quotes(quotes_path);
+    let file = gomaju_core::quotes::read_quotes(quotes_path);
     let quotes = file.get(locale);
     if quotes.is_empty() {
         return None;
@@ -706,10 +706,10 @@ fn pseudo_random_index(len: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use restee_core::quotes::{save_quotes, QuotesFile};
+    use gomaju_core::quotes::{save_quotes, QuotesFile};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("restee-host-quotes-{name}"));
+        let dir = std::env::temp_dir().join(format!("gomaju-host-quotes-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("quotes.toml")
@@ -772,8 +772,8 @@ with:
                 .parent()
                 .map(|dir| dir.join("quotes.toml"))
                 .unwrap_or_else(|| PathBuf::from("quotes.toml"));
-            if let Err(e) = restee_core::quotes::load_quotes(&quotes_path) {
-                eprintln!("restee: could not initialize quotes.toml ({e})");
+            if let Err(e) = gomaju_core::quotes::load_quotes(&quotes_path) {
+                eprintln!("gomaju: could not initialize quotes.toml ({e})");
             }
 ```
 
@@ -827,7 +827,7 @@ pub fn cmd_get_quotes(
     locale: String,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let file = restee_core::quotes::read_quotes(&state.quotes_path);
+    let file = gomaju_core::quotes::read_quotes(&state.quotes_path);
     Ok(file.get(&locale).to_vec())
 }
 
@@ -845,27 +845,27 @@ pub fn cmd_save_quotes(
     quotes: Vec<String>,
 ) -> Result<Vec<String>, String> {
     require_settings(&window)?;
-    let mut file = restee_core::quotes::read_quotes(&state.quotes_path);
+    let mut file = gomaju_core::quotes::read_quotes(&state.quotes_path);
     file.set(&locale, quotes);
     file.sanitize();
-    restee_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
+    gomaju_core::quotes::save_quotes(&state.quotes_path, &file).map_err(|e| e.to_string())?;
     Ok(file.get(&locale).to_vec())
 }
 ```
 
 - [ ] **Step 6: Build + run host quotes tests**
 
-Run: `cargo build -p restee --features custom-protocol`
+Run: `cargo build -p gomaju --features custom-protocol`
 Expected: compiles (no references to the removed `quotes::seed_if_missing` / `quotes::load` / `quotes::sanitize` / `quotes::save` remain).
 
-Run: `cargo test -p restee quotes::tests`
+Run: `cargo test -p gomaju quotes::tests`
 Expected: 3 host tests PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/quotes.rs src-tauri/src/app_state.rs src-tauri/src/lib.rs src-tauri/src/runtime.rs src-tauri/src/commands.rs
-git commit -m "feat: host uses restee-core quotes.toml (thin pick, load-modify-write save)"
+git commit -m "feat: host uses gomaju-core quotes.toml (thin pick, load-modify-write save)"
 ```
 
 ---
@@ -874,7 +874,7 @@ git commit -m "feat: host uses restee-core quotes.toml (thin pick, load-modify-w
 
 **Files:**
 - Delete: `src-tauri/default_quotes.en.txt`, `src-tauri/default_quotes.zh-Hant.txt`
-- Modify: `crates/restee-core/src/config.rs:113`, `src/main.ts:74,204,212,252`, `src/quotes-editor.ts:2`
+- Modify: `crates/gomaju-core/src/config.rs:113`, `src/main.ts:74,204,212,252`, `src/quotes-editor.ts:2`
 
 - [ ] **Step 1: Delete the orphaned seed files** (their `include_str!` was removed in Task 6)
 
@@ -882,7 +882,7 @@ git commit -m "feat: host uses restee-core quotes.toml (thin pick, load-modify-w
 git rm src-tauri/default_quotes.en.txt src-tauri/default_quotes.zh-Hant.txt
 ```
 
-- [ ] **Step 2: Fix `crates/restee-core/src/config.rs:113`** — change the doc comment:
+- [ ] **Step 2: Fix `crates/gomaju-core/src/config.rs:113`** — change the doc comment:
 
 Find:
 ```rust
@@ -935,7 +935,7 @@ git commit -m "chore: drop old default_quotes.*.txt; fix stale quotes.txt commen
 
 Replace the first bullet (the one starting "The break overlay shows an optional inspirational **quote**, picked from the **active locale's** quotes file (next to `config.toml`: `quotes.en.txt` / `quotes.zh-Hant.txt` ...") and the editor bullet's storage details to describe the new model. Key points the new text must state:
 - Quotes live in a single **`quotes.toml`** at `<config_dir>/quotes.toml` (next to `config.toml`), both locales as top-level arrays (`en`, `"zh-Hant"`).
-- The model + `sanitize` + `load_quotes`/`save_quotes`/`read_quotes` live in `crates/restee-core/src/quotes.rs` (mirrors `chime.rs`), seeded from embedded `crates/restee-core/default_quotes.toml`; `load_quotes` self-heals (seed-on-missing / backup-on-corrupt-from-embedded-default).
+- The model + `sanitize` + `load_quotes`/`save_quotes`/`read_quotes` live in `crates/gomaju-core/src/quotes.rs` (mirrors `chime.rs`), seeded from embedded `crates/gomaju-core/default_quotes.toml`; `load_quotes` self-heals (seed-on-missing / backup-on-corrupt-from-embedded-default).
 - First run **migrates** the old `quotes.<locale>.txt` (and legacy `quotes.txt` → `en`) into `quotes.toml`, then **deletes** the `.txt` files. Migration runs only on the missing-file path; corrupt recovery never re-reads `.txt`.
 - Host `src-tauri/src/quotes.rs` keeps only `pick` (wall-clock random; re-read live each break, no cache, no cross-locale fallback).
 - `cmd_get_quotes`/`cmd_save_quotes` keep per-locale signatures; save is load-modify-write (one locale never clobbers the other). Reads never write.
@@ -956,7 +956,7 @@ git commit -m "docs: CLAUDE.md describes quotes.toml storage + migration"
 
 - [ ] **Step 1: Core tests**
 
-Run: `cargo test -p restee-core`
+Run: `cargo test -p gomaju-core`
 Expected: all green, including the new `quotes::tests`.
 
 - [ ] **Step 2: Lint**
@@ -967,14 +967,14 @@ Expected: no new warnings in `quotes.rs` / touched files.
 - [ ] **Step 3: Release build (embedded assets)**
 
 Run: `cargo build --release --features custom-protocol`
-Expected: builds. (Stop any running `restee.exe` first — a running tray instance locks the exe; `Stop-Process -Name restee -Force` if needed.)
+Expected: builds. (Stop any running `gomaju.exe` first — a running tray instance locks the exe; `Stop-Process -Name gomaju -Force` if needed.)
 
 - [ ] **Step 4: Manual migration check** (the real config dir currently has `quotes.en.txt` + `quotes.zh-Hant.txt`, no `quotes.txt`)
 
-Run the built `target\release\restee.exe`, then inspect `%APPDATA%\com.restee.app\`:
+Run the built `target\release\gomaju.exe`, then inspect `%APPDATA%\com.gomaju.app\`:
 - Expected: `quotes.toml` now exists with `en` + `zh-Hant` arrays matching the old `.txt` contents.
 - Expected: `quotes.en.txt` and `quotes.zh-Hant.txt` are **gone** (deleted by migration).
-- Trigger a break (debug builds: `RESTEE_BREAK_ON_START=1`) with `show_quotes` on and confirm a quote shows on the overlay.
+- Trigger a break (debug builds: `GOMAJU_BREAK_ON_START=1`) with `show_quotes` on and confirm a quote shows on the overlay.
 - Open Settings → Quotes, toggle locale, add/remove a quote, Save, reopen — confirm the edit round-trips and the other locale is intact (load-modify-write).
 
 - [ ] **Step 5: Final confirmation**

@@ -1,22 +1,22 @@
 import { readInjected } from "./util";
 
 // Lightweight hand-rolled i18n. The locale is injected per-window at creation by the Rust
-// window builder (`window.__RESTEE_LOCALE__`), read synchronously here, and fixed for the
+// window builder (`window.__GOMAJU_LOCALE__`), read synchronously here, and fixed for the
 // window's lifetime — switching language in the tray takes effect when a window is reopened.
 
 export type Locale = "zh-Hant" | "en";
 
 export const LOCALE: Locale =
-  readInjected<string>("__RESTEE_LOCALE__", "zh-Hant") === "en" ? "en" : "zh-Hant";
+  readInjected<string>("__GOMAJU_LOCALE__", "zh-Hant") === "en" ? "en" : "zh-Hant";
 
 type Entry = { "zh-Hant": string; en: string };
 
 const MESSAGES: Record<string, Entry> = {
   // --- Document / window titles ---
-  "title.settings": { en: "Restee — Settings", "zh-Hant": "Restee — 設定" },
-  "title.rules": { en: "Restee — Break rules", "zh-Hant": "Restee — 休息規則" },
-  "title.alarms": { en: "Restee — Alarms", "zh-Hant": "Restee — 鬧鐘" },
-  "title.chimes": { en: "Restee — Chimes", "zh-Hant": "Restee — 鈴聲" },
+  "title.settings": { en: "Gomaju — Settings", "zh-Hant": "Gomaju — 設定" },
+  "title.rules": { en: "Gomaju — Break rules", "zh-Hant": "Gomaju — 休息規則" },
+  "title.alarms": { en: "Gomaju — Alarms", "zh-Hant": "Gomaju — 鬧鐘" },
+  "title.chimes": { en: "Gomaju — Chimes", "zh-Hant": "Gomaju — 鈴聲" },
 
   // --- Common ---
   "common.close": { en: "Close", "zh-Hant": "關閉" },
@@ -35,13 +35,13 @@ const MESSAGES: Record<string, Entry> = {
 
   // --- Quotes "changed on disk" conflict modal (Settings Quotes card) ---
   "confirm.quotes_conflict_title": {
-    en: "Quotes changed outside Restee",
-    "zh-Hant": "語錄已在 Restee 外被變更",
+    en: "Quotes changed outside Gomaju",
+    "zh-Hant": "語錄已在 Gomaju 外被變更",
   },
   "confirm.quotes_conflict_msg": {
-    en: "A quotes file was edited outside Restee since you opened this window. Overwrite it with your current list, or keep the version on disk (your quote edits here will be discarded)?",
+    en: "A quotes file was edited outside Gomaju since you opened this window. Overwrite it with your current list, or keep the version on disk (your quote edits here will be discarded)?",
     "zh-Hant":
-      "自您開啟此視窗後，語錄檔已在 Restee 外被編輯。要以您目前的清單覆寫，還是保留磁碟上的版本（將捨棄您在此處的語錄變更）？",
+      "自您開啟此視窗後，語錄檔已在 Gomaju 外被編輯。要以您目前的清單覆寫，還是保留磁碟上的版本（將捨棄您在此處的語錄變更）？",
   },
   "confirm.quotes_overwrite": { en: "Overwrite", "zh-Hant": "覆寫" },
   "confirm.quotes_keep_disk": { en: "Keep on-disk version", "zh-Hant": "保留磁碟版本" },
@@ -161,12 +161,12 @@ const MESSAGES: Record<string, Entry> = {
   "card.next_in": { en: "next in {mmss}", "zh-Hant": "{mmss} 後" },
 
   // --- Alarms window ---
-  "alarms.heading": { en: "Restee — Alarms", "zh-Hant": "Restee — 鬧鐘" },
+  "alarms.heading": { en: "Gomaju — Alarms", "zh-Hant": "Gomaju — 鬧鐘" },
   "alarms.section_heading": { en: "Alarms", "zh-Hant": "鬧鐘" },
   "alarms.desc": {
-    en: "A notification and sound at a set clock time. Alarms fire even while the break timer is paused or a break is on screen. An alarm only fires if Restee is running at that minute — there's no catch-up for times missed while it was closed.",
+    en: "A notification and sound at a set clock time. Alarms fire even while the break timer is paused or a break is on screen. An alarm only fires if Gomaju is running at that minute — there's no catch-up for times missed while it was closed.",
     "zh-Hant":
-      "在設定的時刻發出通知與聲音。即使休息計時已暫停或正在休息，鬧鐘仍會響起。鬧鐘僅在該分鐘 Restee 正在執行時才會響 — 關閉期間錯過的時間不會補響。",
+      "在設定的時刻發出通知與聲音。即使休息計時已暫停或正在休息，鬧鐘仍會響起。鬧鐘僅在該分鐘 Gomaju 正在執行時才會響 — 關閉期間錯過的時間不會補響。",
   },
   "alarms.add": { en: "+ Add alarm", "zh-Hant": "＋ 新增鬧鐘" },
   "alarms.name_ph": { en: "Alarm name", "zh-Hant": "鬧鐘名稱" },
@@ -183,6 +183,13 @@ const MESSAGES: Record<string, Entry> = {
   "alarms.default_name": { en: "Alarm", "zh-Hant": "鬧鐘" },
   "alarms.new_name": { en: "New alarm", "zh-Hant": "新鬧鐘" },
 
+  // Compact countdown to an alarm's next fire (largest two non-zero units). Each locale is a
+  // self-contained template so units *and* spacing read naturally — e.g. "2d 3h" vs "2天3小時".
+  "dur.dh": { en: "{d}d {h}h", "zh-Hant": "{d}天{h}小時" },
+  "dur.hm": { en: "{h}h {m}m", "zh-Hant": "{h}小時{m}分" },
+  "dur.m": { en: "{m}m", "zh-Hant": "{m}分鐘" },
+  "dur.s": { en: "{s}s", "zh-Hant": "{s}秒" },
+
   // Weekday abbreviations (Mon … Sun)
   "weekday.0": { en: "Mon", "zh-Hant": "一" },
   "weekday.1": { en: "Tue", "zh-Hant": "二" },
@@ -193,7 +200,7 @@ const MESSAGES: Record<string, Entry> = {
   "weekday.6": { en: "Sun", "zh-Hant": "日" },
 
   // --- Chimes window ---
-  "chimes.heading": { en: "Restee — Chimes", "zh-Hant": "Restee — 鈴聲" },
+  "chimes.heading": { en: "Gomaju — Chimes", "zh-Hant": "Gomaju — 鈴聲" },
   "chimes.section_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
   "chimes.desc": {
     en: "Create custom sounds — a sequence of tones, or an imported audio file. A break rule or alarm can then pick a saved chime; leave a rule/alarm's chime unset to use the default.",
@@ -278,7 +285,7 @@ const MESSAGES: Record<string, Entry> = {
 export function t(key: string, params?: Record<string, string | number>): string {
   const entry = MESSAGES[key];
   if (!entry) {
-    console.warn(`restee: missing i18n key '${key}'`);
+    console.warn(`gomaju: missing i18n key '${key}'`);
     return key;
   }
   let s = entry[LOCALE];

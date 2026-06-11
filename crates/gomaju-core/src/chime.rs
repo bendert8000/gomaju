@@ -2,7 +2,7 @@
 //!
 //! A chime is either a **synthesized** tone sequence (`kind = "tones"`, played from `steps`) or a
 //! reference to an **imported** audio file (`kind = "file"`, the bare `file` name under the app's
-//! `chimes/` dir). Like the rest of `restee-core`, this module is dependency-free (serde/toml only)
+//! `chimes/` dir). Like the rest of `gomaju-core`, this module is dependency-free (serde/toml only)
 //! and has no audio backend — it owns the DTOs and a [`sanitize_chimes`] validation pass; the host
 //! (Tauri layer) turns a [`ChimeDto`] into actual sound via rodio.
 

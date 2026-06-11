@@ -88,7 +88,7 @@ chimes). Editing it therefore needs its own commands, independent of the config 
     `#`-leading lines (so save→reload round-trips identically, since `parse()` already strips
     those on load). Idempotent.
   - `pub fn save(config_dir: &Path, quotes: &[String]) -> std::io::Result<()>` — **atomic**,
-    mirroring `config::save` (`crates/restee-core/src/config.rs:369`): `create_dir_all(config_dir)`,
+    mirroring `config::save` (`crates/gomaju-core/src/config.rs:369`): `create_dir_all(config_dir)`,
     write `quotes.txt.tmp` in the same dir, `fs::rename` over `quotes.txt`. Writes the lines it is
     given (the command sanitizes first), joined by `\n` with a trailing newline (empty list →
     empty file). Never truncates the live file on a failed write.
@@ -157,7 +157,7 @@ file the app writes; this is a single-user local app.
   empty/`#`-leading; idempotency (`sanitize(sanitize(x)) == sanitize(x)`); a `save`→`load`
   round-trip in a temp dir returns the sanitized list.
 - **Manual** (no TS test harness): `npm run build` + `cargo build --features custom-protocol`,
-  launch with `RESTEE_OPEN_SETTINGS=1`, confirm `restee: window content loaded: settings`, then
+  launch with `GOMAJU_OPEN_SETTINGS=1`, confirm `gomaju: window content loaded: settings`, then
   add/edit/remove/save, reopen to confirm persistence, and exercise the conflict prompt by editing
   `quotes.txt` externally while a dirty editor is open. Verify via logs, not full-screen captures.
 

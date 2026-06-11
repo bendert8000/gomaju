@@ -2,8 +2,8 @@
 
 Guidance for AI agents (and humans) working in this repo. Keep it short and current.
 
-restee is a cross-platform, tray-resident break reminder built with **Tauri v2**
-(Rust core + TypeScript/HTML/CSS UI). The dependency-free `restee-core` crate decides
+gomaju is a cross-platform, tray-resident break reminder built with **Tauri v2**
+(Rust core + TypeScript/HTML/CSS UI). The dependency-free `gomaju-core` crate decides
 *when* to break; the `src-tauri` layer turns those decisions into windows, sounds,
 tray UI, and notifications.
 
@@ -14,7 +14,7 @@ tray UI, and notifications.
 | Dev (hot reload, runs Vite dev server) | `npm run tauri dev` |
 | Full release + installers | `npm run tauri build` |
 | Quick runnable release binary (no installers) | `cargo build --release --features custom-protocol` |
-| Core engine tests (fast, no Tauri) | `cargo test -p restee-core` |
+| Core engine tests (fast, no Tauri) | `cargo test -p gomaju-core` |
 | Lint | `cargo clippy --workspace --all-targets` |
 
 ### ⚠️ Never build a runnable app with plain `cargo build [--release]`
@@ -33,7 +33,7 @@ let dev = !custom_protocol;   // dev mode UNLESS the `custom-protocol` feature i
   server. With no server running you get **`ERR_CONNECTION_REFUSED`** / a blank window.
 
 So for a standalone binary, always pass `--features custom-protocol` (declared in
-`src-tauri/Cargo.toml`). The release binary lands at `target/release/restee.exe`
+`src-tauri/Cargo.toml`). The release binary lands at `target/release/gomaju.exe`
 (workspace target dir at the repo root, not under `src-tauri/`).
 
 `npm run tauri build` also runs `npm run build` (`version:check && tsc && vite build`)
@@ -64,7 +64,7 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   start date. Week-parity is pure integer math — `days_from_civil` + `monday_week` in
   `alarm.rs` (chrono-free, unit-tested in isolation).
 - The engine stays clock-free: recurrence is a pure, tested matcher in
-  `crates/restee-core/src/alarm.rs` (`alarm_is_due` + `sanitize_alarms`); the firing
+  `crates/gomaju-core/src/alarm.rs` (`alarm_is_due` + `sanitize_alarms`); the firing
   loop is `src-tauri/src/alarm.rs::spawn_scheduler` — a 1s thread **edge-triggered on the
   wall minute** (fires once per matching minute; no catch-up for missed minutes; "once"
   alarms auto-disable + persist after firing).
@@ -77,7 +77,7 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
 - Break rules live in **two** windows: **Settings** (`index.html` / `src/main.ts`, "Rules"
   card) is the full editor (shared `src/rule-editor.ts` grid). The **standalone Break-rules
   window** (`breaks.html` / `src/breaks.ts`, label `breaks`, tray "Breaks…"; window title is
-  still "Restee — Break rules") is a
+  still "Gomaju — Break rules") is a
   **quick-select dashboard**: big read-only cards where only On/Off (tap the card) and
   Repeat/Once (segmented control) are editable; each toggle auto-saves via
   `cmd_set_rule_flags` (merge-by-id, so it never clobbers Settings detail edits) and
@@ -86,12 +86,21 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   type.
 - The standalone window **auto-opens on every cold start** (`lib.rs` setup), alongside the
   startup "Running in the system tray" toast (see Notifications). Debug builds honor
-  `RESTEE_NO_OPEN_RULES` to suppress the auto-open.
+  `GOMAJU_NO_OPEN_RULES` to suppress the auto-open.
+- The **tray menu** lists each enabled break as a clickable status line (`🟢 ☕ {name} · {dur}`,
+  soonest first). Clicking one prompts "take this break?" (`runtime::confirm_then_break_one`) and,
+  on confirm, fires *that specific* rule's break immediately via `Engine::break_now_rule(rule_id)`
+  (the per-rule sibling of `break_now`). The menu item carries id `break:<rule_id>`; the placeholder
+  lines ("On a break now" / "No breaks enabled") stay non-actionable `status-{i}` items. The whole
+  break list is rebuilt each tick only when a rendered line changes (`tray.rs` cache key).
 - Each rule has a `repeat` flag (default true). A **once** rule (`repeat=false`) fires one
   break, then the engine disables it (`Effect::RuleDisabled`) and the host persists
   `enabled=false` (`runtime::persist_rule_disabled`) — same auto-disable model as alarm
-  "Once"; re-check "On" to re-arm. All config writers hold the `config` lock across
-  save+cache so the ticker's auto-disable can't clobber a concurrent window Save.
+  "Once"; re-check "On" to re-arm. **All** config writers go through
+  `AppState::with_config_write` (`app_state.rs`), which clones → mutates → saves → swaps the
+  cache under one held `config` lock, so the ticker's auto-disable can't clobber a concurrent
+  window Save (and vice-versa). Don't hand-roll a `config.lock()` + `config::save` write — use
+  the helper.
 - Both save paths reconfigure the live engine via `commands.rs::reconfigure_engine`.
   `cmd_save_rules` (gated by `require_breaks`) sanitizes **rules only**
   (`config::sanitize_rules`), like `cmd_save_alarms` does for alarms. To prevent a stale
@@ -106,7 +115,7 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   (break-start, break-over, alarm) are the **defaults**. Users can also create **saved chimes**:
   named presets that are either a synthesized `ToneStep` sequence (`kind = "tones"`) or an
   imported audio file (`kind = "file"`, decoded by `rodio::Decoder`). The model + `sanitize_chimes`
-  live in the dependency-free `crates/restee-core/src/chime.rs` (integer fields only — `ChimesFile`
+  live in the dependency-free `crates/gomaju-core/src/chime.rs` (integer fields only — `ChimesFile`
   derives `Eq`; `is_safe_filename` rejects path-escaping names). Chimes persist in their **own**
   `chimes.toml` — at `<config_dir>/chimes/chimes.toml`, in the same folder as imported sound files —
   **not** in `config.toml`. `chime::load_chimes`/`save_chimes` self-heal + seed from the embedded
@@ -154,11 +163,11 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   like the per-rule `note`.
 - Quotes are stored in a single **`quotes.toml`** (`<config_dir>/quotes.toml`) with two top-level
   arrays: `en = [...]` and `"zh-Hant" = [...]`. The data model + validation live in
-  `crates/restee-core/src/quotes.rs` (mirrors `chime.rs`): `QuotesFile` struct, `sanitize()` (trim +
+  `crates/gomaju-core/src/quotes.rs` (mirrors `chime.rs`): `QuotesFile` struct, `sanitize()` (trim +
   drop blank/`#`-comment lines per locale), `read_quotes` (best-effort, **never writes** — used for
   all reads and the per-break pick), `save_quotes` (atomic temp+rename), and `load_quotes`
   (self-healing: missing → migrate-or-seed + write; corrupt → back up `.toml.bak` + reseed from
-  embedded `crates/restee-core/default_quotes.toml`; valid → sanitize + persist only if changed).
+  embedded `crates/gomaju-core/default_quotes.toml`; valid → sanitize + persist only if changed).
   **First-run migration:** `load_quotes` builds `quotes.toml` from the old `quotes.en.txt` /
   `quotes.zh-Hant.txt` (and legacy `quotes.txt` → `en` if `quotes.en.txt` absent), then **deletes**
   those `.txt` files. `lib.rs` calls `load_quotes` once at startup; `AppState.quotes_path` holds the
@@ -172,7 +181,7 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   `cmd_save_quotes` is **read-modify-write** (`read_quotes` → set locale → `sanitize` →
   `save_quotes`) so saving one locale never clobbers the other, and uses `read_quotes` (not
   `load_quotes`) so no migration/backup side-effects. The row editor drops blank/`#`-comment lines.
-  Save is conflict-guarded per locale: re-reads `quotes.toml` and, if changed outside Restee since
+  Save is conflict-guarded per locale: re-reads `quotes.toml` and, if changed outside Gomaju since
   last sync, prompts Overwrite/Keep-disk (`confirmQuotesConflict`) before writing. `onFocusRefresh`
   re-syncs all locales (like rules) when the window is clean.
 - The pre-break countdown toast (`toast.html`) is positioned **bottom-right** near the tray via
@@ -185,7 +194,7 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
 ## Config defaults
 
 The seed config a fresh install writes lives as editable TOML at
-`crates/restee-core/default_config.toml`, embedded via `include_str!` and parsed by
+`crates/gomaju-core/default_config.toml`, embedded via `include_str!` and parsed by
 `ConfigFile::default()` (tests assert it parses and is sanitize-clean). `config::load`
 generates `config.toml` from it on first run / corrupt-file recovery. Keep `CONFIG_VERSION`
 in sync with the file's `version`.
@@ -193,17 +202,27 @@ in sync with the file's `version`.
 ## Layout
 
 ```
-crates/restee-core/   # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
+crates/gomaju-core/   # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
 src/                  # frontend: settings (index.html/main.ts), breaks.html, alarms.html, chimes.html, overlay.html, toast.html; shared rule-editor.ts
 src-tauri/            # Tauri app: tray, idle, overlays, hotkeys, autostart, audio, notifications, alarm scheduler, window modules
 ```
 
+## Logging
+
+All `gomaju:` diagnostics go through the `rlog!` macro (`logging.rs`), a zero-dependency
+drop-in for `eprintln!` that tees each line to **stderr** (so `tauri dev` is unchanged) **and**
+to a rolling log file at `<config_dir>/gomaju.log` (rotated to `gomaju.log.old` **at startup** when
+it exceeds ~1 MB). Embedded newlines in a logged value are collapsed so one diagnostic is one line.
+`logging::init` is called once in `lib.rs` setup after the config dir exists; before that (and
+in unit tests) `rlog!` is stderr-only. **Use `crate::rlog!(...)`, not `eprintln!`,** for any new
+`gomaju:`-prefixed diagnostic so installed users (who have no console) leave a trace.
+
 ## Dev/test hooks (debug builds only)
 
-- `RESTEE_BREAK_ON_START=1` — fire a break ~2s after launch.
-- `RESTEE_OPEN_SETTINGS=1` — open the settings window on launch.
-- `RESTEE_OPEN_ALARMS=1` — open the alarms window on launch.
-- `RESTEE_NO_OPEN_RULES=1` — suppress the break-rules window's cold-start auto-open.
-- Frontends log `restee: window content loaded: <label>` once their page renders —
+- `GOMAJU_BREAK_ON_START=1` — fire a break ~2s after launch.
+- `GOMAJU_OPEN_SETTINGS=1` — open the settings window on launch.
+- `GOMAJU_OPEN_ALARMS=1` — open the alarms window on launch.
+- `GOMAJU_NO_OPEN_RULES=1` — suppress the break-rules window's cold-start auto-open.
+- Frontends log `gomaju: window content loaded: <label>` once their page renders —
   a useful signal that embedded assets actually loaded (it never fires in a broken
   dev-mode binary).

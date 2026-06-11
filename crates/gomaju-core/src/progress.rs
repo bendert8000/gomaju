@@ -66,7 +66,7 @@ mod tests {
     use super::*;
 
     fn temp_path(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("restee-progress-{name}"));
+        let dir = std::env::temp_dir().join(format!("gomaju-progress-{name}"));
         let _ = fs::create_dir_all(&dir);
         dir.join("session.toml")
     }

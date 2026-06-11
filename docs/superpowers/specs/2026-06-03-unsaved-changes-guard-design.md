@@ -203,7 +203,7 @@ Tauri v2 core-permissions reference during Codex review.)
 
 ## Testing / verification
 
-Engine logic is unchanged, so no `restee-core` tests. Manual verification via
+Engine logic is unchanged, so no `gomaju-core` tests. Manual verification via
 `npm run tauri dev`, for **both** Settings and Alarms and **both** close triggers:
 
 1. Open, change nothing, Close / X → closes immediately (no modal).

@@ -32,9 +32,9 @@ pub fn open(app: &AppHandle) {
         {
             Ok(window) => {
                 let _ = window.set_focus();
-                eprintln!("restee: breaks window opened");
+                crate::rlog!("gomaju: breaks window opened");
             }
-            Err(e) => eprintln!("restee: failed to open breaks window: {e}"),
+            Err(e) => crate::rlog!("gomaju: failed to open breaks window: {e}"),
         }
     });
 }

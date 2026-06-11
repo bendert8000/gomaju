@@ -19,7 +19,7 @@ import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
 // Assigned in init() once the chimes are first rendered; referenced only afterwards.
 let guard!: UnsavedGuard;
 
-// --- Types mirroring restee_core::chime DTOs (ToneStep is imported from ./notes) ---
+// --- Types mirroring gomaju_core::chime DTOs (ToneStep is imported from ./notes) ---
 
 type ChimeKind = "tones" | "file";
 
@@ -270,7 +270,7 @@ async function preview(card: HTMLElement): Promise<void> {
   if (btn === previewBtn) {
     // This card is playing — the button is now ⏸ Pause, so stop it.
     setPreviewIdle();
-    invoke("cmd_stop_preview").catch((err) => console.error("restee: stop preview failed", err));
+    invoke("cmd_stop_preview").catch((err) => console.error("gomaju: stop preview failed", err));
     return;
   }
   setPreviewIdle(); // revert any other card's button; the backend stops its audio when we start
@@ -283,7 +283,7 @@ async function preview(card: HTMLElement): Promise<void> {
     btn.classList.add("playing");
   } catch (err) {
     setPreviewIdle();
-    console.error("restee: chime preview failed", err);
+    console.error("gomaju: chime preview failed", err);
   }
 }
 
@@ -303,7 +303,7 @@ async function playNote(card: HTMLElement, note: Note): Promise<void> {
       },
     });
   } catch (err) {
-    console.error("restee: note preview failed", err);
+    console.error("gomaju: note preview failed", err);
   }
 }
 
@@ -374,7 +374,7 @@ async function init(): Promise<void> {
   });
   $("open-folder").addEventListener("click", () => {
     invoke("cmd_open_chimes_folder").catch((err) =>
-      console.error("restee: open chimes folder failed", err),
+      console.error("gomaju: open chimes folder failed", err),
     );
   });
   $("save-btn").addEventListener("click", () => void save());
@@ -382,5 +382,5 @@ async function init(): Promise<void> {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  init().catch((err) => console.error("restee chimes init failed", err));
+  init().catch((err) => console.error("gomaju chimes init failed", err));
 });

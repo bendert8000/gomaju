@@ -1,5 +1,5 @@
 //! Wall-clock alarm scheduler (the Tauri-side counterpart to the pure recurrence
-//! logic in `restee_core::alarm`). The engine is clock-free, so anything that fires
+//! logic in `gomaju_core::alarm`). The engine is clock-free, so anything that fires
 //! at an absolute local time lives here.
 
 use std::time::Duration;
@@ -7,7 +7,7 @@ use std::time::Duration;
 use chrono::{DateTime, Datelike, Days, Local, NaiveDate, TimeZone, Timelike};
 use tauri::{AppHandle, Manager};
 
-use restee_core::alarm::{alarm_is_due, days_in_month, parse_hhmm, AlarmDto, RepeatDto};
+use gomaju_core::alarm::{alarm_is_due, days_in_month, parse_hhmm, AlarmDto, RepeatDto};
 
 use crate::app_state::AppState;
 use crate::{audio, runtime};
@@ -101,7 +101,7 @@ pub fn spawn_scheduler(app: AppHandle) {
             let ymd = now.format("%Y-%m-%d").to_string();
 
             // Snapshot under lock, then release it before running side effects.
-            let (alarms, chimes, locale): (Vec<AlarmDto>, Vec<restee_core::chime::ChimeDto>, String) = {
+            let (alarms, chimes, locale): (Vec<AlarmDto>, Vec<gomaju_core::chime::ChimeDto>, String) = {
                 let st = app.state::<AppState>();
                 let (alarms, locale) = {
                     let cfg = st.config.lock().unwrap();
@@ -120,7 +120,7 @@ pub fn spawn_scheduler(app: AppHandle) {
                 if !alarm_is_due(a, hh, mm, weekday_mon0, month, day, dim, &ymd) {
                     continue;
                 }
-                eprintln!("restee: alarm fired ({})", a.name);
+                crate::rlog!("gomaju: alarm fired ({})", a.name);
                 runtime::show_notification(&app, crate::i18n::tr(&locale, "notif.alarm_title"), &a.name);
                 if fired_chime.is_none() {
                     fired_chime = Some((a.chime_id.clone(), a.chime_volume_pct));
@@ -148,43 +148,27 @@ pub fn spawn_scheduler(app: AppHandle) {
 /// failed write never leaves the cache claiming "disabled" while disk says "enabled".
 fn disable_once(app: &AppHandle, id: &str) {
     let st = app.state::<AppState>();
-
-    // Build the snapshot to persist (clone with the flag flipped) without touching the cache.
-    let to_save = {
-        let cfg = st.config.lock().unwrap();
-        let mut clone = cfg.clone();
-        match clone.alarms.iter_mut().find(|a| a.id == id) {
-            Some(a) => a.enabled = false,
-            None => return, // already gone — nothing to disable
+    // Flip enabled=false on a clone, then write+swap under one held lock — so a concurrent
+    // alarms-window save can't interleave a stale snapshot. Mirrors runtime::persist_rule_disabled.
+    let result = st.with_config_write(|cur| match cur.alarms.iter_mut().find(|a| a.id == id) {
+        Some(a) => {
+            a.enabled = false;
+            true
         }
-        clone
-    };
-
-    if let Err(e) = restee_core::config::save(&st.config_path, &to_save) {
-        eprintln!("restee: failed to persist once-alarm disable ({e})");
-        return; // leave the cache untouched so it stays consistent with disk
+        None => false, // already gone — nothing to disable
+    });
+    match result {
+        Ok(Some(_)) => crate::rlog!("gomaju: once-alarm '{id}' disabled after firing"),
+        Ok(None) => {}
+        Err(e) => crate::rlog!("gomaju: failed to persist once-alarm disable ({e})"),
     }
-
-    // Disk write succeeded — flip the flag in the live cache (re-find by id so a concurrent
-    // alarms-window save isn't clobbered).
-    if let Some(a) = st
-        .config
-        .lock()
-        .unwrap()
-        .alarms
-        .iter_mut()
-        .find(|a| a.id == id)
-    {
-        a.enabled = false;
-    }
-    eprintln!("restee: once-alarm '{id}' disabled after firing");
 }
 
 #[cfg(test)]
 mod tests {
     use super::next_fire;
     use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
-    use restee_core::alarm::{AlarmDto, RepeatDto};
+    use gomaju_core::alarm::{AlarmDto, RepeatDto};
 
     fn local(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> DateTime<Local> {
         Local
@@ -205,7 +189,7 @@ mod tests {
             date: None,
             enabled: true,
             chime_id: String::new(),
-            chime_volume_pct: restee_core::alarm::default_chime_volume(),
+            chime_volume_pct: gomaju_core::alarm::default_chime_volume(),
         }
     }
 

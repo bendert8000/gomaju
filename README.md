@@ -1,4 +1,4 @@
-# restee
+# gomaju
 
 > 語言 / Language：**繁體中文** ｜ [English](#english)
 
@@ -24,7 +24,7 @@
 
 - **休息規則** — 想設幾條都行，每條都有自己的間隔、要休息多久、還有強度（軟性／強制）。規則可以**一直重複**，也可以只響**一次**（響完就自動關掉）。每條還能寫一段備註（可以多行），休息的時候就顯示在畫面上。要細調就到完整的**設定**表格裡改；想快速開開關關，就用獨立的**休息規則儀表板**（系統匣的 *Breaks…*）— 一張張大卡片，點一下切 開／關 跟 重複／單次，存檔後馬上套到正在跑的計時器上。
 
-- **時鐘鬧鐘** — 給它名稱 + 時間 + 重複方式：**單次、每日、每週、每兩週、每月、每年**。每週、每兩週可以勾要哪幾天；每兩週是從你指定的那一週開始、每隔一週響一次；每月碰到沒有的日子（像 31 號）會自動改成當月最後一天；每年就看月 + 日。時間一到就用一個特別的音效加通知提醒你 — 就算休息計時器暫停了、或正在休息中，照樣會響 — 不過只有 Restee 開著的時候才算數（沒開的那段時間錯過就錯過，不會補響）。這些通通在專屬的**鬧鐘**視窗裡管。
+- **時鐘鬧鐘** — 給它名稱 + 時間 + 重複方式：**單次、每日、每週、每兩週、每月、每年**。每週、每兩週可以勾要哪幾天；每兩週是從你指定的那一週開始、每隔一週響一次；每月碰到沒有的日子（像 31 號）會自動改成當月最後一天；每年就看月 + 日。時間一到就用一個特別的音效加通知提醒你 — 就算休息計時器暫停了、或正在休息中，照樣會響 — 不過只有 Gomaju 開著的時候才算數（沒開的那段時間錯過就錯過，不會補響）。這些通通在專屬的**鬧鐘**視窗裡管。
 
 - **兩種強度** — *軟性*：溫和、隨時可以略過的全螢幕畫面，加上提示音和（可選的）通知；*強制*：把**每一個螢幕**都用不透明的畫面蓋住。強制休息要怎麼脫身也能自己挑：**長按才放你走**、**一鍵輕鬆略過**，或者乾脆**不留輕鬆的後門**。
 
@@ -57,19 +57,19 @@ npm run tauri dev
 App 會直接縮在系統匣裡（不會跳視窗）。想看看休息長怎樣就點**系統匣 → Break now**、要開關規則就點**系統匣 → Breaks…**，所有設定則在**系統匣 → Settings…** 裡面。
 
 幾個測試很方便的小開關（環境變數，只有 debug build 才有）：
-- `RESTEE_BREAK_ON_START=1` — 啟動後大約 2 秒就先跳一次休息。
-- `RESTEE_OPEN_SETTINGS=1` — 一啟動就把設定視窗打開。
-- `RESTEE_OPEN_ALARMS=1` — 一啟動就把鬧鐘視窗打開。
-- `RESTEE_NO_OPEN_RULES=1` — 本來每次啟動都會跳出休息規則視窗，設了這個就不跳。
+- `GOMAJU_BREAK_ON_START=1` — 啟動後大約 2 秒就先跳一次休息。
+- `GOMAJU_OPEN_SETTINGS=1` — 一啟動就把設定視窗打開。
+- `GOMAJU_OPEN_ALARMS=1` — 一啟動就把鬧鐘視窗打開。
+- `GOMAJU_NO_OPEN_RULES=1` — 本來每次啟動都會跳出休息規則視窗，設了這個就不跳。
 
 ## 測試
 
 ```bash
-cargo test -p restee-core     # 純引擎 + 設定 + 鬧鐘週期的單元／屬性測試
+cargo test -p gomaju-core     # 純引擎 + 設定 + 鬧鐘週期的單元／屬性測試
 cargo clippy --workspace --all-targets
 ```
 
-計時、優先序、閒置這些邏輯，加上鬧鐘的週期判斷，全都放在不依賴任何外部套件的 `restee-core` crate 裡，所以根本不用編譯 Tauri，一秒不到就測完了。
+計時、優先序、閒置這些邏輯，加上鬧鐘的週期判斷，全都放在不依賴任何外部套件的 `gomaju-core` crate 裡，所以根本不用編譯 Tauri，一秒不到就測完了。
 
 ## 從原始碼建置
 
@@ -105,8 +105,8 @@ npm run tauri build
 
 安裝程式會放在 `target\release\bundle\`：
 
-- `msi\` — WiX 包的安裝程式，例如 `Restee_0.1.0_x64_en-US.msi`
-- `nsis\` — NSIS 的安裝 `.exe`，例如 `Restee_0.1.0_x64-setup.exe`
+- `msi\` — WiX 包的安裝程式，例如 `Gomaju_0.1.0_x64_en-US.msi`
+- `nsis\` — NSIS 的安裝 `.exe`，例如 `Gomaju_0.1.0_x64-setup.exe`
 
 如果你想要那種免安裝、點兩下就跑的檔案，往下看「獨立執行檔（免安裝）」。
 
@@ -118,12 +118,12 @@ npm run tauri build -- --target universal-apple-darwin    # 通用（需兩個 R
 # 單一架構：--target aarch64-apple-darwin | --target x86_64-apple-darwin
 ```
 
-產出會是：`macos/Restee.app` 加上 `dmg/Restee_<ver>_<arch>.dmg`。
+產出會是：`macos/Gomaju.app` 加上 `dmg/Gomaju_<ver>_<arch>.dmg`。
 
 這個版本**沒有簽章**，所以直接雙擊會被 Gatekeeper 擋下來。改成對著 app 按右鍵 → **打開**（確認一次就好），或者把隔離旗標清掉：
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/Restee.app
+xattr -dr com.apple.quarantine /path/to/Gomaju.app
 ```
 
 ### 在 Linux 建置
@@ -139,7 +139,7 @@ npm run tauri build   # 先安裝上方前置需求中的 apt 套件
 想要一個免安裝、直接點下去就能跑的執行檔（本機測試很方便）：
 
 ```bash
-cargo build --release --features custom-protocol   # → target/release/restee.exe（Windows）| restee（macOS/Linux）
+cargo build --release --features custom-protocol   # → target/release/gomaju.exe（Windows）| gomaju（macOS/Linux）
 ```
 
 > **千萬不要**直接拿 `cargo build`／`cargo build --release` 去建可執行的 app。
@@ -148,7 +148,7 @@ cargo build --release --features custom-protocol   # → target/release/restee.e
 它會直接沿用現成的 `dist/`；要是你動過 `src/` 裡的東西，記得先 `npm run build` 重新產一份。在 **Windows** 上，建置之前先把還在跑的那個關掉 — 因為系統匣 app 跑著的時候會把執行檔鎖住，不然建置會以 `Access denied (os error 5)` 失敗：
 
 ```powershell
-Stop-Process -Name restee -Force
+Stop-Process -Name gomaju -Force
 ```
 
 ### 簽署（後續）
@@ -161,11 +161,11 @@ Stop-Process -Name restee -Force
 
 所有狀態都存在作業系統設定目錄裡的一個 TOML 檔，而且這個檔壞了還會自己修好：
 
-- **Windows** — `%APPDATA%\com.restee.app\config.toml`
-- **macOS** — `~/Library/Application Support/com.restee.app/config.toml`
-- **Linux** — `~/.config/com.restee.app/config.toml`
+- **Windows** — `%APPDATA%\com.gomaju.app\config.toml`
+- **macOS** — `~/Library/Application Support/com.gomaju.app/config.toml`
+- **Linux** — `~/.config/com.gomaju.app/config.toml`
 
-裡面放的是各種設定、休息**規則**、**鬧鐘**（還有你選的語言）。你可以在 app 裡用 **Settings／Breaks…／Alarms…** 改，也可以直接手動編。萬一檔案壞了，它會先備份一份（`config.toml.bak`）再還原成預設值；而預設值就是內建的那份 [`crates/restee-core/default_config.toml`](crates/restee-core/default_config.toml)。
+裡面放的是各種設定、休息**規則**、**鬧鐘**（還有你選的語言）。你可以在 app 裡用 **Settings／Breaks…／Alarms…** 改，也可以直接手動編。萬一檔案壞了，它會先備份一份（`config.toml.bak`）再還原成預設值；而預設值就是內建的那份 [`crates/gomaju-core/default_config.toml`](crates/gomaju-core/default_config.toml)。
 
 另外有兩樣東西不放在 `config.toml` 裡，而是擺在它**隔壁**各自的檔案（第一次跑的時候會建好，之後隨時可以改）：
 
@@ -175,7 +175,7 @@ Stop-Process -Name restee -Force
 ## 專案結構
 
 ```
-crates/restee-core/  # 純引擎 + 設定 DTO + 鬧鐘週期（無 Tauri/OS 相依）；隨附 default_config.toml
+crates/gomaju-core/  # 純引擎 + 設定 DTO + 鬧鐘週期（無 Tauri/OS 相依）；隨附 default_config.toml
 src/                 # 前端（Vite，原生 TS）：index.html（設定）、breaks.html（休息規則儀表板）、
                      #   alarms.html（鬧鐘）、chimes.html（鈴聲編輯器）、overlay.html（休息畫面）、toast.html
                      #   （休息前提示）；共用 rule-editor.ts / notes.ts / quotes-editor.ts
@@ -188,7 +188,7 @@ src-tauri/           # Tauri 主程式：系統匣、閒置、覆蓋層、快捷
 
 <a id="english"></a>
 
-# restee
+# gomaju
 
 A cross-platform, tray-resident **break reminder for engineers** — and a lightweight
 **clock-alarm** tool. It nudges you to rest your eyes and step away on customizable
@@ -224,7 +224,7 @@ Built with **Tauri v2** (Rust core + TypeScript/HTML/CSS UI): tiny binaries, low
   Yearly**. Weekly and Bi-weekly let you pick weekdays; bi-weekly fires every *other* week
   from a start date; monthly clamps to the month's last day; yearly is month + day. Alarms
   ring with a distinct tone and a notification — even while the break timer is paused or a
-  break is on screen — but only while Restee is running (no catch-up for missed minutes).
+  break is on screen — but only while Gomaju is running (no catch-up for missed minutes).
   Managed in their own **Alarms** window.
 - **Two enforcement tiers** — *soft* (calm, skippable full-screen overlay + chime + optional
   notification) and *strict* (opaque cover on **all monitors**). Strict breaks honor a
@@ -275,20 +275,20 @@ The app starts in the system tray (no window). Use **tray → Break now** to pre
 break, **tray → Breaks…** to toggle rules, or **tray → Settings…** to edit everything.
 
 Handy test hooks (env vars, debug builds):
-- `RESTEE_BREAK_ON_START=1` — fire a break ~2s after launch.
-- `RESTEE_OPEN_SETTINGS=1` — open the settings window on launch.
-- `RESTEE_OPEN_ALARMS=1` — open the alarms window on launch.
-- `RESTEE_NO_OPEN_RULES=1` — suppress the break-rules window that otherwise opens on every launch.
+- `GOMAJU_BREAK_ON_START=1` — fire a break ~2s after launch.
+- `GOMAJU_OPEN_SETTINGS=1` — open the settings window on launch.
+- `GOMAJU_OPEN_ALARMS=1` — open the alarms window on launch.
+- `GOMAJU_NO_OPEN_RULES=1` — suppress the break-rules window that otherwise opens on every launch.
 
 ## Test
 
 ```bash
-cargo test -p restee-core     # pure engine + config + alarm-recurrence unit/property tests
+cargo test -p gomaju-core     # pure engine + config + alarm-recurrence unit/property tests
 cargo clippy --workspace --all-targets
 ```
 
 The timing/priority/idle logic and the alarm-recurrence matcher live in the dependency-free
-`restee-core` crate, so they test in well under a second without compiling Tauri.
+`gomaju-core` crate, so they test in well under a second without compiling Tauri.
 
 ## Build from source
 
@@ -332,8 +332,8 @@ npm run tauri build
 
 Installers land under `target\release\bundle\`:
 
-- `msi\` — WiX installer, e.g. `Restee_0.1.0_x64_en-US.msi`
-- `nsis\` — NSIS setup `.exe`, e.g. `Restee_0.1.0_x64-setup.exe`
+- `msi\` — WiX installer, e.g. `Gomaju_0.1.0_x64_en-US.msi`
+- `nsis\` — NSIS setup `.exe`, e.g. `Gomaju_0.1.0_x64-setup.exe`
 
 For a no-installer binary, see [Standalone binary](#standalone-binary-no-installer) below.
 
@@ -345,13 +345,13 @@ npm run tauri build -- --target universal-apple-darwin    # universal (needs bot
 # single arch: --target aarch64-apple-darwin | --target x86_64-apple-darwin
 ```
 
-Output: `macos/Restee.app` + `dmg/Restee_<ver>_<arch>.dmg`.
+Output: `macos/Gomaju.app` + `dmg/Gomaju_<ver>_<arch>.dmg`.
 
 The build is **unsigned**, so Gatekeeper blocks a double-click. Right-click the app → **Open**
 (confirm once), or clear the quarantine flag:
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/Restee.app
+xattr -dr com.apple.quarantine /path/to/Gomaju.app
 ```
 
 ### Build for Linux
@@ -368,7 +368,7 @@ reliable for the tray).
 For a quick runnable binary with no installer (handy for local testing):
 
 ```bash
-cargo build --release --features custom-protocol   # → target/release/restee.exe (Windows) | restee (macOS/Linux)
+cargo build --release --features custom-protocol   # → target/release/gomaju.exe (Windows) | gomaju (macOS/Linux)
 ```
 
 > **Do not** build a runnable app with a bare `cargo build`/`cargo build --release`.
@@ -383,7 +383,7 @@ This reuses the existing `dist/`; if you changed anything under `src/`, refresh 
 locks the binary, so the build otherwise fails with `Access denied (os error 5)`:
 
 ```powershell
-Stop-Process -Name restee -Force
+Stop-Process -Name gomaju -Force
 ```
 
 ### Signing (follow-up)
@@ -398,14 +398,14 @@ Builds are currently **unsigned**. For distribution:
 
 All state lives in a single, self-healing TOML file in the OS config dir:
 
-- **Windows** — `%APPDATA%\com.restee.app\config.toml`
-- **macOS** — `~/Library/Application Support/com.restee.app/config.toml`
-- **Linux** — `~/.config/com.restee.app/config.toml`
+- **Windows** — `%APPDATA%\com.gomaju.app\config.toml`
+- **macOS** — `~/Library/Application Support/com.gomaju.app/config.toml`
+- **Linux** — `~/.config/com.gomaju.app/config.toml`
 
 It holds the settings, break **rules**, and **alarms** (plus the chosen language). Edit it
 in-app via **Settings / Breaks… / Alarms…**, or by hand. A corrupt file is backed up
 (`config.toml.bak`) and defaults are restored. The shipped defaults are the embedded
-[`crates/restee-core/default_config.toml`](crates/restee-core/default_config.toml).
+[`crates/gomaju-core/default_config.toml`](crates/gomaju-core/default_config.toml).
 
 Two things live in their own files **next to** `config.toml` (seeded on first run, edited live):
 
@@ -417,7 +417,7 @@ Two things live in their own files **next to** `config.toml` (seeded on first ru
 ## Project layout
 
 ```
-crates/restee-core/  # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
+crates/gomaju-core/  # pure engine + config DTOs + alarm recurrence (no Tauri/OS deps); ships default_config.toml
 src/                 # frontend (Vite, vanilla TS): index.html (Settings), breaks.html (Break-rules dashboard),
                      #   alarms.html (Alarms), chimes.html (Chimes editor), overlay.html (break screen), toast.html
                      #   (pre-break toast); shared rule-editor.ts / notes.ts / quotes-editor.ts

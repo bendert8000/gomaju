@@ -9,6 +9,8 @@ mod commands;
 mod hotkeys;
 mod i18n;
 mod idle;
+mod logging;
+mod migrate;
 mod overlay;
 mod pause_toast;
 mod quotes;
@@ -23,7 +25,7 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-use restee_core::{config, Engine};
+use gomaju_core::{config, Engine};
 
 use app_state::AppState;
 
@@ -50,15 +52,29 @@ pub fn run() {
                 .path()
                 .app_config_dir()
                 .map(|dir| dir.join("config.toml"))
-                .unwrap_or_else(|_| PathBuf::from("restee-config.toml"));
+                .unwrap_or_else(|_| PathBuf::from("gomaju-config.toml"));
+
+            // One-time rebrand migration: if this is a first run under the new identifier
+            // (com.gomaju.app) but the old com.restee.app config dir exists, copy the user's data
+            // across. MUST run before config::load, which would otherwise create a fresh default dir.
+            if let Some(dir) = config_path.parent() {
+                migrate::from_legacy_identifier(dir);
+            }
 
             let outcome = config::load(&config_path).map_err(|e| e.to_string())?;
+            // config::load created the config dir, so it's safe to point the file logger at it now.
+            // Every `gomaju:` diagnostic from here on is teed to <config_dir>/gomaju.log.
+            logging::init(
+                config_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new(".")),
+            );
             if outcome.created {
-                eprintln!("restee: wrote default config to {}", config_path.display());
+                crate::rlog!("gomaju: wrote default config to {}", config_path.display());
             }
             if let Some(backup) = &outcome.recovered_backup {
-                eprintln!(
-                    "restee: config was unreadable; backed up to {} and restored defaults",
+                crate::rlog!(
+                    "gomaju: config was unreadable; backed up to {} and restored defaults",
                     backup.display()
                 );
             }
@@ -70,8 +86,8 @@ pub fn run() {
                 .parent()
                 .map(|dir| dir.join("quotes.toml"))
                 .unwrap_or_else(|| PathBuf::from("quotes.toml"));
-            if let Err(e) = restee_core::quotes::load_quotes(&quotes_path) {
-                eprintln!("restee: could not initialize quotes.toml ({e})");
+            if let Err(e) = gomaju_core::quotes::load_quotes(&quotes_path) {
+                crate::rlog!("gomaju: could not initialize quotes.toml ({e})");
             }
 
             // Load saved chimes from their own file (chimes/chimes.toml), kept separate from
@@ -81,10 +97,10 @@ pub fn run() {
                 .parent()
                 .map(|dir| dir.join("chimes").join("chimes.toml"))
                 .unwrap_or_else(|| PathBuf::from("chimes/chimes.toml"));
-            let chimes = match restee_core::chime::load_chimes(&chimes_path) {
+            let chimes = match gomaju_core::chime::load_chimes(&chimes_path) {
                 Ok(file) => file.chimes,
                 Err(e) => {
-                    eprintln!("restee: could not load chimes.toml ({e}); starting with none");
+                    crate::rlog!("gomaju: could not load chimes.toml ({e}); starting with none");
                     Vec::new()
                 }
             };
@@ -107,7 +123,7 @@ pub fn run() {
             const MEANINGFUL_WORK_SECS: u64 = 60;
 
             let (rules, settings) = cfg.to_engine_inputs();
-            let saved = restee_core::progress::read_progress(&session_path);
+            let saved = gomaju_core::progress::read_progress(&session_path);
             let now_unix = chrono::Utc::now().timestamp();
             // Off in Settings -> never ask, always start fresh.
             let should_prompt = cfg.settings.resume_prompt_enabled
@@ -142,7 +158,7 @@ pub fn run() {
 
             let idle = idle::detect();
             let idle_status = idle.status();
-            eprintln!("restee: idle source status = {idle_status:?}");
+            crate::rlog!("gomaju: idle source status = {idle_status:?}");
 
             app.manage(AppState {
                 engine: Mutex::new(engine),
@@ -168,15 +184,15 @@ pub fn run() {
             // Apply persisted hotkeys + autostart preference.
             let hotkey_errors = hotkeys::apply(&handle, &hotkeys_cfg);
             for err in &hotkey_errors {
-                eprintln!("restee: hotkey not registered — {err}");
+                crate::rlog!("gomaju: hotkey not registered — {err}");
             }
             autostart::apply(&handle, autostart_wanted);
 
             // Cold start: open the break-rules window so setup is front-and-center. Debug
-            // builds honor RESTEE_NO_OPEN_RULES to suppress the auto-open (handy under
+            // builds honor GOMAJU_NO_OPEN_RULES to suppress the auto-open (handy under
             // `tauri dev`).
             #[cfg(debug_assertions)]
-            let open_rules = std::env::var("RESTEE_NO_OPEN_RULES").is_err();
+            let open_rules = std::env::var("GOMAJU_NO_OPEN_RULES").is_err();
             #[cfg(not(debug_assertions))]
             let open_rules = true;
 
@@ -205,13 +221,13 @@ pub fn run() {
             // here since the release profile does not enable them.
             #[cfg(debug_assertions)]
             {
-                if std::env::var("RESTEE_OPEN_SETTINGS").is_ok() {
+                if std::env::var("GOMAJU_OPEN_SETTINGS").is_ok() {
                     settings_window::open(&handle);
                 }
-                if std::env::var("RESTEE_OPEN_ALARMS").is_ok() {
+                if std::env::var("GOMAJU_OPEN_ALARMS").is_ok() {
                     alarms_window::open(&handle);
                 }
-                if std::env::var("RESTEE_BREAK_ON_START").is_ok() {
+                if std::env::var("GOMAJU_BREAK_ON_START").is_ok() {
                     let h = handle.clone();
                     std::thread::spawn(move || {
                         std::thread::sleep(std::time::Duration::from_secs(2));
@@ -258,7 +274,7 @@ pub fn run() {
             commands::cmd_open_chimes_folder,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building the restee application")
+        .expect("error while building the gomaju application")
         .run(|app, event| {
             // No persistent window: keep the app alive (tray-resident) when an
             // overlay/settings window closes (`code == None`). But honor an explicit

@@ -151,8 +151,8 @@ fn delete_legacy_txt(config_dir: &Path) {
         let p = config_dir.join(name);
         if p.exists() {
             match fs::remove_file(&p) {
-                Ok(()) => eprintln!("restee: removed migrated quote file {}", p.display()),
-                Err(e) => eprintln!("restee: could not remove {} ({e})", p.display()),
+                Ok(()) => eprintln!("gomaju: removed migrated quote file {}", p.display()),
+                Err(e) => eprintln!("gomaju: could not remove {} ({e})", p.display()),
             }
         }
     }
@@ -278,7 +278,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("restee-quotes-{name}"));
+        let dir = std::env::temp_dir().join(format!("gomaju-quotes-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir

@@ -1,5 +1,5 @@
 # Default break quotes seeded on first run (one entry per quote). The user's quotes.toml lives in
-# the OS config dir next to config.toml; Restee never overwrites it after seeding/migration.
+# the OS config dir next to config.toml; Gomaju never overwrites it after seeding/migration.
 
 en = [
   "All work and no play makes Jack a dull boy. — James Howell, Proverbs in English, Italian, French and Spanish (1659)",

@@ -1,4 +1,4 @@
-# restee — Fix Plan (from code review, revised after Codex review)
+# gomaju — Fix Plan (from code review, revised after Codex review)
 
 Addresses the actionable findings from the working-tree review. Scope: correctness,
 least-privilege, and release hygiene. Codex reviewed v1 of this plan; its corrections
@@ -45,7 +45,7 @@ one reaching its interval soonest; the toast can name the wrong break.
 
 **Approach:** select the in-window enabled rule with the smallest remaining
 (`interval - work`); tiebreak by `higher_priority`, then list order.
-- **Files:** `crates/restee-core/src/engine.rs`.
+- **Files:** `crates/gomaju-core/src/engine.rs`.
 - **Tests (TDD):** (a) two in-window rules where the shorter-remaining one is the
   lower-priority soft rule → warning names the soft rule; (b) **tie test** — equal
   remaining strict vs soft → choose strict (Codex's addition).
@@ -70,11 +70,11 @@ warning pause/resume updates to the toast.)
 warn of `min(warn, interval - 1)` per rule so the warning always lands at least 1s into
 the cycle (never at work=0), and document that `warn >= interval` means "warn as early
 as possible." Keep a generous `warn_seconds` sanity clamp in config (e.g. `<= 3600`).
-- **Files:** `crates/restee-core/src/engine.rs`, `crates/restee-core/src/config.rs` (+ test).
+- **Files:** `crates/gomaju-core/src/engine.rs`, `crates/gomaju-core/src/config.rs` (+ test).
 
 ## 5. Don't honor test env hooks in release (HYGIENE)
 
-**Approach:** gate `RESTEE_BREAK_ON_START` / `RESTEE_OPEN_SETTINGS` behind
+**Approach:** gate `GOMAJU_BREAK_ON_START` / `GOMAJU_OPEN_SETTINGS` behind
 `#[cfg(debug_assertions)]`. (Codex note: acceptable, but for a hard guarantee a
 `dev-hooks` Cargo feature is stronger since a release profile *could* enable debug
 assertions — ours doesn't, so `debug_assertions` is sufficient; mention the feature
@@ -92,7 +92,7 @@ log failures. Verify rapid double-launch during startup doesn't race.
 **Problem:** init scripts run on every top-level navigation; Tauri docs recommend a
 `window.location` origin/path check.
 
-**Approach:** guard the injected assignment so it only sets `window.__RESTEE_*__` on the
+**Approach:** guard the injected assignment so it only sets `window.__GOMAJU_*__` on the
 expected app origin/path, e.g. wrap in `if (location.protocol === 'tauri:' || …) { … }`
 inside the injected script. Overlays/toast never navigate, so this is defense-in-depth.
 - **Files:** `src-tauri/src/overlay.rs`, `src-tauri/src/toast.rs`.
@@ -108,7 +108,7 @@ than 1–4.
 - **Files:** `src-tauri/tauri.conf.json`.
 
 ## Verification (whole round)
-- `cargo test -p restee-core` (existing 19 + new warning/tie/clamp tests) and
+- `cargo test -p gomaju-core` (existing 19 + new warning/tie/clamp tests) and
   `cargo clippy --workspace --all-targets` clean.
 - `npx tauri build`; launch the production binary and confirm via logs/manual:
   settings opens from tray, saves, and closes; overlay skip + hold-Esc work; a natural

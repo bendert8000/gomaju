@@ -4,7 +4,7 @@
 //! locale (anything that isn't `"en"` falls back to Traditional Chinese, matching the
 //! config default). Strings that interpolate runtime values (`{name}`, `{dur}`) are stored
 //! as templates and the call site substitutes via [`str::replace`]. Window/notification
-//! brand text (`Restee`) stays untranslated and is not in the catalog.
+//! brand text (`Gomaju`) stays untranslated and is not in the catalog.
 
 use tauri::{AppHandle, Manager};
 
@@ -42,8 +42,8 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
-        "tray.quit" => pick(locale, "Quit Restee", "結束 Restee"),
-        "tray.tooltip" => pick(locale, "Restee — break reminder", "Restee — 休息提醒"),
+        "tray.quit" => pick(locale, "Quit Gomaju", "結束 Gomaju"),
+        "tray.tooltip" => pick(locale, "Gomaju — break reminder", "Gomaju — 休息提醒"),
         // Tray status lines
         "tray.start_running" => pick(locale, "Running", "執行中"),
         "tray.placeholder" => pick(locale, "Next break in …", "下次休息還有…"),
@@ -66,6 +66,15 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "dialog.reset" => pick(locale, "Reset", "重設"),
         "dialog.cancel" => pick(locale, "Cancel", "取消"),
 
+        // "Take this break now" dialog (tray → click a break line). {name} = rule name.
+        "dialog.break_now_title" => pick(locale, "Take this break?", "要現在休息嗎？"),
+        "dialog.break_now_msg" => pick(
+            locale,
+            "Start the “{name}” break right now?",
+            "要立即開始「{name}」休息嗎？",
+        ),
+        "dialog.break_now_ok" => pick(locale, "Take break", "立即休息"),
+
         // Cold-start "resume previous break progress?" dialog ({age} = how long ago it was saved)
         "dialog.resume_progress_title" => pick(locale, "Resume break progress?", "恢復休息進度？"),
         "dialog.resume_progress_msg" => pick(
@@ -76,24 +85,24 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "dialog.resume" => pick(locale, "Resume", "恢復"),
         "dialog.start_fresh" => pick(locale, "Start fresh", "重新開始"),
         "dialog.import_chime_title" => {
-            pick(locale, "Restee — Import chime sound", "Restee — 匯入鈴聲音檔")
+            pick(locale, "Gomaju — Import chime sound", "Gomaju — 匯入鈴聲音檔")
         }
 
         // Notifications ({name} = rule/alarm name)
         "notif.soft_break" => pick(locale, "{name} — time for a quick break", "{name} — 該休息一下了"),
         "notif.startup" => pick(locale, "Running in the system tray", "正在系統匣中執行"),
-        "notif.break_title" => pick(locale, "Restee · Break reminder", "Restee · 休息提醒"),
-        "notif.alarm_title" => pick(locale, "Restee · Alarm", "Restee · 鬧鐘"),
+        "notif.break_title" => pick(locale, "Gomaju · Break reminder", "Gomaju · 休息提醒"),
+        "notif.alarm_title" => pick(locale, "Gomaju · Alarm", "Gomaju · 鬧鐘"),
 
         // Native window titles
-        "title.settings" => pick(locale, "Restee — Settings", "Restee — 設定"),
-        "title.rules" => pick(locale, "Restee — Break rules", "Restee — 休息規則"),
-        "title.alarms" => pick(locale, "Restee — Alarms", "Restee — 鬧鐘"),
-        "title.chimes" => pick(locale, "Restee — Chimes", "Restee — 鈴聲"),
+        "title.settings" => pick(locale, "Gomaju — Settings", "Gomaju — 設定"),
+        "title.rules" => pick(locale, "Gomaju — Break rules", "Gomaju — 休息規則"),
+        "title.alarms" => pick(locale, "Gomaju — Alarms", "Gomaju — 鬧鐘"),
+        "title.chimes" => pick(locale, "Gomaju — Chimes", "Gomaju — 鈴聲"),
 
         _ => {
             // All keys should be in the catalog; surface a miss in dev rather than panic.
-            eprintln!("restee: missing i18n key '{key}'");
+            crate::rlog!("gomaju: missing i18n key '{key}'");
             "?"
         }
     }
