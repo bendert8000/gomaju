@@ -2,7 +2,7 @@
 
 > 語言 / Language：**繁體中文** ｜ [English](#english)
 
-一款跨平台、常駐在系統匣的**工程師休息提醒工具**，順手也能拿來當**時鐘鬧鐘**。它會照你設定的間隔，提醒你讓眼睛歇一下、起來走動走動 — 可以是溫和、按一下就略過的*軟性*休息；需要更狠一點的時候，也能用蓋住整個螢幕的*強制*休息把你從螢幕前拉開。順帶一提，它也能照實際時間響鬧鐘（每天、每週、每兩週……都行）。
+Gomaju是台語「顧目睭」、照顧眼睛的意思，這是一款跨平台、常駐在系統匣的**工程師休息提醒工具**，順手也能拿來當**時鐘鬧鐘**。它會照你設定的間隔，提醒你讓眼睛歇一下、起來走動走動 — 可以是溫和、按一下就略過的*軟性*休息；需要更狠一點的時候，也能用蓋住整個螢幕的*強制*休息把你從螢幕前拉開。順帶一提，它也能照實際時間響鬧鐘（每天、每週、每兩週……都行）。
 
 用 **Tauri v2** 做的（Rust 核心 + TypeScript/HTML/CSS 介面），所以執行檔很小、閒置時也只吃幾十 MB 記憶體，而且完全沒用到 Electron。
 
@@ -190,7 +190,7 @@ src-tauri/           # Tauri 主程式：系統匣、閒置、覆蓋層、快捷
 
 # gomaju
 
-A cross-platform, tray-resident **break reminder for engineers** — and a lightweight
+Gomaju is the Taiwanese word for "顧目睭" (kòo ba̍k-tsiu), meaning to take care of one's eyes. Gomaju is a cross-platform, tray-resident **break reminder for engineers** — and a lightweight
 **clock-alarm** tool. It nudges you to rest your eyes and step away on customizable
 intervals (gentle *soft* breaks, or screen-covering *strict* breaks when you need a firmer
 push), and can fire wall-clock alarms (daily, weekly, bi-weekly, …) right alongside.
