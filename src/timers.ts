@@ -126,10 +126,11 @@ function wireDurationField(
 
 // --- Timer rows ---
 
-/** Reflect run state in a row: the toggle label, the live remaining readout, and a state class.
- *  Never touches the editable inputs (name / duration / chime), so the per-second poll can't
- *  discard in-progress edits. */
-function applyRunState(row: HTMLElement, state: RunState, displaySecs: number): void {
+/** Reflect run state in a row: the toggle label, the live readout (remaining or, in count-up mode,
+ *  elapsed), and a state class. Never touches the editable inputs (duration / chime), so the
+ *  per-second poll can't discard in-progress edits. The caller passes the display value via
+ *  [`displaySecs`]. */
+function applyRunState(row: HTMLElement, state: RunState, secs: number): void {
   row.dataset.state = state;
   const toggle = q<HTMLButtonElement>(row, ".timer-toggle");
   toggle.textContent =
@@ -139,7 +140,7 @@ function applyRunState(row: HTMLElement, state: RunState, displaySecs: number): 
         ? t("timers.resume")
         : t("timers.start");
   const rem = q<HTMLElement>(row, ".timer-remaining");
-  rem.textContent = state === "idle" ? "" : fmtClock(displaySecs);
+  rem.textContent = state === "idle" ? "" : fmtClock(secs);
 }
 
 function timerRow(v: CountdownView): HTMLElement {
