@@ -111,20 +111,32 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   Because that only seeds fresh installs, `ConfigFile::migrate()` (run in `config::load`, gated by
   `CONFIG_VERSION` — bumped to **2**) seeds them once into older configs that have **no** countdowns
   (never clobbers a user's list, never re-adds after a deliberate clear).
-- **Running-timer toasts** (`src-tauri/src/timer_toast.rs`, `timer-toast.html` / `src/timer-toast.ts`,
-  windows `timer-toast-<id>`, capability `timer-toast-*` in `overlay.json`): one small frameless,
-  always-on-top, non-focus-stealing toast per **running** timer, stacked bottom-right above the tray.
-  Gated by the **`settings.show_timer_toasts`** bool (default on). `timer_toast::sync(app)` is the
-  single idempotent reconciler — desired (running timers in config order, if the setting is on) vs the
-  actual `timer-toast-*` windows; it creates/closes the diff and re-stacks, with a cheap set-equality
-  early-out. **It is driven by the countdown scheduler's ~250 ms background tick — NOT from the
-  commands.** This is load-bearing: creating a webview window from a command (which runs on the main
-  thread inside a WebView2 IPC callback) re-enters the message loop and **deadlocks/hangs on Windows**;
-  driving it from a background thread (like the break toast) creates windows in a clean main-thread
-  context. The commands (`cmd_start_countdown` / pause / reset / `cmd_toast_stop_countdown` /
-  `cmd_save_countdowns`) only mutate run state; toasts appear/close on the next tick (≤250 ms). Each
-  toast injects `{id,name,remaining_secs}` and counts down locally; the host closes it on finish/stop
-  (no event push, empty capability). The ✕ derives its timer id from the window's own label.
+- **Timer toasts** (`src-tauri/src/timer_toast.rs`, `timer-toast.html` / `src/timer-toast.ts`,
+  capability `timer-toast-*` / `timer-done-*` in `overlay.json`): the **`settings.show_timer_toasts`**
+  bool (default on) selects **which** toast, not whether there is one. **Checked** → one small
+  frameless, always-on-top, non-focus-stealing **countdown** toast per **running** timer (windows
+  `timer-toast-<id>`), stacked bottom-right, closed at `00:00`. **Unchecked** → no running toast, but
+  when a timer fires a persistent **"Time's up!"** toast (windows `timer-done-<id>`, a separate prefix)
+  appears and **stays until the user clicks ✕** — independent of `settings.notifications`, one toast
+  per timer id (a re-fire just refreshes it). The pending finished set is `AppState.finished_toasts:
+  Mutex<HashMap<id,name>>` (in-memory, reset on cold start), filled by the countdown scheduler when a
+  timer fires while the setting is off (name captured at fire time), and cleared by
+  `cmd_dismiss_timer_done` (the ✕; id from the window's own `timer-done-` label) — the next tick closes
+  the window. `timer_toast::sync(app)` is the single idempotent reconciler for **both** families:
+  desired = running timers in config order (only if the setting is on) **plus** finished toasts pruned
+  to config-member ids (always, which also self-heals any delete/fire race — a deleted timer's toast
+  can't resurrect); it diffs vs the actual `timer-toast-*` / `timer-done-*` windows, creates/closes the
+  difference and re-stacks (finished above running), with a cheap label-set early-out recomputed from
+  live windows (so a failed creation self-corrects next tick). **It is driven by the countdown
+  scheduler's ~250 ms background tick — NOT from the commands.** This is load-bearing: creating a
+  webview window from a command (which runs on the main thread inside a WebView2 IPC callback) re-enters
+  the message loop and **deadlocks/hangs on Windows**; driving it from a background thread (like the
+  break toast) creates windows in a clean main-thread context. The commands (`cmd_start_countdown` /
+  pause / reset / `cmd_toast_stop_countdown` / `cmd_dismiss_timer_done` / `cmd_save_countdowns`) only
+  mutate run state; toasts appear/close on the next tick (≤250 ms). Each toast injects
+  `{id,name,remaining_secs,finished}` and (running) counts down locally; the host closes it on
+  finish/stop (no event push, empty capability). The toggle lives in its own **Timers** card in
+  Settings (`index.html`).
 
 ## Break rules (two editors, shared UI)
 
