@@ -1,4 +1,4 @@
-# Auto-named, locale-aware timers
+# Timer enhancements: auto-name + count-up mode
 
 - **Date:** 2026-06-15
 - **Status:** Approved (design)
@@ -6,11 +6,20 @@
 
 ## Summary
 
-Remove the user-editable timer **name**. A timer is now identified solely by its duration, and its
-display name is **computed** from the duration + the current locale: `"{clock} {word}"` —
-English `"02:30 timer"`, 繁體中文 `"02:30 計時器"`. The clock is `mm:ss`, or `h:mm:ss` once the
-duration reaches an hour (`"1:00:00 timer"`), matching the app's existing clock convention. Because
-the name is computed (never stored), it follows the active locale automatically.
+Two related timer changes:
+
+1. **Auto-name (locale-aware).** Remove the user-editable timer **name**. A timer is identified
+   solely by its duration, and its display name is **computed** from the duration + the current
+   locale: `"{clock} {word}"` — English `"02:30 timer"`, 繁體中文 `"02:30 計時器"`. The clock is
+   `mm:ss`, or `h:mm:ss` once the duration reaches an hour (`"1:00:00 timer"`), matching the app's
+   existing clock convention. Because the name is computed (never stored), it follows the active
+   locale automatically.
+
+2. **Count-up mode (global).** A new global setting in the Timers card switches all timers between
+   **countdown** (default — counts the configured duration down to zero) and **count-up** (counts
+   from zero up to the configured duration). This is a **display-only** transform: the engine and
+   the moment a timer fires are unchanged; only the live number shown flips from *remaining* to
+   *elapsed*.
 
 ## Current behavior (baseline)
 
@@ -108,12 +117,65 @@ Update the Timers section of `CLAUDE.md`: a countdown is a reusable **duration**
 its display name is auto-derived as `"{mm:ss|h:mm:ss} {timer-word}"` per locale (`format_clock` +
 `timer_display_name`), used in the notification and toasts; the Timers window has no name field.
 
+## Design — count-up mode
+
+### Setting (global)
+
+- Add `pub timer_count_up: bool` to `Settings` (`crates/gomaju-core/src/config.rs`), default
+  `false`, mirroring `show_timer_toasts` (same `serde` default behavior, so existing `config.toml`
+  files without it load as `false`). No `CONFIG_VERSION` bump.
+- Seed `timer_count_up = false` in `default_config.toml` (next to `show_timer_toasts`).
+- **Timers settings card** (`index.html`): add a labeled `<select id="timer-mode">` with two options
+  — Countdown (default) / Count up — below the `show-timer-toasts` checkbox. `src/main.ts` maps it
+  to/from the bool: `value = cfg.settings.timer_count_up ? "countup" : "countdown"` on load,
+  `timer_count_up: sel.value === "countup"` on save.
+- i18n (`src/i18n.ts`): `settings.timer_mode_label`, `settings.timer_mode_countdown`,
+  `settings.timer_mode_countup`.
+
+### Engine: unchanged
+
+`CountdownRun`, `start`/`pause`/`reset`/`remaining_secs`, the scheduler, and the fire instant are
+**not** touched. Count-up is purely a presentation transform: `elapsed = duration_secs −
+remaining_secs` (both already available wherever the live value is shown).
+
+### Display changes
+
+- **Running toast** (`src-tauri/src/timer_toast.rs` + `src/timer-toast.ts`): the running-toast
+  `DesiredToast`/`ToastInfo` gain `count_up: bool` and `duration_secs: u32` (finished toasts ignore
+  them). `sync` already needs each timer's `duration_secs` (to compute the auto-name), so its
+  per-timer tuple carries `duration_secs`; it also reads `settings.timer_count_up`. In
+  `timer-toast.ts`, the running branch: when `count_up`, start the local readout at
+  `duration_secs − remaining_secs` and **increment** each second toward `duration_secs` (capped);
+  otherwise decrement toward 0 as today. The finished ("Time's up!") toast shows no live number and
+  is unaffected.
+- **Timers window readout** (`src/timers.ts`): `CountdownView` gains `count_up: bool`. The
+  `.timer-remaining` readout shows `fmtClock(count_up ? def.duration_secs − remaining_secs :
+  remaining_secs)` while running/paused (still blank when idle). The window picks up a mode change on
+  its next 1s poll.
+
+### Backend plumbing
+
+- `CountdownView` (`src-tauri/src/commands.rs`) gains `count_up: bool`, set from
+  `cfg.settings.timer_count_up` in both `cmd_get_countdowns` and `cmd_save_countdowns` (each reads
+  the setting once and stamps it on every view).
+- The running-toast injection in `timer_toast::sync`/`build_toast` adds `count_up` +
+  `duration_secs` to `ToastInfo`.
+
+### Tests (count-up)
+
+- The transform is `duration − remaining` (trivial); covered by reasoning + the existing
+  `remaining_secs` tests. No new pure helper. Primary verification is manual (watch a timer count
+  up, confirm it still fires at the configured time).
+
 ## Out of scope
 
-- No change to the toast windows / capability / `cmd_dismiss_timer_done` (the prior feature).
+- No change to the toast windows' capability or `cmd_dismiss_timer_done` (the prior feature); the
+  only toast change is the injected `ToastInfo` (adds `count_up` + `duration_secs`).
 - No `CONFIG_VERSION` bump or migration code.
 - No localized name in the Timers window (it has no name field at all).
 - No change to break-rule or alarm names (those keep their editable names).
+- Count-up is a single **global** setting, not per-timer; the engine/firing is not changed (display
+  transform only).
 
 ## Verification
 
@@ -121,6 +183,11 @@ its display name is auto-derived as `"{mm:ss|h:mm:ss} {timer-word}"` per locale 
   (timer_display_name).
 - `cargo clippy --workspace --all-targets`.
 - `npm run build`.
-- Manual (`npm run tauri dev`): Timers window shows no name field; start a 2:30 timer with toasts
-  off → "Time's up!" toast and the notification both read "02:30 timer" (or "02:30 計時器" after a
-  language switch); with toasts on, the running toast's label reads "02:30 timer".
+- Manual (`npm run tauri dev`):
+  - **Auto-name:** Timers window shows no name field; start a 2:30 timer with toasts off →
+    "Time's up!" toast and the notification both read "02:30 timer" (or "02:30 計時器" after a
+    language switch); with toasts on, the running toast's label reads "02:30 timer".
+  - **Count-up:** set the Timers card mode to Count up; start a 2:30 timer → the running toast and
+    the Timers-window readout count **up** from 00:00 toward 02:30, and the timer still fires at the
+    configured time (notification + "Time's up!"/close). Switch back to Countdown → counts down from
+    02:30 to 00:00 as before. Default (fresh/old config) is Countdown.
