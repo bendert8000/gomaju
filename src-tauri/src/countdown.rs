@@ -133,9 +133,10 @@ pub fn spawn_scheduler(app: AppHandle) {
                 // Either way the timer leaves the running set (one-shot). Fire only if its def
                 // still exists; a def deleted out from under us just drops the orphan silently.
                 if let Some(def) = defs.get(&id) {
-                    fired.push((def.name.clone(), def.chime_id.clone(), def.chime_volume_pct));
+                    let display = timer_display_name(def.duration_secs, &locale);
+                    fired.push((display.clone(), def.chime_id.clone(), def.chime_volume_pct));
                     if !show_toasts {
-                        to_finish.push((id.clone(), def.name.clone()));
+                        to_finish.push((id.clone(), display));
                     }
                 }
                 map.remove(&id);

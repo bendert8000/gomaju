@@ -118,26 +118,29 @@ pub fn sync(app: &AppHandle) {
     let st = app.state::<AppState>();
     let now = Instant::now();
 
-    // Config first (released): stack/display order + the show-toasts setting.
-    let (show_running, order): (bool, Vec<(String, String)>) = {
+    // Config first (released): stack/display order (id + duration) + the show-toasts setting.
+    let (show_running, order): (bool, Vec<(String, u32)>) = {
         let cfg = st.config.lock().unwrap();
         let order = cfg
             .countdowns
             .iter()
-            .map(|c| (c.id.clone(), c.name.clone()))
+            .map(|c| (c.id.clone(), c.duration_secs))
             .collect();
         (cfg.settings.show_timer_toasts, order)
     };
+    let locale = crate::i18n::current_locale(app);
 
-    // Running set (released): running timers in config order, with current remaining for injection.
+    // Running set (released): running timers in config order, with their computed name + remaining.
     let running: Vec<(String, String, u32)> = {
         let map = st.countdown_runtime.lock().unwrap();
         order
             .iter()
-            .filter_map(|(id, name)| match map.get(id) {
-                Some(run @ CountdownRun::Running { .. }) => {
-                    Some((id.clone(), name.clone(), crate::countdown::remaining_secs(run, now)))
-                }
+            .filter_map(|(id, dur)| match map.get(id) {
+                Some(run @ CountdownRun::Running { .. }) => Some((
+                    id.clone(),
+                    crate::countdown::timer_display_name(*dur, &locale),
+                    crate::countdown::remaining_secs(run, now),
+                )),
                 _ => None,
             })
             .collect()
@@ -151,7 +154,7 @@ pub fn sync(app: &AppHandle) {
         fin.retain(|id, _| valid.contains(id.as_str()));
         order
             .iter()
-            .filter_map(|(id, _)| fin.get(id).map(|name| (id.clone(), name.clone())))
+            .filter_map(|(id, _dur)| fin.get(id).map(|name| (id.clone(), name.clone())))
             .collect()
     };
 
