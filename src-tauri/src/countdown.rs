@@ -94,7 +94,7 @@ pub fn spawn_scheduler(app: AppHandle) {
         // 1) Snapshot the defs + locale + notification gate under the config lock. The chimes
         //    list is deliberately NOT cloned here — only when a timer actually fires (step 3) —
         //    so an idle app (the common case) doesn't clone it 4×/second forever.
-        let (defs, locale, notify): (HashMap<String, CountdownDto>, String, bool) = {
+        let (defs, locale, notify, show_toasts): (HashMap<String, CountdownDto>, String, bool, bool) = {
             let st = app.state::<AppState>();
             let cfg = st.config.lock().unwrap();
             let defs = cfg
@@ -102,11 +102,12 @@ pub fn spawn_scheduler(app: AppHandle) {
                 .iter()
                 .map(|c| (c.id.clone(), c.clone()))
                 .collect();
-            (defs, cfg.locale.clone(), cfg.settings.notifications)
+            (defs, cfg.locale.clone(), cfg.settings.notifications, cfg.settings.show_timer_toasts)
         };
 
         // 2) Atomic due-check + transition under the runtime lock. Collect what to fire.
         let mut fired: Vec<(String, String, u8)> = Vec::new(); // (name, chime_id, volume)
+        let mut to_finish: Vec<(String, String)> = Vec::new(); // (id, name) for "time's up" toasts
         {
             let st = app.state::<AppState>();
             let mut map = st.countdown_runtime.lock().unwrap();
@@ -122,6 +123,9 @@ pub fn spawn_scheduler(app: AppHandle) {
                 // still exists; a def deleted out from under us just drops the orphan silently.
                 if let Some(def) = defs.get(&id) {
                     fired.push((def.name.clone(), def.chime_id.clone(), def.chime_volume_pct));
+                    if !show_toasts {
+                        to_finish.push((id.clone(), def.name.clone()));
+                    }
                 }
                 map.remove(&id);
             }
@@ -150,6 +154,15 @@ pub fn spawn_scheduler(app: AppHandle) {
                     );
                 }
                 audio::play_countdown_chime(&chime_id, volume, &chimes, &dir);
+            }
+        }
+        // Record "time's up" toasts (unchecked mode). Own lock, no nesting — config -> runtime ->
+        // finished_toasts. The sync() call below (same tick) creates the windows off the main thread.
+        if !to_finish.is_empty() {
+            let st = app.state::<AppState>();
+            let mut fin = st.finished_toasts.lock().unwrap();
+            for (id, name) in to_finish {
+                fin.insert(id, name); // one toast per id; a re-fire just refreshes the entry
             }
         }
         // Reconcile the running-timer toasts every tick (cheap no-op when unchanged). Done here on
