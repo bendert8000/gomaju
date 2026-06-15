@@ -28,6 +28,7 @@ interface CountdownView {
   def: CountdownDto;
   state: RunState;
   remaining_secs: number;
+  count_up: boolean;
 }
 
 const MIN_SECS = 1;
@@ -49,6 +50,11 @@ function clampInt(value: string, lo: number, hi: number, fallback: number): numb
 function splitHMS(total: number): { h: number; m: number; s: number } {
   const t = Math.max(0, Math.floor(total));
   return { h: Math.floor(t / 3600), m: Math.floor((t % 3600) / 60), s: t % 60 };
+}
+
+/** The live number to show for a view: elapsed (0→duration) in count-up mode, else remaining. */
+function displaySecs(v: CountdownView): number {
+  return v.count_up ? Math.max(0, v.def.duration_secs - v.remaining_secs) : v.remaining_secs;
 }
 
 /** Remaining as `mm:ss`, or `h:mm:ss` past an hour. Matches the tray's `fmt_clock`. */
@@ -123,7 +129,7 @@ function wireDurationField(
 /** Reflect run state in a row: the toggle label, the live remaining readout, and a state class.
  *  Never touches the editable inputs (name / duration / chime), so the per-second poll can't
  *  discard in-progress edits. */
-function applyRunState(row: HTMLElement, state: RunState, remainingSecs: number): void {
+function applyRunState(row: HTMLElement, state: RunState, displaySecs: number): void {
   row.dataset.state = state;
   const toggle = q<HTMLButtonElement>(row, ".timer-toggle");
   toggle.textContent =
@@ -133,7 +139,7 @@ function applyRunState(row: HTMLElement, state: RunState, remainingSecs: number)
         ? t("timers.resume")
         : t("timers.start");
   const rem = q<HTMLElement>(row, ".timer-remaining");
-  rem.textContent = state === "idle" ? "" : fmtClock(remainingSecs);
+  rem.textContent = state === "idle" ? "" : fmtClock(displaySecs);
 }
 
 function timerRow(v: CountdownView): HTMLElement {
@@ -189,7 +195,7 @@ function timerRow(v: CountdownView): HTMLElement {
   q(row, ".timer-reset").addEventListener("click", () => void resetTimer(row.dataset.id ?? ""));
   q(row, ".timer-remove").addEventListener("click", () => row.remove());
 
-  applyRunState(row, v.state, v.remaining_secs);
+  applyRunState(row, v.state, displaySecs(v));
   return row;
 }
 
@@ -228,7 +234,7 @@ async function refresh(): Promise<void> {
   for (const row of document.querySelectorAll<HTMLElement>(".timer-item")) {
     const v = byId.get(row.dataset.id ?? "");
     if (!v) continue; // a freshly-added, not-yet-saved row
-    applyRunState(row, v.state, v.remaining_secs);
+    applyRunState(row, v.state, displaySecs(v));
   }
 }
 
@@ -316,6 +322,7 @@ async function init(): Promise<void> {
         },
         state: "idle",
         remaining_secs: 5 * 60,
+        count_up: false,
       }),
     );
   });

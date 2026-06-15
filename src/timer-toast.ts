@@ -8,6 +8,8 @@ interface ToastInfo {
   name: string;
   remaining_secs: number;
   finished: boolean;
+  count_up: boolean;
+  duration_secs: number;
 }
 
 const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
@@ -15,6 +17,8 @@ const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
   name: "",
   remaining_secs: 0,
   finished: false,
+  count_up: false,
+  duration_secs: 0,
 });
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
@@ -61,11 +65,20 @@ window.addEventListener("DOMContentLoaded", () => {
     invoke("cmd_toast_stop_countdown").catch(() => {});
   });
 
-  // Count down locally; the host closes this window on finish/stop.
-  let remaining = info.remaining_secs;
-  time.textContent = fmt(remaining);
-  window.setInterval(() => {
-    remaining = Math.max(0, remaining - 1);
+  // Running toast: count down to 0, or up to the configured duration.
+  if (info.count_up) {
+    let elapsed = Math.max(0, info.duration_secs - info.remaining_secs);
+    time.textContent = fmt(elapsed);
+    window.setInterval(() => {
+      elapsed = Math.min(info.duration_secs, elapsed + 1);
+      time.textContent = fmt(elapsed);
+    }, 1000);
+  } else {
+    let remaining = info.remaining_secs;
     time.textContent = fmt(remaining);
-  }, 1000);
+    window.setInterval(() => {
+      remaining = Math.max(0, remaining - 1);
+      time.textContent = fmt(remaining);
+    }, 1000);
+  }
 });
