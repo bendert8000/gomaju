@@ -100,6 +100,7 @@ struct ToastInfo<'a> {
     id: &'a str,
     name: &'a str,
     remaining_secs: u32,
+    finished: bool,
 }
 
 /// Reconcile the open toasts with the running timers + the `show_timer_toasts` setting. Creates
@@ -109,8 +110,8 @@ pub fn sync(app: &AppHandle) {
     let st = app.state::<AppState>();
     let now = Instant::now();
 
-    // Config first (released), then runtime (released) — never both held, matching the scheduler.
-    let (enabled, order): (bool, Vec<(String, String)>) = {
+    // Config first (released): stack/display order + the show-toasts setting.
+    let (show_running, order): (bool, Vec<(String, String)>) = {
         let cfg = st.config.lock().unwrap();
         let order = cfg
             .countdowns
@@ -119,72 +120,82 @@ pub fn sync(app: &AppHandle) {
             .collect();
         (cfg.settings.show_timer_toasts, order)
     };
-    // Desired toasts: running timers in config order, with their current remaining for injection.
-    let desired: Vec<(String, String, u32)> = if !enabled {
-        Vec::new()
-    } else {
+
+    // Running set (released): running timers in config order, with current remaining for injection.
+    let running: Vec<(String, String, u32)> = {
         let map = st.countdown_runtime.lock().unwrap();
         order
-            .into_iter()
-            .filter_map(|(id, name)| match map.get(&id) {
+            .iter()
+            .filter_map(|(id, name)| match map.get(id) {
                 Some(run @ CountdownRun::Running { .. }) => {
-                    Some((id, name, crate::countdown::remaining_secs(run, now)))
+                    Some((id.clone(), name.clone(), crate::countdown::remaining_secs(run, now)))
                 }
                 _ => None,
             })
             .collect()
     };
 
-    // Early-out: if the open toast set already matches the desired set, there's nothing to do —
-    // skip the main-thread hop entirely. This makes per-tick polling from the scheduler cheap.
-    // (Stack order is config order, which is stable, so an unchanged set never needs a reposition.)
-    let desired_ids: HashSet<String> = desired.iter().map(|(id, _, _)| id.clone()).collect();
-    let actual_ids: HashSet<String> = app
+    // Finished set (released): prune to config-member ids (self-healing — kills the
+    // delete-then-insert resurrection race), then take them in config order.
+    let finished: Vec<(String, String)> = {
+        let mut fin = st.finished_toasts.lock().unwrap();
+        let valid: HashSet<&str> = order.iter().map(|(id, _)| id.as_str()).collect();
+        fin.retain(|id, _| valid.contains(id.as_str()));
+        order
+            .iter()
+            .filter_map(|(id, _)| fin.get(id).map(|name| (id.clone(), name.clone())))
+            .collect()
+    };
+
+    let desired = desired_toasts(show_running, &running, &finished);
+
+    // Early-out: desired label set vs actually-open toast windows (both families). Recomputed from
+    // live windows every tick so a transient creation failure self-corrects next tick.
+    let desired_labels: HashSet<String> = desired.iter().map(|d| d.label.clone()).collect();
+    let actual_labels: HashSet<String> = app
         .webview_windows()
         .into_keys()
-        .filter_map(|l| id_from_label(&l).map(str::to_string))
+        .filter(|l| l.starts_with(TIMER_TOAST_PREFIX) || l.starts_with(TIMER_DONE_PREFIX))
         .collect();
-    if desired_ids == actual_ids {
+    if desired_labels == actual_labels {
         return;
     }
 
     // Native window ops must run on the main thread.
     let app = app.clone();
     let _ = app.clone().run_on_main_thread(move || {
-        // Close toasts whose timer is no longer desired.
+        // Close toast windows (either family) no longer desired.
         let actual: Vec<String> = app
             .webview_windows()
             .into_keys()
-            .filter(|l| l.starts_with(TIMER_TOAST_PREFIX))
+            .filter(|l| l.starts_with(TIMER_TOAST_PREFIX) || l.starts_with(TIMER_DONE_PREFIX))
             .collect();
         for label in &actual {
-            let keep = id_from_label(label)
-                .map(|id| desired.iter().any(|(d, _, _)| d == id))
-                .unwrap_or(false);
-            if !keep {
+            if !desired.iter().any(|d| &d.label == label) {
                 if let Some(w) = app.get_webview_window(label) {
                     let _ = w.close();
                 }
             }
         }
-        // Create toasts for newly-running timers.
-        for (id, name, remaining) in &desired {
-            if app.get_webview_window(&label_for(id)).is_none() {
-                build_toast(&app, id, name, *remaining);
+        // Create toast windows for the newly-desired ones.
+        for d in &desired {
+            if app.get_webview_window(&d.label).is_none() {
+                build_toast(&app, d);
             }
         }
-        // Stack them bottom-right (config order: first at the very bottom, next above it).
+        // Stack them bottom-right in desired order (index 0 nearest the tray).
         relayout(&app, &desired);
     });
 }
 
 /// Build one toast window (hidden; `relayout` positions then shows it). Mirrors `toast.rs`'s
 /// flags: frameless, always-on-top, never focus-stealing, off the taskbar.
-fn build_toast(app: &AppHandle, id: &str, name: &str, remaining_secs: u32) {
+fn build_toast(app: &AppHandle, d: &DesiredToast) {
     let json = serde_json::to_string(&ToastInfo {
-        id,
-        name,
-        remaining_secs,
+        id: &d.id,
+        name: &d.name,
+        remaining_secs: d.remaining_secs,
+        finished: d.finished,
     })
     .unwrap_or_else(|_| "null".into());
     let init = format!(
@@ -192,8 +203,7 @@ fn build_toast(app: &AppHandle, id: &str, name: &str, remaining_secs: u32) {
         crate::webview::guarded_init("__GOMAJU_TIMER_TOAST__", &json),
         crate::webview::locale_init(&crate::i18n::current_locale(app)),
     );
-    let label = label_for(id);
-    match WebviewWindowBuilder::new(app, &label, WebviewUrl::App("timer-toast.html".into()))
+    match WebviewWindowBuilder::new(app, &d.label, WebviewUrl::App("timer-toast.html".into()))
         .title("Gomaju")
         .decorations(false)
         .always_on_top(true)
@@ -206,14 +216,18 @@ fn build_toast(app: &AppHandle, id: &str, name: &str, remaining_secs: u32) {
         .initialization_script(&init)
         .build()
     {
-        Ok(_) => crate::rlog!("gomaju: timer toast opened ({name})"),
+        Ok(_) => crate::rlog!(
+            "gomaju: {} toast opened ({})",
+            if d.finished { "timer-done" } else { "timer" },
+            d.name
+        ),
         Err(e) => crate::rlog!("gomaju: failed to create timer toast: {e}"),
     }
 }
 
 /// Stack the desired toasts at the bottom-right of the primary monitor's work area, growing
 /// upward in `desired` order (index 0 nearest the tray). Positions then shows each window.
-fn relayout(app: &AppHandle, desired: &[(String, String, u32)]) {
+fn relayout(app: &AppHandle, desired: &[DesiredToast]) {
     let Some(monitor) = app.primary_monitor().ok().flatten() else {
         return;
     };
@@ -222,8 +236,8 @@ fn relayout(app: &AppHandle, desired: &[(String, String, u32)]) {
     let margin = (16.0 * scale).round() as i32;
     let gap = (8.0 * scale).round() as i32;
     let mut y_bottom = work.position.y + work.size.height as i32 - margin;
-    for (id, _, _) in desired {
-        let Some(window) = app.get_webview_window(&label_for(id)) else {
+    for d in desired {
+        let Some(window) = app.get_webview_window(&d.label) else {
             continue;
         };
         let outer = window.outer_size().unwrap_or_default();
