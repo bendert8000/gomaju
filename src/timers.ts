@@ -17,7 +17,6 @@ let chimes: ChimeOption[] = [];
 
 interface CountdownDto {
   id: string;
-  name: string;
   duration_secs: number; // 1..=86_399 (00:00:01 .. 23:59:59)
   chime_id: string; // id of a saved chime to play (empty = default tone)
   chime_volume_pct: number; // 0..=100
@@ -145,7 +144,6 @@ function timerRow(v: CountdownView): HTMLElement {
   // below, so there's no interpolation/XSS surface.
   row.innerHTML = `
     <div class="alarm-line">
-      <input class="timer-name" type="text" placeholder="${t("timers.name_ph")}" />
       <label class="timer-duration"><span class="timer-duration-label">${t("timers.duration")}</span><span class="timer-dur-group"><input class="timer-dur-h" type="text" inputmode="numeric" maxlength="2" aria-label="${t("timers.hours")}" /><span class="timer-dur-sep">:</span><input class="timer-dur-m" type="text" inputmode="numeric" maxlength="2" aria-label="${t("timers.minutes")}" /><span class="timer-dur-sep">:</span><input class="timer-dur-s" type="text" inputmode="numeric" maxlength="2" aria-label="${t("timers.seconds")}" /></span></label>
       <button class="timer-remove btn-ghost" type="button" title="${t("common.remove")}">✕</button>
     </div>
@@ -159,7 +157,6 @@ function timerRow(v: CountdownView): HTMLElement {
     </div>
   `;
 
-  q<HTMLInputElement>(row, ".timer-name").value = v.def.name;
   const hh = q<HTMLInputElement>(row, ".timer-dur-h");
   const mm = q<HTMLInputElement>(row, ".timer-dur-m");
   const ss = q<HTMLInputElement>(row, ".timer-dur-s");
@@ -206,7 +203,6 @@ function renderTimers(views: CountdownView[]): void {
 function collectTimers(): CountdownDto[] {
   return Array.from(document.querySelectorAll<HTMLElement>(".timer-item")).map((row) => ({
     id: row.dataset.id || crypto.randomUUID(),
-    name: q<HTMLInputElement>(row, ".timer-name").value.trim() || t("timers.default_name"),
     duration_secs: clampDuration(
       clampField(q<HTMLInputElement>(row, ".timer-dur-h").value, MAX_H) * 3600 +
         clampField(q<HTMLInputElement>(row, ".timer-dur-m").value, MAX_M) * 60 +
@@ -314,7 +310,6 @@ async function init(): Promise<void> {
       timerRow({
         def: {
           id: crypto.randomUUID(),
-          name: t("timers.new_name"),
           duration_secs: 5 * 60,
           chime_id: "",
           chime_volume_pct: 20,

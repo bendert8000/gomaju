@@ -202,7 +202,6 @@ const MESSAGES: Record<string, Entry> = {
       "倒數計時（1 秒至 99:59:59），歸零時播放所選鈴聲。每個計時器可獨立開始、暫停與重設；可同時執行多個。Gomaju 重新啟動時，執行中的計時器會重設為閒置。",
   },
   "timers.add": { en: "+ Add timer", "zh-Hant": "＋ 新增計時器" },
-  "timers.name_ph": { en: "Timer name", "zh-Hant": "計時器名稱" },
   "timers.duration": { en: "Duration", "zh-Hant": "時長" },
   "timers.hours": { en: "Hours", "zh-Hant": "時" },
   "timers.minutes": { en: "Minutes", "zh-Hant": "分" },
@@ -214,8 +213,6 @@ const MESSAGES: Record<string, Entry> = {
   "timers.stop": { en: "Stop", "zh-Hant": "停止" },
   "timers.times_up": { en: "Time's up!", "zh-Hant": "時間到！" },
   "timers.dismiss": { en: "Dismiss", "zh-Hant": "關閉" },
-  "timers.default_name": { en: "Timer", "zh-Hant": "計時器" },
-  "timers.new_name": { en: "New timer", "zh-Hant": "新計時器" },
 
   // Compact countdown to an alarm's next fire (largest two non-zero units). Each locale is a
   // self-contained template so units *and* spacing read naturally — e.g. "2d 3h" vs "2天3小時".

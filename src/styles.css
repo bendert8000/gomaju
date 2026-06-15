@@ -917,10 +917,6 @@ input.chime-volume-picker {
 }
 
 /* --- Timers window (countdown timers) --- */
-.timer-name {
-  flex: 1;
-  min-width: 8rem;
-}
 .timer-duration {
   display: inline-flex;
   align-items: center;

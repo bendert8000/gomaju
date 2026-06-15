@@ -536,7 +536,6 @@ mod tests {
             version: 1,
             countdowns: vec![CountdownDto {
                 id: "mine".into(),
-                name: "Mine".into(),
                 duration_secs: 42,
                 chime_id: String::new(),
                 chime_volume_pct: 20,

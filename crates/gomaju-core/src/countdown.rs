@@ -24,7 +24,6 @@ pub const MAX_DURATION_SECS: u32 = 99 * 3600 + 59 * 60 + 59; // 359_999
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CountdownDto {
     pub id: String,
-    pub name: String,
     /// Countdown length in seconds, clamped to `MIN_DURATION_SECS..=MAX_DURATION_SECS`.
     pub duration_secs: u32,
     /// Optional id of a saved chime to play when this countdown fires (empty = the default tone).
@@ -104,7 +103,6 @@ mod tests {
     fn cd(id: &str, dur: u32) -> CountdownDto {
         CountdownDto {
             id: id.into(),
-            name: "T".into(),
             duration_secs: dur,
             chime_id: String::new(),
             chime_volume_pct: default_chime_volume(),
