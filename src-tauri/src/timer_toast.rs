@@ -66,6 +66,7 @@ struct DesiredToast {
     finished: bool,
     count_up: bool,
     duration_secs: u32,
+    progress: bool,
 }
 
 /// Compute the ordered desired toast set.
@@ -74,11 +75,13 @@ struct DesiredToast {
 /// - `finished`: (id, name) for timers with a pending "time's up" toast, already pruned to
 ///   config-member ids, in config order; always included.
 /// - `count_up`: the global `timer_count_up` setting; propagated to running toasts only.
+/// - `progress`: the global `timer_toast_progress` setting; propagated to running toasts only.
 ///
 /// Order is running-first then finished, so finished toasts stack above running ones.
 fn desired_toasts(
     show_running: bool,
     count_up: bool,
+    progress: bool,
     running: &[(String, String, u32, u32)], // (id, name, remaining_secs, duration_secs)
     finished: &[(String, String)],          // (id, name)
 ) -> Vec<DesiredToast> {
@@ -93,6 +96,7 @@ fn desired_toasts(
                 finished: false,
                 count_up,
                 duration_secs: *duration,
+                progress,
             });
         }
     }
@@ -105,6 +109,7 @@ fn desired_toasts(
             finished: true,
             count_up: false,
             duration_secs: 0,
+            progress: false,
         });
     }
     out
@@ -119,6 +124,7 @@ struct ToastInfo<'a> {
     finished: bool,
     count_up: bool,
     duration_secs: u32,
+    progress: bool,
 }
 
 /// Reconcile the open toasts with the running timers + the `show_timer_toasts` setting. Creates
@@ -129,14 +135,19 @@ pub fn sync(app: &AppHandle) {
     let now = Instant::now();
 
     // Config first (released): stack/display order (id + duration) + the show-toasts setting.
-    let (show_running, count_up, order): (bool, bool, Vec<(String, u32)>) = {
+    let (show_running, count_up, progress, order): (bool, bool, bool, Vec<(String, u32)>) = {
         let cfg = st.config.lock().unwrap();
         let order = cfg
             .countdowns
             .iter()
             .map(|c| (c.id.clone(), c.duration_secs))
             .collect();
-        (cfg.settings.show_timer_toasts, cfg.settings.timer_count_up, order)
+        (
+            cfg.settings.show_timer_toasts,
+            cfg.settings.timer_count_up,
+            cfg.settings.timer_toast_progress,
+            order,
+        )
     };
     let locale = crate::i18n::current_locale(app);
 
@@ -169,7 +180,7 @@ pub fn sync(app: &AppHandle) {
             .collect()
     };
 
-    let desired = desired_toasts(show_running, count_up, &running, &finished);
+    let desired = desired_toasts(show_running, count_up, progress, &running, &finished);
 
     // Early-out: desired label set vs actually-open toast windows (both families). Recomputed from
     // live windows every tick so a transient creation failure self-corrects next tick.
@@ -220,6 +231,7 @@ fn build_toast(app: &AppHandle, d: &DesiredToast) {
         finished: d.finished,
         count_up: d.count_up,
         duration_secs: d.duration_secs,
+        progress: d.progress,
     })
     .unwrap_or_else(|_| "null".into());
     let init = format!(
@@ -288,30 +300,32 @@ mod tests {
     fn unchecked_mode_shows_only_finished_toasts() {
         let running = vec![run("a", "A", 30, 60)];
         let finished = vec![fin("b", "B")];
-        let d = desired_toasts(false, false, &running, &finished);
+        let d = desired_toasts(false, false, true, &running, &finished);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].label, "timer-done-b");
         assert!(d[0].finished);
         assert_eq!(d[0].id, "b");
+        assert!(!d[0].progress);
     }
 
     #[test]
     fn checked_mode_with_no_finished_shows_running_only() {
         let running = vec![run("a", "A", 30, 60), run("b", "B", 5, 5)];
-        let d = desired_toasts(true, false, &running, &[]);
+        let d = desired_toasts(true, false, true, &running, &[]);
         assert_eq!(d.len(), 2);
         assert_eq!(d[0].label, "timer-toast-a");
         assert_eq!(d[0].remaining_secs, 30);
         assert_eq!(d[0].duration_secs, 60);
         assert!(!d[0].finished);
         assert!(!d[0].count_up);
+        assert!(d[0].progress);
         assert_eq!(d[1].label, "timer-toast-b");
     }
 
     #[test]
     fn count_up_flag_propagates_to_running_toasts() {
         let running = vec![run("a", "A", 30, 60)];
-        let d = desired_toasts(true, true, &running, &[]);
+        let d = desired_toasts(true, true, true, &running, &[]);
         assert!(d[0].count_up);
         assert_eq!(d[0].duration_secs, 60);
     }
@@ -320,7 +334,7 @@ mod tests {
     fn running_first_then_finished_in_order() {
         let running = vec![run("a", "A", 30, 60)];
         let finished = vec![fin("b", "B"), fin("c", "C")];
-        let d = desired_toasts(true, false, &running, &finished);
+        let d = desired_toasts(true, false, true, &running, &finished);
         let labels: Vec<&str> = d.iter().map(|x| x.label.as_str()).collect();
         assert_eq!(labels, ["timer-toast-a", "timer-done-b", "timer-done-c"]);
         assert_eq!((d[1].finished, d[2].finished), (true, true));
@@ -330,5 +344,16 @@ mod tests {
     fn id_round_trips_through_done_label() {
         assert_eq!(id_from_done_label("timer-done-xyz"), Some("xyz"));
         assert_eq!(id_from_done_label("timer-toast-xyz"), None);
+    }
+
+    #[test]
+    fn progress_flag_propagates_to_running_only() {
+        let running = vec![run("a", "A", 30, 60)];
+        let finished = vec![fin("b", "B")];
+        let d = desired_toasts(true, false, true, &running, &finished);
+        assert!(d[0].progress, "running toast carries progress");
+        assert!(!d[1].progress, "finished toast never shows a bar");
+        let off = desired_toasts(true, false, false, &running, &[]);
+        assert!(!off[0].progress, "progress off -> running toast has no bar");
     }
 }
