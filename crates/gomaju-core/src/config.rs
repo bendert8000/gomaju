@@ -11,11 +11,12 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::alarm::{self, AlarmDto};
+use crate::countdown::{self, CountdownDto};
 use crate::rule::{Enforcement, Rule};
 use crate::settings::{EscapeMode, IdlePolicy, Settings};
 
 /// Bumped when the on-disk schema changes; drives migrations.
-pub const CONFIG_VERSION: u32 = 1;
+pub const CONFIG_VERSION: u32 = 2;
 
 /// Safety cap: no break may auto-hold longer than this, so a bad value can never
 /// lock the user out for an unreasonable time.
@@ -141,6 +142,10 @@ pub struct SettingsDto {
     /// resume prompt keeps working for configs written before this field existed.
     #[serde(default = "default_true")]
     pub resume_prompt_enabled: bool,
+    /// Show an on-screen toast (one per timer, stacked bottom-right) for each *running* countdown
+    /// timer. UI/host-only. Defaults on so the feature is visible after the update.
+    #[serde(default = "default_true")]
+    pub show_timer_toasts: bool,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -186,6 +191,11 @@ pub struct ConfigFile {
     // stray `alarms = []` that TOML would attach to the final `[[rules]]` table.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub alarms: Vec<AlarmDto>,
+    // Countdown timers (the "Timers" feature). Persisted definitions only — the live
+    // start/pause/reset run state is host-side and in-memory (reset on every launch).
+    // Omitted from the file when empty, like `alarms`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub countdowns: Vec<CountdownDto>,
     // Saved chimes used to live here; they now have their own `chimes.toml` (see crate::chime).
     // Rules/alarms still reference a chime by `chime_id`; an unknown id falls back to the default
     // tone at playback, so the chime list doesn't need to live in this file.
@@ -199,7 +209,7 @@ pub fn default_chime_volume() -> u8 {
     20
 }
 
-fn is_default_chime_volume(v: &u8) -> bool {
+pub fn is_default_chime_volume(v: &u8) -> bool {
     *v == default_chime_volume()
 }
 
@@ -226,6 +236,7 @@ impl Default for SettingsDto {
             pause_reminder_enabled: true,
             pause_reminder_interval_secs: default_pause_reminder_interval_secs(),
             resume_prompt_enabled: true,
+            show_timer_toasts: true,
         }
     }
 }
@@ -369,7 +380,28 @@ impl ConfigFile {
         if alarm::sanitize_alarms(&mut self.alarms) {
             changed = true;
         }
+        if countdown::sanitize_countdowns(&mut self.countdowns) {
+            changed = true;
+        }
         changed
+    }
+
+    /// One-time, version-gated upgrades for a config loaded from an older schema, then stamp it
+    /// with the current [`CONFIG_VERSION`]. Returns true if anything changed (so the caller
+    /// persists). Distinct from [`Self::sanitize`] (which clamps on every load); this runs only
+    /// when crossing a version, so each step happens exactly once.
+    pub fn migrate(&mut self) -> bool {
+        if self.version >= CONFIG_VERSION {
+            return false;
+        }
+        // v1 -> v2: seed the default countdown-timer presets for configs written before timers
+        // existed — but ONLY when the user has none, so we never clobber their list or re-add the
+        // presets after they deliberately clear them (the version stamp makes this run once).
+        if self.version < 2 && self.countdowns.is_empty() {
+            self.countdowns = ConfigFile::default().countdowns;
+        }
+        self.version = CONFIG_VERSION;
+        true
     }
 
     /// Convert to the engine's runtime inputs.
@@ -409,7 +441,11 @@ pub fn load(path: &Path) -> std::io::Result<LoadOutcome> {
     let text = fs::read_to_string(path)?;
     match toml::from_str::<ConfigFile>(&text) {
         Ok(mut config) => {
-            if config.sanitize() {
+            // Version-gated upgrades first (e.g. seeding new default timers), then the per-load
+            // sanitize; persist if either touched the config.
+            let migrated = config.migrate();
+            let sanitized = config.sanitize();
+            if migrated || sanitized {
                 let _ = save(path, &config);
             }
             Ok(LoadOutcome {
@@ -475,8 +511,48 @@ mod tests {
         let mut cfg = ConfigFile::default();
         assert_eq!(cfg.rules.len(), 2);
         assert_eq!(cfg.alarms.len(), 5);
+        assert_eq!(cfg.countdowns.len(), 7); // the seeded timer presets (1m .. 1h)
+        assert_eq!(cfg.version, CONFIG_VERSION);
         // The shipped default must already be valid — sanitize should change nothing.
         assert!(!cfg.sanitize());
+    }
+
+    #[test]
+    fn migrate_seeds_default_timers_for_a_pre_timers_config() {
+        // A config from before timers existed (no countdowns, old version) gains the presets.
+        let mut cfg = ConfigFile {
+            version: 1,
+            countdowns: Vec::new(),
+            ..ConfigFile::default()
+        };
+        assert!(cfg.migrate());
+        assert_eq!(cfg.version, CONFIG_VERSION);
+        assert_eq!(cfg.countdowns.len(), 7);
+    }
+
+    #[test]
+    fn migrate_does_not_clobber_user_timers() {
+        let mut cfg = ConfigFile {
+            version: 1,
+            countdowns: vec![CountdownDto {
+                id: "mine".into(),
+                name: "Mine".into(),
+                duration_secs: 42,
+                chime_id: String::new(),
+                chime_volume_pct: 20,
+            }],
+            ..ConfigFile::default()
+        };
+        assert!(cfg.migrate());
+        assert_eq!(cfg.version, CONFIG_VERSION);
+        assert_eq!(cfg.countdowns.len(), 1, "existing timers are kept, presets not re-added");
+        assert_eq!(cfg.countdowns[0].id, "mine");
+    }
+
+    #[test]
+    fn migrate_is_a_noop_at_current_version() {
+        let mut cfg = ConfigFile::default(); // already at CONFIG_VERSION
+        assert!(!cfg.migrate());
     }
 
     #[test]

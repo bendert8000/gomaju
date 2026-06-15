@@ -41,6 +41,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.break_now" => pick(locale, "Break now", "立即休息"),
         "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
+        "tray.timers" => pick(locale, "Timers…", "計時器…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
         "tray.quit" => pick(locale, "Quit Gomaju", "結束 Gomaju"),
         "tray.tooltip" => pick(locale, "Gomaju — break reminder", "Gomaju — 休息提醒"),
@@ -93,11 +94,13 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "notif.startup" => pick(locale, "Running in the system tray", "正在系統匣中執行"),
         "notif.break_title" => pick(locale, "Gomaju · Break reminder", "Gomaju · 休息提醒"),
         "notif.alarm_title" => pick(locale, "Gomaju · Alarm", "Gomaju · 鬧鐘"),
+        "notif.timer_title" => pick(locale, "Gomaju · Timer", "Gomaju · 計時器"),
 
         // Native window titles
         "title.settings" => pick(locale, "Gomaju — Settings", "Gomaju — 設定"),
         "title.rules" => pick(locale, "Gomaju — Break rules", "Gomaju — 休息規則"),
         "title.alarms" => pick(locale, "Gomaju — Alarms", "Gomaju — 鬧鐘"),
+        "title.timers" => pick(locale, "Gomaju — Timers", "Gomaju — 計時器"),
         "title.chimes" => pick(locale, "Gomaju — Chimes", "Gomaju — 鈴聲"),
 
         _ => {

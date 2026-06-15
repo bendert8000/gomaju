@@ -16,6 +16,7 @@ const MESSAGES: Record<string, Entry> = {
   "title.settings": { en: "Gomaju — Settings", "zh-Hant": "Gomaju — 設定" },
   "title.rules": { en: "Gomaju — Break rules", "zh-Hant": "Gomaju — 休息規則" },
   "title.alarms": { en: "Gomaju — Alarms", "zh-Hant": "Gomaju — 鬧鐘" },
+  "title.timers": { en: "Gomaju — Timers", "zh-Hant": "Gomaju — 計時器" },
   "title.chimes": { en: "Gomaju — Chimes", "zh-Hant": "Gomaju — 鈴聲" },
 
   // --- Common ---
@@ -103,6 +104,10 @@ const MESSAGES: Record<string, Entry> = {
     en: "Show a notification on soft breaks",
     "zh-Hant": "柔性休息時顯示通知",
   },
+  "settings.show_timer_toasts_label": {
+    en: "Show a toast for each running timer",
+    "zh-Hant": "為每個執行中的計時器顯示提示窗",
+  },
   "settings.autostart_label": { en: "Launch at login", "zh-Hant": "登入時啟動" },
   "settings.chimes_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
   "settings.chimes_desc": {
@@ -182,6 +187,28 @@ const MESSAGES: Record<string, Entry> = {
   "alarms.in": { en: "in {dur}", "zh-Hant": "{dur} 後" },
   "alarms.default_name": { en: "Alarm", "zh-Hant": "鬧鐘" },
   "alarms.new_name": { en: "New alarm", "zh-Hant": "新鬧鐘" },
+
+  // --- Timers window (countdown timers) ---
+  "timers.heading": { en: "Gomaju — Timers", "zh-Hant": "Gomaju — 計時器" },
+  "timers.section_heading": { en: "Timers", "zh-Hant": "計時器" },
+  "timers.desc": {
+    en: "A countdown (1 second to 99:59:59) that plays its chime when it reaches zero. Start, pause, and reset each timer independently; many can run at once. Running timers reset to idle if Gomaju restarts.",
+    "zh-Hant":
+      "倒數計時（1 秒至 99:59:59），歸零時播放所選鈴聲。每個計時器可獨立開始、暫停與重設；可同時執行多個。Gomaju 重新啟動時，執行中的計時器會重設為閒置。",
+  },
+  "timers.add": { en: "+ Add timer", "zh-Hant": "＋ 新增計時器" },
+  "timers.name_ph": { en: "Timer name", "zh-Hant": "計時器名稱" },
+  "timers.duration": { en: "Duration", "zh-Hant": "時長" },
+  "timers.hours": { en: "Hours", "zh-Hant": "時" },
+  "timers.minutes": { en: "Minutes", "zh-Hant": "分" },
+  "timers.seconds": { en: "Seconds", "zh-Hant": "秒" },
+  "timers.start": { en: "Start", "zh-Hant": "開始" },
+  "timers.pause": { en: "Pause", "zh-Hant": "暫停" },
+  "timers.resume": { en: "Resume", "zh-Hant": "繼續" },
+  "timers.reset": { en: "Reset", "zh-Hant": "重設" },
+  "timers.stop": { en: "Stop", "zh-Hant": "停止" },
+  "timers.default_name": { en: "Timer", "zh-Hant": "計時器" },
+  "timers.new_name": { en: "New timer", "zh-Hant": "新計時器" },
 
   // Compact countdown to an alarm's next fire (largest two non-zero units). Each locale is a
   // self-contained template so units *and* spacing read naturally — e.g. "2d 3h" vs "2天3小時".
@@ -266,6 +293,7 @@ const MESSAGES: Record<string, Entry> = {
   "toast.starting_in": { en: "starting in {mmss}", "zh-Hant": "{mmss} 後開始" },
   "toast.starting_soon": { en: "starting soon…", "zh-Hant": "即將開始…" },
   "toast.delay": { en: "Delay 1 min", "zh-Hant": "延後 1 分鐘" },
+  "toast.break_now": { en: "Break now", "zh-Hant": "立即休息" },
 
   // --- Pause reminder toast ---
   "pause_toast.title": { en: "Still paused?", "zh-Hant": "仍在暫停？" },

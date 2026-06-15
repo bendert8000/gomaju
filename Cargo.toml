@@ -8,13 +8,8 @@ resolver = "2"
 # to ~19 GB; this cuts it to a fraction with no loss of backtraces.
 debug = "line-tables-only"
 
-[profile.release]
-# Smaller release binary (Cargo's default release profile applies no size optimizations).
-# LTO + a single codegen unit + size-favoring opt-level do most of the work; `strip` drops
-# symbol tables (a big win on Linux/macOS; minor on Windows MSVC, where debug info lives in a
-# separate .pdb that isn't shipped). `panic = "abort"` deliberately left off — it shaves a bit
-# more but changes panic behavior, so it's an opt-in.
-opt-level = "s"
-lto = true
-codegen-units = 1
-strip = true
+# NOTE: no custom [profile.release] — Cargo's defaults (opt-level=3, lto=false,
+# codegen-units=16, no strip) are used deliberately for faster release compiles. A
+# size-optimized profile (opt-level="s" + lto + codegen-units=1 + strip) cut the Windows
+# binary ~33% (12.1 → 8.2 MB) but made release builds much slower (LTO + single codegen
+# unit); we trade that smaller binary back for build speed. Re-add the block if size matters.

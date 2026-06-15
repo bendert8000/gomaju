@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -5,6 +6,7 @@ use std::time::Instant;
 use gomaju_core::chime::ChimeDto;
 use gomaju_core::{config::ConfigFile, Engine};
 
+use crate::countdown::CountdownRun;
 use crate::idle::IdleStatus;
 
 #[derive(Default)]
@@ -39,6 +41,11 @@ pub struct AppState {
     pub running_since: Mutex<Option<Instant>>,
     /// Runtime-only scheduler for the "still paused?" reminder dialog.
     pub pause_reminder: Mutex<PauseReminderState>,
+    /// Live run state for countdown timers, keyed by `CountdownDto.id`. Absent = idle.
+    /// In-memory only (never persisted), so every cold start begins with all timers idle —
+    /// the user's chosen "reset on restart" behavior. The countdown scheduler reads/transitions
+    /// this each tick; the timer commands start/pause/reset entries here without touching disk.
+    pub countdown_runtime: Mutex<HashMap<String, CountdownRun>>,
 }
 
 impl AppState {
@@ -94,6 +101,7 @@ mod tests {
             idle_status: IdleStatus::Active,
             running_since: Mutex::new(None),
             pause_reminder: Mutex::new(PauseReminderState::default()),
+            countdown_runtime: Mutex::new(HashMap::new()),
         }
     }
 

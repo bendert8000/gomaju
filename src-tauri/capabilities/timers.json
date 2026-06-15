@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "timers",
+  "description": "Capability for the timers (countdown) window. Almost no core API access — it invokes app-defined commands (cmd_get_countdowns / cmd_save_countdowns / cmd_start_countdown / cmd_pause_countdown / cmd_reset_countdown / cmd_close_countdowns / cmd_window_ready, plus the read-only cmd_get_chimes and cmd_preview_chime_by_id / cmd_stop_preview for the chime picker), which are not capability-gated and are restricted to this window by the require_timers() / shows_chime_picker() caller-checks in src/commands.rs. core:event:allow-listen is granted so the unsaved-changes guard can register getCurrentWindow().onCloseRequested (src/unsaved-guard.ts) and the chime-preview button can listen for the preview-ended event.",
+  "windows": ["timers"],
+  "permissions": ["core:event:allow-listen"]
+}

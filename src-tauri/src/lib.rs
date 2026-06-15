@@ -6,6 +6,7 @@ mod autostart;
 mod breaks_window;
 mod chimes_window;
 mod commands;
+mod countdown;
 mod hotkeys;
 mod i18n;
 mod idle;
@@ -16,6 +17,8 @@ mod pause_toast;
 mod quotes;
 mod runtime;
 mod settings_window;
+mod timer_toast;
+mod timers_window;
 mod toast;
 mod tray;
 mod webview;
@@ -172,6 +175,8 @@ pub fn run() {
                 // `Some` when we started counting now; `None` while the resume prompt is pending.
                 running_since: Mutex::new(running_since),
                 pause_reminder: Mutex::new(Default::default()),
+                // Countdown timers always start idle (run state is never persisted).
+                countdown_runtime: Mutex::new(Default::default()),
             });
 
             tray::build_tray(&handle)?;
@@ -180,6 +185,8 @@ pub fn run() {
             runtime::spawn_ticker(handle.clone(), idle);
             // Wall-clock alarms run on their own thread, independent of the break engine.
             alarm::spawn_scheduler(handle.clone());
+            // Countdown timers fire on their own faster (~250ms) thread, also engine-independent.
+            countdown::spawn_scheduler(handle.clone());
 
             // Apply persisted hotkeys + autostart preference.
             let hotkey_errors = hotkeys::apply(&handle, &hotkeys_cfg);
@@ -227,6 +234,9 @@ pub fn run() {
                 if std::env::var("GOMAJU_OPEN_ALARMS").is_ok() {
                     alarms_window::open(&handle);
                 }
+                if std::env::var("GOMAJU_OPEN_TIMERS").is_ok() {
+                    timers_window::open(&handle);
+                }
                 if std::env::var("GOMAJU_BREAK_ON_START").is_ok() {
                     let h = handle.clone();
                     std::thread::spawn(move || {
@@ -243,6 +253,7 @@ pub fn run() {
             commands::cmd_skip,
             commands::cmd_reset_timer,
             commands::cmd_delay_break,
+            commands::cmd_break_now_rule,
             commands::cmd_resume_from_pause_reminder,
             commands::cmd_stay_paused_from_reminder,
             commands::cmd_get_config,
@@ -258,6 +269,13 @@ pub fn run() {
             commands::cmd_get_alarm_fires,
             commands::cmd_save_alarms,
             commands::cmd_close_alarms,
+            commands::cmd_get_countdowns,
+            commands::cmd_save_countdowns,
+            commands::cmd_start_countdown,
+            commands::cmd_pause_countdown,
+            commands::cmd_reset_countdown,
+            commands::cmd_close_countdowns,
+            commands::cmd_toast_stop_countdown,
             commands::cmd_get_rules,
             commands::cmd_set_rule_flags,
             commands::cmd_close_breaks,

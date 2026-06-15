@@ -5,6 +5,7 @@ use tauri_plugin_dialog::DialogExt;
 use gomaju_core::alarm::{self, AlarmDto};
 use gomaju_core::chime::{self, ChimeDto, ChimesFile};
 use gomaju_core::config::{self, ConfigFile, RuleDto};
+use gomaju_core::countdown::CountdownDto;
 
 use crate::alarms_window::{self, ALARMS_LABEL};
 use crate::app_state::AppState;
@@ -12,6 +13,7 @@ use crate::breaks_window::{self, BREAKS_LABEL};
 use crate::chimes_window::{self, CHIMES_LABEL};
 use crate::idle::IdleStatus;
 use crate::settings_window::{self, SETTINGS_LABEL};
+use crate::timers_window::{self, TIMERS_LABEL};
 use crate::{autostart, hotkeys, runtime};
 
 /// Pure, unit-testable predicate: is this window label the settings window?
@@ -34,11 +36,16 @@ fn is_chimes(label: &str) -> bool {
     label == CHIMES_LABEL
 }
 
+/// Pure, unit-testable predicate: is this window label the timers window?
+fn is_timers(label: &str) -> bool {
+    label == TIMERS_LABEL
+}
+
 /// Windows that show a chime picker (`<select>`), and so may preview a chime by id: the settings
-/// rules editor and the alarms window. (The chimes window previews unsaved definitions via
-/// `cmd_preview_chime` instead, so it is intentionally not here.)
+/// rules editor, the alarms window, and the timers window. (The chimes window previews unsaved
+/// definitions via `cmd_preview_chime` instead, so it is intentionally not here.)
 fn shows_chime_picker(label: &str) -> bool {
-    is_settings(label) || is_alarms(label)
+    is_settings(label) || is_alarms(label) || is_timers(label)
 }
 
 /// Windows that carry a chime preview ▶/⏸ button, and so may stop a running preview: the chime
@@ -76,6 +83,21 @@ fn require_breaks(window: &WebviewWindow) -> Result<(), String> {
 /// Reject a chimes-write command invoked from any window other than the chimes window.
 fn require_chimes(window: &WebviewWindow) -> Result<(), String> {
     gate(is_chimes(window.label()), "chimes")
+}
+
+/// Reject a timers command invoked from any window other than the timers window.
+fn require_timers(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_timers(window.label()), "timers")
+}
+
+/// True for a per-timer toast window (`timer-toast-<id>`).
+fn is_timer_toast(label: &str) -> bool {
+    label.starts_with(crate::timer_toast::TIMER_TOAST_PREFIX)
+}
+
+/// Reject the toast ✕ command invoked from any window other than a timer-toast window.
+fn require_timer_toast(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_timer_toast(window.label()), "timer-toast")
 }
 
 /// Reject the snooze command invoked from any window other than the pre-break warning toast.
@@ -139,6 +161,20 @@ pub fn cmd_delay_break(
         .unwrap()
         .delay_break(&rule_id, std::time::Duration::from_secs(secs));
     runtime::apply_effects(&app, &fx);
+    Ok(())
+}
+
+/// Take the imminent break **now** (the pre-break toast's "Break now"): fire `rule_id`'s break
+/// immediately. The resulting `StartBreak` effect opens the overlay and closes this toast. Toast-only.
+#[tauri::command]
+pub fn cmd_break_now_rule(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+    rule_id: String,
+) -> Result<(), String> {
+    require_toast(&window)?;
+    runtime::action_break_now_rule(&app, state.inner(), &rule_id);
     Ok(())
 }
 
@@ -283,6 +319,8 @@ pub fn cmd_save_config(
 
     reconfigure_engine(&app, state.inner(), &config);
     runtime::sync_pause_reminder(&app);
+    // A `show_timer_toasts` toggle is picked up by the scheduler's next reconcile tick (toast
+    // windows must be created off this main-thread command path — see `timer_toast`).
 
     let hotkey_errors = hotkeys::apply(&app, &config.hotkeys);
     autostart::apply(&app, config.autostart);
@@ -404,7 +442,171 @@ pub fn cmd_close_alarms(window: WebviewWindow, app: AppHandle) -> Result<(), Str
     Ok(())
 }
 
-// --- Chimes (chimes-window writes; settings/alarms/chimes may read the list) ---
+// --- Countdown timers (timers-window only) ---
+
+/// One timer's saved definition plus its live run state, for the Timers window.
+#[derive(Serialize)]
+pub struct CountdownView {
+    pub def: CountdownDto,
+    /// "idle" | "running" | "paused".
+    pub state: &'static str,
+    /// Whole seconds left (ceil); the full duration when idle.
+    pub remaining_secs: u32,
+}
+
+/// The saved timers joined with their in-memory run state. The window polls this each second.
+#[tauri::command]
+pub fn cmd_get_countdowns(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<Vec<CountdownView>, String> {
+    require_timers(&window)?;
+    let now = std::time::Instant::now();
+    let defs = state.config.lock().unwrap().countdowns.clone();
+    let map = state.countdown_runtime.lock().unwrap();
+    let views = defs
+        .into_iter()
+        .map(|def| {
+            let run = map.get(&def.id);
+            let remaining = match run {
+                Some(r) => crate::countdown::remaining_secs(r, now),
+                None => def.duration_secs, // idle -> show the full duration
+            };
+            CountdownView {
+                state: crate::countdown::state_str(run),
+                remaining_secs: remaining,
+                def,
+            }
+        })
+        .collect();
+    Ok(views)
+}
+
+/// Persist the edited timer list (clone → swap → sanitize → write → swap cache, like
+/// `cmd_save_alarms`), then prune run state for any timers that were deleted. Returns the
+/// sanitized list **with live run state** (so the UI re-render keeps running timers' state
+/// instead of flashing them idle). Note: an id regenerated by sanitize loses its run entry on
+/// prune — i.e. saving an edited *running* timer resets it, acceptable for a local single-user app.
+#[tauri::command]
+pub fn cmd_save_countdowns(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    countdowns: Vec<CountdownDto>,
+) -> Result<Vec<CountdownView>, String> {
+    require_timers(&window)?;
+    let config = state
+        .with_config_write(move |cur| {
+            cur.countdowns = countdowns;
+            gomaju_core::countdown::sanitize_countdowns(&mut cur.countdowns);
+            true
+        })?
+        .expect("save always writes");
+    let now = std::time::Instant::now();
+    let mut map = state.countdown_runtime.lock().unwrap();
+    {
+        let valid: std::collections::HashSet<&str> =
+            config.countdowns.iter().map(|c| c.id.as_str()).collect();
+        map.retain(|id, _| valid.contains(id.as_str()));
+    }
+    let views = config
+        .countdowns
+        .iter()
+        .map(|def| {
+            let run = map.get(&def.id);
+            CountdownView {
+                state: crate::countdown::state_str(run),
+                remaining_secs: run
+                    .map(|r| crate::countdown::remaining_secs(r, now))
+                    .unwrap_or(def.duration_secs),
+                def: def.clone(),
+            }
+        })
+        .collect();
+    // Deleted timers' toasts are closed by the scheduler's next reconcile tick.
+    Ok(views)
+}
+
+/// Start (or resume) a timer. No-op if `id` isn't a saved timer (avoids orphan run state).
+// Toast windows are reconciled by the countdown scheduler thread (see `timer_toast::sync`), NOT
+// here — creating a webview from a command (main-thread WebView2 IPC callback) deadlocks on
+// Windows. These commands only mutate the in-memory run state; the toast appears/closes on the
+// next ~250 ms scheduler tick.
+#[tauri::command]
+pub fn cmd_start_countdown(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    require_timers(&window)?;
+    let duration = state
+        .config
+        .lock()
+        .unwrap()
+        .countdowns
+        .iter()
+        .find(|c| c.id == id)
+        .map(|c| std::time::Duration::from_secs(c.duration_secs as u64));
+    let Some(duration) = duration else {
+        return Ok(()); // unknown/unsaved id -> no-op
+    };
+    let now = std::time::Instant::now();
+    let mut map = state.countdown_runtime.lock().unwrap();
+    crate::countdown::start(&mut map, &id, duration, now);
+    Ok(())
+}
+
+/// Pause a running timer (no-op otherwise).
+#[tauri::command]
+pub fn cmd_pause_countdown(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    require_timers(&window)?;
+    let now = std::time::Instant::now();
+    let mut map = state.countdown_runtime.lock().unwrap();
+    crate::countdown::pause(&mut map, &id, now);
+    Ok(())
+}
+
+/// Reset a timer back to idle.
+#[tauri::command]
+pub fn cmd_reset_countdown(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    require_timers(&window)?;
+    let mut map = state.countdown_runtime.lock().unwrap();
+    crate::countdown::reset(&mut map, &id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cmd_close_countdowns(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_timers(&window)?;
+    timers_window::close(&app);
+    Ok(())
+}
+
+/// The ✕ on a running-timer toast: stop (reset) that timer. The id comes from the toast's **own**
+/// window label, so it can't target another timer; resetting it makes the scheduler's next
+/// reconcile tick close this toast.
+#[tauri::command]
+pub fn cmd_toast_stop_countdown(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_timer_toast(&window)?;
+    if let Some(id) = crate::timer_toast::id_from_label(window.label()) {
+        let id = id.to_string();
+        let mut map = state.countdown_runtime.lock().unwrap();
+        crate::countdown::reset(&mut map, &id);
+    }
+    Ok(())
+}
+
+// --- Chimes (chimes-window writes; settings/alarms/timers/chimes may read the list) ---
 
 /// The saved chime list. Readable from the windows that show a chime picker (settings rules
 /// editor + alarms) and the chimes editor itself; writes stay chimes-only.
@@ -414,8 +616,11 @@ pub fn cmd_get_chimes(
     state: State<'_, AppState>,
 ) -> Result<Vec<ChimeDto>, String> {
     gate(
-        is_settings(window.label()) || is_alarms(window.label()) || is_chimes(window.label()),
-        "settings/alarms/chimes",
+        is_settings(window.label())
+            || is_alarms(window.label())
+            || is_timers(window.label())
+            || is_chimes(window.label()),
+        "settings/alarms/timers/chimes",
     )?;
     Ok(state.chimes.lock().unwrap().clone())
 }
@@ -737,7 +942,8 @@ pub fn cmd_set_locale(window: WebviewWindow, app: AppHandle, locale: String) -> 
 #[cfg(test)]
 mod tests {
     use super::{
-        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, shows_chime_picker,
+        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, is_timers,
+        shows_chime_picker,
     };
 
     #[test]
@@ -785,10 +991,22 @@ mod tests {
     }
 
     #[test]
+    fn only_the_timers_window_is_privileged_for_timer_commands() {
+        assert!(is_timers("timers"));
+        assert!(!is_timers("settings"));
+        assert!(!is_timers("alarms"));
+        assert!(!is_timers("breaks"));
+        assert!(!is_timers("overlay-0"));
+        assert!(!is_timers("Timers")); // case-sensitive
+        assert!(!is_timers(""));
+    }
+
+    #[test]
     fn only_chime_picker_windows_may_preview_by_id() {
         // cmd_preview_chime_by_id: the windows that show a chime <select>.
         assert!(shows_chime_picker("settings"));
         assert!(shows_chime_picker("alarms"));
+        assert!(shows_chime_picker("timers"));
         // Chimes previews unsaved defs via cmd_preview_chime, not by id; everything else is denied.
         assert!(!shows_chime_picker("chimes"));
         assert!(!shows_chime_picker("breaks"));
@@ -802,6 +1020,7 @@ mod tests {
         // cmd_stop_preview: the chime pickers plus the chimes editor.
         assert!(has_chime_preview("settings"));
         assert!(has_chime_preview("alarms"));
+        assert!(has_chime_preview("timers"));
         assert!(has_chime_preview("chimes"));
         assert!(!has_chime_preview("breaks"));
         assert!(!has_chime_preview("overlay-0"));

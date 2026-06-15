@@ -25,9 +25,18 @@ const titleEl = document.getElementById("toast-title")!;
 const subEl = document.getElementById("toast-sub")!;
 const barEl = document.getElementById("toast-bar") as HTMLElement;
 const delayEl = document.getElementById("toast-delay") as HTMLButtonElement;
+const breakNowEl = document.getElementById("toast-break-now") as HTMLButtonElement;
 
 titleEl.textContent = t("toast.title", { name: info.name });
 delayEl.textContent = t("toast.delay");
+breakNowEl.textContent = t("toast.break_now");
+// Break now: start this rule's break immediately. The resulting StartBreak effect opens the
+// overlay and closes this toast.
+breakNowEl.addEventListener("click", () => {
+  invoke("cmd_break_now_rule", { ruleId: info.rule_id }).catch((err) =>
+    console.error("gomaju: break now failed", err),
+  );
+});
 // Snooze: push this break back 1 minute. The backend closes the toast (cancelled-warning effect).
 delayEl.addEventListener("click", () => {
   invoke("cmd_delay_break", { ruleId: info.rule_id, secs: 60 }).catch((err) =>

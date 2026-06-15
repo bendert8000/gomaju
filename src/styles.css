@@ -331,10 +331,25 @@ body {
 .toast__delay--primary:hover {
   background: rgba(143, 207, 154, 0.3);
 }
+/* "Break now": affirmative green call-to-action. Solid app-success green (#5fd29a, same hue as
+   .ok and the enabled halos) with dark text for contrast; brighter on hover. */
+.toast__delay--go {
+  color: #06240f;
+  background: #5fd29a;
+  border-color: #5fd29a;
+  font-weight: 600;
+}
+.toast__delay--go:hover {
+  background: #6fe0a8;
+  border-color: #6fe0a8;
+}
+/* The toast's two actions (Break now / Delay 1 min) stack vertically — there's no horizontal
+   room beside the mascot that peeks in from the right. */
 .toast__actions {
+  flex: 0 0 auto;
   display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 .toast__hint {
   font-size: 0.72rem;
@@ -899,6 +914,135 @@ input.chime-volume-picker {
 }
 .alarm-next:empty {
   display: none;
+}
+
+/* --- Timers window (countdown timers) --- */
+.timer-name {
+  flex: 1;
+  min-width: 8rem;
+}
+.timer-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.timer-duration-label {
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+/* The three hh/mm/ss sub-fields rendered as one bordered box (mirrors a normal text input). */
+.timer-dur-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 0.15rem 0.35rem;
+  background: rgba(0, 0, 0, 0.18);
+  font-variant-numeric: tabular-nums;
+}
+.timer-dur-group:focus-within {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.timer-dur-group input {
+  width: 1.7rem;
+  flex: 0 0 1.7rem;
+  border: none;
+  background: transparent;
+  text-align: center;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.timer-dur-group input:focus {
+  outline: none;
+}
+.timer-dur-sep {
+  opacity: 0.6;
+  user-select: none;
+}
+.timer-controls {
+  gap: 0.6rem;
+}
+.timer-toggle {
+  min-width: 5.5rem;
+}
+.timer-remaining {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.timer-remaining:empty {
+  display: none;
+}
+/* Running / paused accents on the timer card (reusing the alarm card's `--on` halo var). */
+.timer-item[data-state="running"] {
+  --on: #5fd29a;
+  border-color: color-mix(in srgb, var(--on) 50%, transparent);
+  background: color-mix(in srgb, var(--on) 7%, transparent);
+}
+.timer-item[data-state="paused"] {
+  --on: #e0b341;
+  border-color: color-mix(in srgb, var(--on) 45%, transparent);
+  background: color-mix(in srgb, var(--on) 6%, transparent);
+}
+
+/* --- Running-timer toast (one window per running countdown, stacked bottom-right) --- */
+.timer-toast {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.85rem;
+  background: #161b24;
+  color: #eef2f7;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+  font-size: 0.95rem;
+  animation: gomaju-fade-in 250ms ease-out;
+}
+.timer-toast__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.timer-toast__icon {
+  flex: 0 0 auto;
+}
+.timer-toast__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.timer-toast__time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+.timer-toast__stop {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef2f7;
+  cursor: pointer;
+  line-height: 1;
+}
+.timer-toast__stop:hover {
+  background: rgba(255, 80, 80, 0.35);
 }
 
 /* --- Break-rules dashboard (quick select) --- */

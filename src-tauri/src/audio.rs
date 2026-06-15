@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
@@ -245,6 +246,105 @@ pub fn play_alarm_chime(chime_id: &str, volume_pct: u8, chimes: &[ChimeDto], chi
         "alarm tone",
         fill_alarm,
     );
+}
+
+/// True while a countdown chime is sounding. Several countdown timers can come due in the same
+/// tick; the cues are fire-and-forget, so without a guard they'd stack unbounded overlapping
+/// audio threads. We allow at most one countdown chime at a time:
+/// if one is already sounding, additional fires are skipped here (the scheduler still shows
+/// the notification). This is the countdown equivalent of the alarm "one chime per minute" rule.
+static COUNTDOWN_SOUNDING: AtomicBool = AtomicBool::new(false);
+
+/// Like [`play`], but single-slot for countdowns: if a countdown chime is already sounding, skip.
+/// A drop guard clears the busy flag however the thread exits (device error, decode error, or
+/// natural end), so a one-off failure can never wedge the slot shut.
+fn play_countdown<F>(fill: F)
+where
+    F: FnOnce(&Sink) + Send + 'static,
+{
+    if COUNTDOWN_SOUNDING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return; // already sounding -> coalesce this fire
+    }
+    std::thread::spawn(move || {
+        struct Busy;
+        impl Drop for Busy {
+            fn drop(&mut self) {
+                COUNTDOWN_SOUNDING.store(false, Ordering::Release);
+            }
+        }
+        let _busy = Busy;
+
+        let (_stream, handle) = match OutputStream::try_default() {
+            Ok(out) => out,
+            Err(e) => {
+                crate::rlog!("gomaju: no audio output device ({e})");
+                return;
+            }
+        };
+        let sink = match Sink::try_new(&handle) {
+            Ok(s) => s,
+            Err(e) => {
+                crate::rlog!("gomaju: could not create audio sink ({e})");
+                return;
+            }
+        };
+        fill(&sink);
+        sink.append(silence(SYNTH_TAIL_MS)); // drain on silence so the stream drop doesn't pop
+        sink.sleep_until_end();
+        crate::rlog!("gomaju: countdown chime played");
+    });
+}
+
+/// Countdown cue: the timer's assigned chime, or the built-in default tone (the alarm tone,
+/// reused so there's no new sound to maintain). Single-slot via [`play_countdown`] so a burst of
+/// simultaneous timers can't pile up overlapping audio. Resolution mirrors [`play_assigned_or`];
+/// `NONE_CHIME_ID` plays nothing.
+pub fn play_countdown_chime(chime_id: &str, volume_pct: u8, chimes: &[ChimeDto], chimes_dir: &Path) {
+    if chime_id == NONE_CHIME_ID {
+        return; // explicit "None" -> silence
+    }
+    if !chime_id.is_empty() {
+        if let Some(c) = chimes.iter().find(|c| c.id == chime_id) {
+            match c.kind {
+                ChimeKindDto::Tones if !c.steps.is_empty() => {
+                    let steps = c.steps.clone();
+                    play_countdown(move |sink| {
+                        sink.set_volume(volume_pct as f32 / 100.0);
+                        for s in &steps {
+                            sink.append(tone_source(s));
+                        }
+                    });
+                    return;
+                }
+                ChimeKindDto::File if is_safe_filename(&c.file) => {
+                    let path = chimes_dir.join(&c.file);
+                    play_countdown(move |sink| {
+                        sink.set_volume(volume_pct as f32 / 100.0);
+                        match std::fs::File::open(&path) {
+                            Ok(file) => match rodio::Decoder::new(std::io::BufReader::new(file)) {
+                                Ok(source) => sink.append(source),
+                                Err(e) => {
+                                    crate::rlog!("gomaju: could not decode chime {} ({e})", path.display())
+                                }
+                            },
+                            Err(e) => {
+                                crate::rlog!("gomaju: could not open chime {} ({e})", path.display())
+                            }
+                        }
+                    });
+                    return;
+                }
+                _ => {} // malformed -> fall through to the default tone
+            }
+        }
+    }
+    play_countdown(move |sink| {
+        sink.set_volume(volume_pct as f32 / 100.0);
+        fill_alarm(sink);
+    });
 }
 
 // --- Stoppable preview (Chimes window) ---

@@ -100,6 +100,13 @@ fn build_menu(
         true,
         None::<&str>,
     )?;
+    let timers = MenuItem::with_id(
+        app,
+        "timers",
+        i18n::tr(locale, "tray.timers"),
+        true,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(
         app,
         "settings",
@@ -137,6 +144,7 @@ fn build_menu(
         &sep1,
         &rules,
         &alarms,
+        &timers,
         &settings,
         &sep2,
         &quit,
@@ -184,6 +192,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "breaks" => crate::breaks_window::open(app),
                 "settings" => crate::settings_window::open(app),
                 "alarms" => crate::alarms_window::open(app),
+                "timers" => crate::timers_window::open(app),
                 "quit" => {
                     crate::rlog!("gomaju: quit requested");
                     app.exit(0);

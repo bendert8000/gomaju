@@ -1,7 +1,7 @@
 # Starter config a fresh install is seeded with (see config::ConfigFile::default, which
 # embeds this file via include_str!). Same format as the on-disk config.toml, so it can be
 # tuned without touching Rust. Keep it valid + sanitize-clean — tests enforce both.
-version = 1
+version = 2
 locale = "zh-Hant"
 autostart = true
 
@@ -18,6 +18,7 @@ show_quotes = true
 pause_reminder_enabled = true
 pause_reminder_interval_secs = 300
 resume_prompt_enabled = true
+show_timer_toasts = true
 
 [hotkeys]
 
@@ -102,3 +103,39 @@ weekdays = []
 day_of_month = 25
 month = 0
 enabled = true
+
+# Countdown-timer presets. Each plays the default tone at zero (chime fields omitted).
+[[countdowns]]
+id = "timer-1m"
+name = "1m"
+duration_secs = 60
+
+[[countdowns]]
+id = "timer-3m"
+name = "3m"
+duration_secs = 180
+
+[[countdowns]]
+id = "timer-5m"
+name = "5m"
+duration_secs = 300
+
+[[countdowns]]
+id = "timer-10m"
+name = "10m"
+duration_secs = 600
+
+[[countdowns]]
+id = "timer-15m"
+name = "15m"
+duration_secs = 900
+
+[[countdowns]]
+id = "timer-30m"
+name = "30m"
+duration_secs = 1800
+
+[[countdowns]]
+id = "timer-1h"
+name = "1h"
+duration_secs = 3600

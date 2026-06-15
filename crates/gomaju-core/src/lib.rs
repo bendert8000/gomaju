@@ -7,6 +7,7 @@
 pub mod alarm;
 pub mod chime;
 pub mod config;
+pub mod countdown;
 mod engine;
 pub mod progress;
 pub mod quotes;

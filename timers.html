@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gomaju — Timers</title>
+    <script type="module" src="/src/timers.ts" defer></script>
+  </head>
+  <body class="settings-page">
+    <header class="settings-header">
+      <h1 data-i18n="timers.heading">Gomaju — Timers</h1>
+    </header>
+
+    <main class="settings-main">
+      <section class="card">
+        <h2 data-i18n="timers.section_heading">Timers</h2>
+        <p class="muted" data-i18n="timers.desc">
+          A countdown (1 second to 99:59:59) that plays its chime when it reaches zero. Start,
+          pause, and reset each timer independently; many can run at once. Running timers reset
+          to idle if Gomaju restarts.
+        </p>
+        <div id="timers"></div>
+        <button id="add-timer" type="button" class="btn-ghost" data-i18n="timers.add">+ Add timer</button>
+      </section>
+    </main>
+
+    <footer class="settings-footer">
+      <span id="save-msg" class="muted"></span>
+      <div class="actions">
+        <button id="close-btn" type="button" class="btn-ghost" data-i18n="common.close">Close</button>
+        <button id="save-btn" type="button" class="btn-primary" data-i18n="common.save">Save</button>
+      </div>
+    </footer>
+  </body>
+</html>

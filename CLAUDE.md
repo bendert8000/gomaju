@@ -72,6 +72,60 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   tray) does CRUD via `cmd_get_alarms`/`cmd_save_alarms`/`cmd_close_alarms`, gated by
   `require_alarms`. Save is clone→sanitize→write→swap (never mutate cache before disk).
 
+## Timers (countdown timers, separate from breaks & alarms)
+
+- A **countdown** is a reusable preset (name + `duration_secs` 1..=359_999 = `99:59:59` + chime),
+  unlike a wall-clock alarm; it's one-shot (fires once, then idle). The dependency-free
+  **definition** + `sanitize_countdowns` live in
+  `crates/gomaju-core/src/countdown.rs` (persisted in `config.toml` as `[[countdowns]]`, omitted
+  when empty). **Backend uses the noun `countdown`** (module/DTO/`cmd_*_countdown`) to avoid
+  colliding with the break engine's own "timer" (`cmd_reset_timer`, `Engine::reset_timer`); the
+  **UI keeps "Timers"** (window label `timers`, `timers.html`/`src/timers.ts`, `timers.json`).
+- **Run state is host-only and in-memory** (`AppState.countdown_runtime: Mutex<HashMap<id,
+  CountdownRun>>`, `CountdownRun = Running{finish_at: Instant} | Paused{remaining}`, absent =
+  idle), **never persisted** → every cold start is idle ("reset on restart"). Start/Pause/Reset
+  (`cmd_start_countdown`/`cmd_pause_countdown`/`cmd_reset_countdown`) mutate only this map (no
+  disk). The pure transition helpers (`start`/`pause`/`reset`/`remaining_secs` ceil) take
+  `now: Instant`, so they're unit-tested without a clock.
+- Firing loop: `src-tauri/src/countdown.rs::spawn_scheduler` — a **~250 ms** thread (finer than
+  alarms' 1 s). Each tick it snapshots the config (config lock, released), then does the
+  due-check **and** the state transition (one-shot: fire, then remove) **atomically under one
+  `countdown_runtime` lock** before any side effect — so a concurrent reset/pause/save can't be
+  clobbered and a deleted/reset timer can't be resurrected. Lock order is always config→runtime.
+  Side effects after unlock: notification (gated by `settings.notifications`) + chime via
+  `audio::play_countdown_chime`, a **single-slot** cue (busy-flag guard mirroring `PREVIEW`) so
+  many simultaneous timers don't stack overlapping audio. The chime is **not** gated by
+  `settings.sound` (a timer the user started should always sound, like an alarm).
+- The **Timers window** (`timers.html` / `src/timers.ts`, label `timers`, tray "Timers…") does
+  CRUD via `cmd_get_countdowns`/`cmd_save_countdowns` (both return `CountdownView` = def + live
+  state) + the start/pause/reset commands, gated by `require_timers`. Duration is **three 2-digit
+  sub-fields** (hh/mm/ss) styled as one `hh:mm:ss` box (`type="text"` so `.select()` works in
+  WebView2 — `type="number"` can't `select()`): focusing a section selects it, per-field clamp is
+  hh≤99 / mm≤59 / ss≤59, auto-advance on 2 digits. Deliberately **not** `<input type=time>`,
+  which renders AM/PM in 12-hour locales (wrong for a duration). It polls `cmd_get_countdowns`
+  each second, rewriting **only** the toggle label +
+  remaining readout (never the editable inputs). Start auto-saves first when dirty (the scheduler
+  reads durations from the saved config). The tray has a **"Timers…"** menu item that opens the
+  window; running timers are **not** listed in the tray (a deliberate choice — no per-second tray churn).
+- **Default presets + migration:** `default_config.toml` seeds 7 presets (1m/3m/5m/10m/15m/30m/1h).
+  Because that only seeds fresh installs, `ConfigFile::migrate()` (run in `config::load`, gated by
+  `CONFIG_VERSION` — bumped to **2**) seeds them once into older configs that have **no** countdowns
+  (never clobbers a user's list, never re-adds after a deliberate clear).
+- **Running-timer toasts** (`src-tauri/src/timer_toast.rs`, `timer-toast.html` / `src/timer-toast.ts`,
+  windows `timer-toast-<id>`, capability `timer-toast-*` in `overlay.json`): one small frameless,
+  always-on-top, non-focus-stealing toast per **running** timer, stacked bottom-right above the tray.
+  Gated by the **`settings.show_timer_toasts`** bool (default on). `timer_toast::sync(app)` is the
+  single idempotent reconciler — desired (running timers in config order, if the setting is on) vs the
+  actual `timer-toast-*` windows; it creates/closes the diff and re-stacks, with a cheap set-equality
+  early-out. **It is driven by the countdown scheduler's ~250 ms background tick — NOT from the
+  commands.** This is load-bearing: creating a webview window from a command (which runs on the main
+  thread inside a WebView2 IPC callback) re-enters the message loop and **deadlocks/hangs on Windows**;
+  driving it from a background thread (like the break toast) creates windows in a clean main-thread
+  context. The commands (`cmd_start_countdown` / pause / reset / `cmd_toast_stop_countdown` /
+  `cmd_save_countdowns`) only mutate run state; toasts appear/close on the next tick (≤250 ms). Each
+  toast injects `{id,name,remaining_secs}` and counts down locally; the host closes it on finish/stop
+  (no event push, empty capability). The ✕ derives its timer id from the window's own label.
+
 ## Break rules (two editors, shared UI)
 
 - Break rules live in **two** windows: **Settings** (`index.html` / `src/main.ts`, "Rules"
@@ -222,6 +276,7 @@ in unit tests) `rlog!` is stderr-only. **Use `crate::rlog!(...)`, not `eprintln!
 - `GOMAJU_BREAK_ON_START=1` — fire a break ~2s after launch.
 - `GOMAJU_OPEN_SETTINGS=1` — open the settings window on launch.
 - `GOMAJU_OPEN_ALARMS=1` — open the alarms window on launch.
+- `GOMAJU_OPEN_TIMERS=1` — open the timers window on launch.
 - `GOMAJU_NO_OPEN_RULES=1` — suppress the break-rules window's cold-start auto-open.
 - Frontends log `gomaju: window content loaded: <label>` once their page renders —
   a useful signal that embedded assets actually loaded (it never fires in a broken
