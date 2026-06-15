@@ -146,6 +146,10 @@ pub struct SettingsDto {
     /// timer. UI/host-only. Defaults on so the feature is visible after the update.
     #[serde(default = "default_true")]
     pub show_timer_toasts: bool,
+    /// Count timers up from zero to the configured duration instead of down to zero. Display-only —
+    /// the fire instant is unchanged. Defaults off (countdown) so existing configs keep behavior.
+    #[serde(default)]
+    pub timer_count_up: bool,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -237,6 +241,7 @@ impl Default for SettingsDto {
             pause_reminder_interval_secs: default_pause_reminder_interval_secs(),
             resume_prompt_enabled: true,
             show_timer_toasts: true,
+            timer_count_up: false,
         }
     }
 }

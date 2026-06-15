@@ -19,6 +19,7 @@ pause_reminder_enabled = true
 pause_reminder_interval_secs = 300
 resume_prompt_enabled = true
 show_timer_toasts = true
+timer_count_up = false
 
 [hotkeys]
 
