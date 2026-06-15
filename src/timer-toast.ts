@@ -68,34 +68,36 @@ window.addEventListener("DOMContentLoaded", () => {
     invoke("cmd_toast_stop_countdown").catch(() => {});
   });
 
-  // Progress bar (fills with elapsed/duration, both modes). Hidden when the setting is off.
+  // Progress bar — mirrors the displayed value over the duration, following the Timer direction:
+  // counting up it fills from empty (elapsed/duration); counting down it drains from full
+  // (remaining/duration). Hidden when the setting is off.
   const barTrack = $("bar-track");
   barTrack.hidden = !info.progress;
   const bar = $("bar");
-  const setBar = (elapsed: number): void => {
+  const setBar = (shown: number): void => {
     if (info.progress && info.duration_secs > 0) {
-      bar.style.width = `${Math.min(100, (elapsed / info.duration_secs) * 100)}%`;
+      bar.style.width = `${Math.min(100, (shown / info.duration_secs) * 100)}%`;
     }
   };
 
-  // Running toast: count down to 0, or up to the configured duration.
-  if (info.count_up) {
-    let elapsed = Math.max(0, info.duration_secs - info.remaining_secs);
-    time.textContent = fmt(elapsed);
-    setBar(elapsed);
-    window.setInterval(() => {
-      elapsed = Math.min(info.duration_secs, elapsed + 1);
-      time.textContent = fmt(elapsed);
-      setBar(elapsed);
-    }, 1000);
-  } else {
-    let remaining = info.remaining_secs;
-    time.textContent = fmt(remaining);
-    setBar(info.duration_secs - remaining);
-    window.setInterval(() => {
-      remaining = Math.max(0, remaining - 1);
-      time.textContent = fmt(remaining);
-      setBar(info.duration_secs - remaining);
-    }, 1000);
+  // Running toast: count down to 0, or up to the configured duration; the bar tracks the same value.
+  let shown = info.count_up
+    ? Math.max(0, info.duration_secs - info.remaining_secs)
+    : info.remaining_secs;
+  time.textContent = fmt(shown);
+  // Paint the initial bar without the 1s intro animation, so a countdown bar starts full rather than
+  // animating up from empty before it drains.
+  if (info.progress) {
+    bar.style.transition = "none";
+    setBar(shown);
+    void bar.offsetWidth; // force a reflow to commit the un-transitioned width
+    bar.style.transition = "";
   }
+  window.setInterval(() => {
+    shown = info.count_up
+      ? Math.min(info.duration_secs, shown + 1)
+      : Math.max(0, shown - 1);
+    time.textContent = fmt(shown);
+    setBar(shown);
+  }, 1000);
 });

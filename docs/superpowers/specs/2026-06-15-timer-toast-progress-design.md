@@ -7,10 +7,14 @@
 ## Summary
 
 Add a thin progress bar to each **running** timer toast, gated by a new global setting in the Timers
-settings card (**default on**). The bar **fills 0→100% with elapsed/duration** — progress toward
-firing — independent of the countdown/count-up direction, matching the app's existing pre-break
-warning-toast bar (`.toast__bar`) and the universal "progress" convention. The terminal
-"Time's up!" toast has no bar.
+settings card (**default on**). The bar **mirrors the displayed value, following the Timer direction
+setting**: counting **up** it fills from empty (`elapsed/duration`); counting **down** it starts full
+and drains (`remaining/duration`). It reuses the styling of the app's existing pre-break warning-toast
+bar (`.toast__bar`). The terminal "Time's up!" toast has no bar.
+
+> **Revision (2026-06-15):** the bar originally always filled with `elapsed/duration`
+> (mode-independent). It now follows the Timer direction — fill when counting up, drain from full when
+> counting down — so the bar and the on-screen number always represent the same quantity.
 
 ## Current state (baseline)
 
@@ -27,10 +31,11 @@ warning-toast bar (`.toast__bar`) and the universal "progress" convention. The t
 ## Desired behavior
 
 - A 4px progress bar at the bottom of each **running** toast, shown only when the new setting is on.
-- The bar fill width = `elapsed / duration_secs` (elapsed = `duration_secs − remaining_secs`),
-  updated each second, animating smoothly (`transition: width 1s linear`). At 100% the timer fires
-  (and a countdown toast then closes). Mode-independent: count-up and countdown both fill toward
-  completion.
+- The bar fill width = `shown / duration_secs`, where `shown` is the same value the toast displays:
+  **elapsed** when counting up (`duration_secs − remaining_secs`; fills 0→full) and **remaining** when
+  counting down (starts full, drains to 0). Updated each second, animating smoothly
+  (`transition: width 1s linear`); the initial paint skips the intro animation so a countdown bar
+  starts full instead of filling up first.
 - The "Time's up!" (finished) toast has no bar.
 
 ## Design
@@ -68,12 +73,14 @@ warning-toast bar (`.toast__bar`) and the universal "progress" convention. The t
 - `src/timer-toast.ts`:
   - Add `progress: boolean` to the `ToastInfo` interface + `readInjected` default (`false`).
   - **Finished branch:** hide the bar track (`$("bar-track").hidden = true`) — terminal toast, no bar.
-  - **Running branch:** if `!info.progress`, hide the bar track. If on, define
-    `const setBar = (elapsed) => { $("bar").style.width = duration > 0 ? `${Math.min(100, (elapsed/duration)*100)}%` : "0"; }`,
-    call it with the initial elapsed, and call it again inside the existing 1s interval (both the
-    count-up and countdown branches already compute the running value; compute `elapsed = count_up ?
-    elapsed : duration − remaining`). The CSS transition animates the fill between ticks.
-  - The bar reflects `elapsed/duration` in **both** modes (fills toward completion).
+  - **Running branch:** set `barTrack.hidden = !info.progress`. Track a single `shown` value (the same
+    value the toast displays): `count_up ? duration − remaining` (counts up) `: remaining` (counts
+    down). `setBar(shown)` sets the fill width to `shown/duration` (guarded `duration > 0`, clamped
+    100%). Paint the initial bar with `transition: none` (then restore) so a countdown bar starts full
+    instead of animating up from empty. The 1s interval moves `shown` (+1 up / −1 down) and re-sets
+    the time text + bar; the CSS transition animates the fill between ticks.
+  - The bar mirrors the on-screen number: **fills** when counting up, **drains from full** when
+    counting down (follows the Timer direction setting).
 - Toast window stays `300×64`; a 4px bar + small gap fits within the existing column padding (verify
   during implementation; only bump `inner_size` height if it visibly clips).
 
@@ -87,9 +94,10 @@ warning-toast bar (`.toast__bar`) and the universal "progress" convention. The t
 
 ### Docs
 
-Update the Timers-toast bullet in `CLAUDE.md`: the running toast injects
-`{…,progress}` and shows a 4px fill bar (`elapsed/duration`) gated by `settings.timer_toast_progress`
-(default on); the toggle lives in the Timers settings card.
+Update the Timers-toast bullet in `CLAUDE.md`: the running toast injects `{…,progress}` and shows a
+4px bar (gated by `settings.timer_toast_progress`, default on) that mirrors the on-screen number —
+fills when counting up, drains from full when counting down; the toggle lives in the Timers settings
+card.
 
 ## Out of scope
 

@@ -142,8 +142,10 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   mutate run state; toasts appear/close on the next tick (≤250 ms). Each toast injects
   `{id,name,remaining_secs,finished,count_up,duration_secs,progress}` (name = the auto-derived display
   name); a **running** toast counts locally — down to 0, or up to `duration_secs` when `count_up` — and,
-  when `progress` (the `settings.timer_toast_progress` setting, default on) is set, fills a 4px bar with
-  `elapsed/duration`; the host closes it on finish/stop (no event push, empty capability). The toggles
+  when `progress` (the `settings.timer_toast_progress` setting, default on) is set, shows a 4px bar that
+  mirrors the on-screen number — fills (`elapsed/duration`) when counting up, drains from full
+  (`remaining/duration`) when counting down; the host closes it on finish/stop (no event push, empty
+  capability). The toggles
   (show-toasts + Countdown/Count-up direction + progress bar) live in the **Timers** card in Settings
   (`index.html`).
 
