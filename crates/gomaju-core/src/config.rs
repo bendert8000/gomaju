@@ -150,6 +150,10 @@ pub struct SettingsDto {
     /// the fire instant is unchanged. Defaults off (countdown) so existing configs keep behavior.
     #[serde(default)]
     pub timer_count_up: bool,
+    /// Show a progress bar on each running timer toast (fills with elapsed/duration). UI/host-only.
+    /// Defaults on.
+    #[serde(default = "default_true")]
+    pub timer_toast_progress: bool,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -242,6 +246,7 @@ impl Default for SettingsDto {
             resume_prompt_enabled: true,
             show_timer_toasts: true,
             timer_count_up: false,
+            timer_toast_progress: true,
         }
     }
 }
