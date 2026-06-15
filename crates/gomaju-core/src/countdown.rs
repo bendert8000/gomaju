@@ -83,6 +83,20 @@ pub fn sanitize_countdowns(items: &mut [CountdownDto]) -> bool {
     changed
 }
 
+/// Format a duration as a clock string: `mm:ss`, or `h:mm:ss` once it reaches an hour. Hours are
+/// not zero-padded; minutes and seconds are (`90 -> "01:30"`, `3600 -> "1:00:00"`). Used to build a
+/// timer's auto-derived display name (timers have no user-set name).
+pub fn format_clock(duration_secs: u32) -> String {
+    let h = duration_secs / 3600;
+    let m = (duration_secs % 3600) / 60;
+    let s = duration_secs % 60;
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m:02}:{s:02}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +151,20 @@ mod tests {
     fn clean_input_is_unchanged() {
         let mut v = vec![cd("a", 60), cd("b", 300)];
         assert!(!sanitize_countdowns(&mut v));
+    }
+
+    #[test]
+    fn format_clock_mm_ss_under_an_hour() {
+        assert_eq!(format_clock(1), "00:01");
+        assert_eq!(format_clock(90), "01:30");
+        assert_eq!(format_clock(150), "02:30");
+        assert_eq!(format_clock(3599), "59:59");
+    }
+
+    #[test]
+    fn format_clock_h_mm_ss_at_and_past_an_hour() {
+        assert_eq!(format_clock(3600), "1:00:00");
+        assert_eq!(format_clock(5400), "1:30:00");
+        assert_eq!(format_clock(359_999), "99:59:59");
     }
 }
