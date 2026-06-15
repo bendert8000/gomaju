@@ -140,10 +140,12 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   break toast) creates windows in a clean main-thread context. The commands (`cmd_start_countdown` /
   pause / reset / `cmd_toast_stop_countdown` / `cmd_dismiss_timer_done` / `cmd_save_countdowns`) only
   mutate run state; toasts appear/close on the next tick (≤250 ms). Each toast injects
-  `{id,name,remaining_secs,finished,count_up,duration_secs}` (name = the auto-derived display name);
-  a **running** toast counts locally — down to 0, or up to `duration_secs` when `count_up` — while the
-  host closes it on finish/stop (no event push, empty capability). The toggles (show-toasts +
-  Countdown/Count-up direction) live in the **Timers** card in Settings (`index.html`).
+  `{id,name,remaining_secs,finished,count_up,duration_secs,progress}` (name = the auto-derived display
+  name); a **running** toast counts locally — down to 0, or up to `duration_secs` when `count_up` — and,
+  when `progress` (the `settings.timer_toast_progress` setting, default on) is set, fills a 4px bar with
+  `elapsed/duration`; the host closes it on finish/stop (no event push, empty capability). The toggles
+  (show-toasts + Countdown/Count-up direction + progress bar) live in the **Timers** card in Settings
+  (`index.html`).
 
 ## Break rules (two editors, shared UI)
 
