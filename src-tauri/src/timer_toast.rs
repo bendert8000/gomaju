@@ -36,6 +36,64 @@ pub fn id_from_label(label: &str) -> Option<&str> {
     label.strip_prefix(TIMER_TOAST_PREFIX)
 }
 
+/// Label prefix for a finished-timer "time's up" toast window: `timer-done-<countdown id>`.
+pub const TIMER_DONE_PREFIX: &str = "timer-done-";
+
+/// The window label for a given countdown id's "time's up" toast.
+fn done_label_for(id: &str) -> String {
+    format!("{TIMER_DONE_PREFIX}{id}")
+}
+
+/// The countdown id encoded in a "time's up" toast window label, if it is one.
+pub fn id_from_done_label(label: &str) -> Option<&str> {
+    label.strip_prefix(TIMER_DONE_PREFIX)
+}
+
+/// One toast the reconciler wants open, in stack order (index 0 nearest the tray).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DesiredToast {
+    id: String,
+    label: String,
+    name: String,
+    remaining_secs: u32,
+    finished: bool,
+}
+
+/// Compute the ordered desired toast set.
+/// - `running`: (id, name, remaining_secs) for currently-running timers, in config order; included
+///   only when `show_running` (the `show_timer_toasts` setting) is true.
+/// - `finished`: (id, name) for timers with a pending "time's up" toast, already pruned to
+///   config-member ids, in config order; always included.
+/// Order is running-first then finished, so finished toasts stack above running ones.
+fn desired_toasts(
+    show_running: bool,
+    running: &[(String, String, u32)],
+    finished: &[(String, String)],
+) -> Vec<DesiredToast> {
+    let mut out = Vec::new();
+    if show_running {
+        for (id, name, remaining) in running {
+            out.push(DesiredToast {
+                id: id.clone(),
+                label: label_for(id),
+                name: name.clone(),
+                remaining_secs: *remaining,
+                finished: false,
+            });
+        }
+    }
+    for (id, name) in finished {
+        out.push(DesiredToast {
+            id: id.clone(),
+            label: done_label_for(id),
+            name: name.clone(),
+            remaining_secs: 0,
+            finished: true,
+        });
+    }
+    out
+}
+
 /// Data injected into a toast before its page loads.
 #[derive(Serialize)]
 struct ToastInfo<'a> {
@@ -174,5 +232,55 @@ fn relayout(app: &AppHandle, desired: &[(String, String, u32)]) {
         let _ = window.set_position(PhysicalPosition::new(x, y));
         let _ = window.show();
         y_bottom = y - gap;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(id: &str, name: &str, secs: u32) -> (String, String, u32) {
+        (id.to_string(), name.to_string(), secs)
+    }
+    fn fin(id: &str, name: &str) -> (String, String) {
+        (id.to_string(), name.to_string())
+    }
+
+    #[test]
+    fn unchecked_mode_shows_only_finished_toasts() {
+        let running = vec![run("a", "A", 30)];
+        let finished = vec![fin("b", "B")];
+        let d = desired_toasts(false, &running, &finished);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].label, "timer-done-b");
+        assert!(d[0].finished);
+        assert_eq!(d[0].id, "b");
+    }
+
+    #[test]
+    fn checked_mode_with_no_finished_shows_running_only() {
+        let running = vec![run("a", "A", 30), run("b", "B", 5)];
+        let d = desired_toasts(true, &running, &[]);
+        assert_eq!(d.len(), 2);
+        assert_eq!(d[0].label, "timer-toast-a");
+        assert_eq!(d[0].remaining_secs, 30);
+        assert!(!d[0].finished);
+        assert_eq!(d[1].label, "timer-toast-b");
+    }
+
+    #[test]
+    fn running_first_then_finished_in_order() {
+        let running = vec![run("a", "A", 30)];
+        let finished = vec![fin("b", "B"), fin("c", "C")];
+        let d = desired_toasts(true, &running, &finished);
+        let labels: Vec<&str> = d.iter().map(|x| x.label.as_str()).collect();
+        assert_eq!(labels, ["timer-toast-a", "timer-done-b", "timer-done-c"]);
+        assert_eq!((d[1].finished, d[2].finished), (true, true));
+    }
+
+    #[test]
+    fn id_round_trips_through_done_label() {
+        assert_eq!(id_from_done_label("timer-done-xyz"), Some("xyz"));
+        assert_eq!(id_from_done_label("timer-toast-xyz"), None);
     }
 }
