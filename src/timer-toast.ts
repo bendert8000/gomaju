@@ -31,6 +31,8 @@ function fmt(total: number): string {
 
 window.addEventListener("DOMContentLoaded", () => {
   // This window's own label: running -> timer-toast-<id>, finished -> timer-done-<id>.
+  // Source of truth for these prefixes is Rust (TIMER_TOAST_PREFIX / TIMER_DONE_PREFIX in
+  // timer_toast.rs); keep them in sync if either side is renamed.
   const label = `${info.finished ? "timer-done-" : "timer-toast-"}${info.id}`;
   // Signal the page loaded (a useful "embedded assets actually loaded" trace).
   invoke("cmd_window_ready", { label }).catch(() => {});

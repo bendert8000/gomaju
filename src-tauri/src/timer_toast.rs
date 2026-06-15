@@ -1,18 +1,25 @@
-//! On-screen toasts for **running** countdown timers — one small always-on-top window per timer,
-//! stacked bottom-right above the tray. Gated by the `show_timer_toasts` setting.
+//! On-screen toasts for countdown timers — small always-on-top windows stacked bottom-right above
+//! the tray. The `show_timer_toasts` setting selects **which** family appears:
+//! - **on** → a live **countdown** toast per *running* timer (`timer-toast-<id>`), closed at 00:00;
+//! - **off** → no running toast, but a persistent **"time's up"** toast (`timer-done-<id>`) when a
+//!   timer fires, kept until the user dismisses it (drawn from [`AppState::finished_toasts`]).
 //!
-//! The set of toasts is reconciled by [`sync`]: it diffs the *desired* set (running timers, in
-//! config order, when the setting is on) against the *actual* `timer-toast-*` windows, creating
-//! and closing only the difference, then re-stacking. `sync` is driven from the **countdown
-//! scheduler's background thread** (~every 250 ms, with a cheap early-out when nothing changed) —
-//! NOT from the start/pause/reset commands. That matters: those commands run on the main thread
-//! inside a WebView2 IPC callback, and creating a webview window from there re-enters the message
-//! loop and deadlocks on Windows. Driving it from a background thread (like the break toast) makes
-//! window creation happen in a clean main-thread context.
+//! Both families are reconciled by [`sync`]: it builds the *desired* set ([`desired_toasts`] —
+//! running timers when the setting is on, plus the finished set pruned to config-member ids, which
+//! self-heals any delete/fire race) and diffs it against the *actual* `timer-toast-*` / `timer-done-*`
+//! windows, creating/closing only the difference, then re-stacking. `sync` is driven from the
+//! **countdown scheduler's background thread** (~every 250 ms, with a cheap label-set early-out
+//! recomputed from live windows) — NOT from the start/pause/reset/dismiss commands. That matters:
+//! those commands run on the main thread inside a WebView2 IPC callback, and creating a webview
+//! window from there re-enters the message loop and deadlocks on Windows. Driving it from a
+//! background thread (like the break toast) makes window creation happen in a clean main-thread
+//! context.
 //!
-//! Each toast counts down locally in JS from an injected `remaining_secs`; the host authoritatively
-//! closes it on finish/stop, so any sub-second drift is cosmetic. (No events are pushed to the
-//! window, so its capability needs no extra permissions.)
+//! A running toast counts down locally in JS from an injected `remaining_secs`; the host
+//! authoritatively closes it on finish/stop, so any sub-second drift is cosmetic. A finished toast
+//! shows "time's up" and is closed when its `finished_toasts` entry is dropped (the ✕ →
+//! `cmd_dismiss_timer_done`, or the timer being deleted). (No events are pushed to the windows, so
+//! their capability needs no extra permissions.)
 
 use std::collections::HashSet;
 use std::time::Instant;
