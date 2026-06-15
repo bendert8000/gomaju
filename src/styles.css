@@ -1040,6 +1040,21 @@ input.chime-volume-picker {
 .timer-toast__stop:hover {
   background: rgba(255, 80, 80, 0.35);
 }
+.timer-toast__bar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.timer-toast__bar[hidden] {
+  display: none;
+}
+.timer-toast__bar-fill {
+  height: 100%;
+  width: 0;
+  background: #6aa6ff;
+  transition: width 1s linear;
+}
 
 /* --- Break-rules dashboard (quick select) --- */
 

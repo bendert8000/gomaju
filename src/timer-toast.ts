@@ -10,6 +10,7 @@ interface ToastInfo {
   finished: boolean;
   count_up: boolean;
   duration_secs: number;
+  progress: boolean;
 }
 
 const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
@@ -19,6 +20,7 @@ const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
   finished: false,
   count_up: false,
   duration_secs: 0,
+  progress: false,
 });
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
@@ -55,6 +57,7 @@ window.addEventListener("DOMContentLoaded", () => {
     stop.addEventListener("click", () => {
       invoke("cmd_dismiss_timer_done").catch(() => {});
     });
+    $("bar-track").hidden = true; // terminal toast: no progress bar
     return;
   }
 
@@ -65,20 +68,34 @@ window.addEventListener("DOMContentLoaded", () => {
     invoke("cmd_toast_stop_countdown").catch(() => {});
   });
 
+  // Progress bar (fills with elapsed/duration, both modes). Hidden when the setting is off.
+  const barTrack = $("bar-track");
+  barTrack.hidden = !info.progress;
+  const bar = $("bar");
+  const setBar = (elapsed: number): void => {
+    if (info.progress && info.duration_secs > 0) {
+      bar.style.width = `${Math.min(100, (elapsed / info.duration_secs) * 100)}%`;
+    }
+  };
+
   // Running toast: count down to 0, or up to the configured duration.
   if (info.count_up) {
     let elapsed = Math.max(0, info.duration_secs - info.remaining_secs);
     time.textContent = fmt(elapsed);
+    setBar(elapsed);
     window.setInterval(() => {
       elapsed = Math.min(info.duration_secs, elapsed + 1);
       time.textContent = fmt(elapsed);
+      setBar(elapsed);
     }, 1000);
   } else {
     let remaining = info.remaining_secs;
     time.textContent = fmt(remaining);
+    setBar(info.duration_secs - remaining);
     window.setInterval(() => {
       remaining = Math.max(0, remaining - 1);
       time.textContent = fmt(remaining);
+      setBar(info.duration_secs - remaining);
     }, 1000);
   }
 });
