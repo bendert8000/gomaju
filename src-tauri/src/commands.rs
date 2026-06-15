@@ -462,6 +462,8 @@ pub struct CountdownView {
     pub state: &'static str,
     /// Whole seconds left (ceil); the full duration when idle.
     pub remaining_secs: u32,
+    /// Global setting: count up to the duration (true) vs down to zero (false). Same for every view.
+    pub count_up: bool,
 }
 
 /// The saved timers joined with their in-memory run state. The window polls this each second.
@@ -472,7 +474,10 @@ pub fn cmd_get_countdowns(
 ) -> Result<Vec<CountdownView>, String> {
     require_timers(&window)?;
     let now = std::time::Instant::now();
-    let defs = state.config.lock().unwrap().countdowns.clone();
+    let (defs, count_up) = {
+        let cfg = state.config.lock().unwrap();
+        (cfg.countdowns.clone(), cfg.settings.timer_count_up)
+    };
     let map = state.countdown_runtime.lock().unwrap();
     let views = defs
         .into_iter()
@@ -485,6 +490,7 @@ pub fn cmd_get_countdowns(
             CountdownView {
                 state: crate::countdown::state_str(run),
                 remaining_secs: remaining,
+                count_up,
                 def,
             }
         })
@@ -539,6 +545,7 @@ pub fn cmd_save_countdowns(
                 remaining_secs: run
                     .map(|r| crate::countdown::remaining_secs(r, now))
                     .unwrap_or(def.duration_secs),
+                count_up: config.settings.timer_count_up,
                 def: def.clone(),
             }
         })
