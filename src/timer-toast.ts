@@ -78,11 +78,10 @@ window.addEventListener("DOMContentLoaded", () => {
       // starts (its origin is the timer's finish instant on the host, so a late tick doesn't skew it).
       let overtime = Math.max(0, Math.floor(info.overtime_secs));
       const render = (): void => {
-        time.textContent = info.count_up
-          ? fmt(overtime)
-          : overtime === 0
-            ? fmt(0)
-            : `-${fmt(overtime)}`;
+        // Sign the overtime by direction: "+mm:ss" counting up, "-mm:ss" counting down. Bare
+        // "00:00" at the exact finish instant (no "+00:00" / "-00:00" flash).
+        time.textContent =
+          overtime === 0 ? fmt(0) : `${info.count_up ? "+" : "-"}${fmt(overtime)}`;
       };
       render();
       window.setInterval(() => {

@@ -22,6 +22,32 @@ const BREAK_ITEM_PREFIX: &str = "break:";
 /// fixed handles (Tauri v2 has no `MenuItem::set_visible`).
 pub struct TrayMenu {
     cache: Mutex<String>,
+    /// OS id of the GUI (main) thread, captured at tray build. On Windows the ticker uses it to
+    /// skip rebuilding the menu while it's open — replacing the menu (`set_menu`) dismisses the
+    /// popup, so updating a countdown would close the menu the user is reading. Unused elsewhere.
+    gui_thread_id: u32,
+}
+
+/// True while the given GUI thread is showing a menu (Windows). Replacing the tray menu then would
+/// dismiss the open popup, so the ticker skips its rebuild until the menu closes. Tauri exposes no
+/// menu open/close event, so we ask the OS directly via the `GUI_INMENUMODE` flag (set for any
+/// tracked popup/menu, including the tray context menu). Always `false` off Windows.
+#[cfg(windows)]
+fn menu_is_open(gui_thread_id: u32) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{GetGUIThreadInfo, GUITHREADINFO, GUI_INMENUMODE};
+    // SAFETY: a zeroed GUITHREADINFO is valid (null handles, zero rects); `cbSize` is set as the
+    // API requires, and `GetGUIThreadInfo` only writes into the struct we own.
+    let mut gui: GUITHREADINFO = unsafe { std::mem::zeroed() };
+    gui.cbSize = std::mem::size_of::<GUITHREADINFO>() as u32;
+    if unsafe { GetGUIThreadInfo(gui_thread_id, &mut gui) }.is_err() {
+        return false;
+    }
+    (gui.flags.0 & GUI_INMENUMODE.0) != 0
+}
+
+#[cfg(not(windows))]
+fn menu_is_open(_gui_thread_id: u32) -> bool {
+    false
 }
 
 /// Build the full tray menu: the status `lines` as disabled info items at the top, then
@@ -50,7 +76,7 @@ fn build_menu(
             MenuItem::with_id(app, id, text, true, None::<&str>)
         })
         .collect::<tauri::Result<Vec<_>>>()?;
-    // Today's upcoming alarms — disabled info lines shown in their own section below the breaks.
+    // Today's upcoming alarms — disabled info lines shown in their own section above the breaks.
     let alarm_items: Vec<MenuItem<tauri::Wry>> = alarm_lines
         .iter()
         .enumerate()
@@ -125,15 +151,16 @@ fn build_menu(
 
     let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> =
         Vec::with_capacity(status_items.len() + alarm_items.len() + 11);
-    for it in &status_items {
-        items.push(it);
-    }
-    // Divider + today's upcoming alarms, only when there are any.
+    // Today's upcoming alarms first (when there are any), then a divider before the breaks.
     if !alarm_items.is_empty() {
-        items.push(&sep_alarms as &dyn IsMenuItem<tauri::Wry>);
         for it in &alarm_items {
             items.push(it);
         }
+        items.push(&sep_alarms as &dyn IsMenuItem<tauri::Wry>);
+    }
+    // Enabled breaks (soonest first) — always shown.
+    for it in &status_items {
+        items.push(it);
     }
     for it in [
         &sep0 as &dyn IsMenuItem<tauri::Wry>,
@@ -207,8 +234,14 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
+    // build_tray runs on the main thread, so this is the GUI thread that later shows the menu.
+    #[cfg(windows)]
+    let gui_thread_id = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+    #[cfg(not(windows))]
+    let gui_thread_id = 0u32;
     app.manage(TrayMenu {
         cache: Mutex::new(String::new()),
+        gui_thread_id,
     });
     Ok(())
 }
@@ -226,6 +259,13 @@ pub fn refresh(
     let Some(menu) = app.try_state::<TrayMenu>() else {
         return;
     };
+
+    // Don't rebuild the menu while it's open (the user is reading it): `set_menu` would dismiss the
+    // popup. Skip this tick and leave the cache untouched, so the menu's content catches up on the
+    // next tick once the menu closes. (Windows-only; a no-op elsewhere.)
+    if menu_is_open(menu.gui_thread_id) {
+        return;
+    }
 
     let locale = i18n::current_locale(app);
     let started = matches!(state, RunState::Running | RunState::InBreak);

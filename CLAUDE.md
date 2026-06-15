@@ -132,7 +132,7 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   persistent finish toast (windows `timer-done-<id>`, a separate prefix) appears and **stays until the
   user clicks ✕** — independent of `settings.notifications`, one toast per timer id (a re-fire just
   refreshes it). **Checked** → that finish toast counts **overtime** past zero (a countdown into the
-  negative `-00:12`; a count-up restarting from zero `00:16`), so at `00:00` the running toast closes
+  negative `-00:12`; a count-up restarting from zero `+00:16`), so at `00:00` the running toast closes
   and the finish toast takes over (a brief window swap that coincides with the chime); its clock turns
   **red** and a short **"Time's up!"** note (reusing `timers.times_up`) sits under the row, so this
   overtime toast is built a touch taller (84 vs 64 px). **Unchecked** →
@@ -186,7 +186,14 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   on confirm, fires *that specific* rule's break immediately via `Engine::break_now_rule(rule_id)`
   (the per-rule sibling of `break_now`). The menu item carries id `break:<rule_id>`; the placeholder
   lines ("On a break now" / "No breaks enabled") stay non-actionable `status-{i}` items. The whole
-  break list is rebuilt each tick only when a rendered line changes (`tray.rs` cache key).
+  break list is rebuilt each tick only when a rendered line changes (`tray.rs` cache key). The two
+  top blocks are **today's upcoming alarms, then the enabled breaks** (alarms above, divided by a
+  separator shown only when there are alarms). **While the menu is open the ticker skips the rebuild**
+  — `set_menu` replaces the menu and would dismiss the open popup, so a ticking countdown would close
+  the menu the user is reading. Tauri exposes no menu open/close event, so on Windows `refresh`
+  asks the OS via `GetGUIThreadInfo` + `GUI_INMENUMODE` (`menu_is_open`, keyed on the GUI thread id
+  captured at build) and returns early, leaving the cache untouched so the content catches up on the
+  next tick after the menu closes (no-op off Windows).
 - Each rule has a `repeat` flag (default true). A **once** rule (`repeat=false`) fires one
   break, then the engine disables it (`Effect::RuleDisabled`) and the host persists
   `enabled=false` (`runtime::persist_rule_disabled`) — same auto-disable model as alarm
