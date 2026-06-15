@@ -7,12 +7,14 @@ interface ToastInfo {
   id: string;
   name: string;
   remaining_secs: number;
+  finished: boolean;
 }
 
 const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
   id: "",
   name: "",
   remaining_secs: 0,
+  finished: false,
 });
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
@@ -28,21 +30,37 @@ function fmt(total: number): string {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  // This window's own label: running -> timer-toast-<id>, finished -> timer-done-<id>.
+  const label = `${info.finished ? "timer-done-" : "timer-toast-"}${info.id}`;
   // Signal the page loaded (a useful "embedded assets actually loaded" trace).
-  invoke("cmd_window_ready", { label: `timer-toast-${info.id}` }).catch(() => {});
+  invoke("cmd_window_ready", { label }).catch(() => {});
 
   $("name").textContent = info.name;
   const stop = $("stop") as HTMLButtonElement;
+  const time = $("time");
+
+  if (info.finished) {
+    // Terminal "Time's up!" toast: no countdown, the ✕ just dismisses (the id is derived from this
+    // window's own label on the Rust side — no arg to spoof).
+    $("icon").textContent = "⏰";
+    time.textContent = t("timers.times_up");
+    stop.title = t("timers.dismiss");
+    stop.setAttribute("aria-label", t("timers.dismiss"));
+    stop.addEventListener("click", () => {
+      invoke("cmd_dismiss_timer_done").catch(() => {});
+    });
+    return;
+  }
+
+  // Running countdown toast.
   stop.title = t("timers.stop");
   stop.setAttribute("aria-label", t("timers.stop"));
-  // The id is derived from this window's own label on the Rust side — no arg to spoof.
   stop.addEventListener("click", () => {
     invoke("cmd_toast_stop_countdown").catch(() => {});
   });
 
   // Count down locally; the host closes this window on finish/stop.
   let remaining = info.remaining_secs;
-  const time = $("time");
   time.textContent = fmt(remaining);
   window.setInterval(() => {
     remaining = Math.max(0, remaining - 1);
