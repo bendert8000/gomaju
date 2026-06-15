@@ -104,9 +104,14 @@ const MESSAGES: Record<string, Entry> = {
     en: "Show a notification on soft breaks",
     "zh-Hant": "柔性休息時顯示通知",
   },
+  "settings.timers_heading": { en: "Timers", "zh-Hant": "計時器" },
   "settings.show_timer_toasts_label": {
-    en: "Show a toast for each running timer",
-    "zh-Hant": "為每個執行中的計時器顯示提示窗",
+    en: "Show a live countdown toast while a timer runs",
+    "zh-Hant": "計時器執行時顯示倒數提示窗",
+  },
+  "settings.show_timer_toasts_hint": {
+    en: "When off, a \"Time's up!\" toast still appears when a timer finishes.",
+    "zh-Hant": "關閉時，計時器結束仍會顯示「時間到！」提示窗。",
   },
   "settings.autostart_label": { en: "Launch at login", "zh-Hant": "登入時啟動" },
   "settings.chimes_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
@@ -207,6 +212,8 @@ const MESSAGES: Record<string, Entry> = {
   "timers.resume": { en: "Resume", "zh-Hant": "繼續" },
   "timers.reset": { en: "Reset", "zh-Hant": "重設" },
   "timers.stop": { en: "Stop", "zh-Hant": "停止" },
+  "timers.times_up": { en: "Time's up!", "zh-Hant": "時間到！" },
+  "timers.dismiss": { en: "Dismiss", "zh-Hant": "關閉" },
   "timers.default_name": { en: "Timer", "zh-Hant": "計時器" },
   "timers.new_name": { en: "New timer", "zh-Hant": "新計時器" },
 

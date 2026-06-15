@@ -82,13 +82,18 @@
           <span data-i18n="settings.notif_label">Show a notification on soft breaks</span>
         </label>
         <label class="field field--checkbox">
-          <input id="show-timer-toasts" type="checkbox" />
-          <span data-i18n="settings.show_timer_toasts_label">Show a toast for each running timer</span>
-        </label>
-        <label class="field field--checkbox">
           <input id="autostart" type="checkbox" />
           <span data-i18n="settings.autostart_label">Launch at login</span>
         </label>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="settings.timers_heading">Timers</h2>
+        <label class="field field--checkbox">
+          <input id="show-timer-toasts" type="checkbox" />
+          <span data-i18n="settings.show_timer_toasts_label">Show a live countdown toast while a timer runs</span>
+        </label>
+        <p class="muted" data-i18n="settings.show_timer_toasts_hint">When off, a "Time's up!" toast still appears when a timer finishes.</p>
       </section>
 
       <section class="card">
