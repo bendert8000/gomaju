@@ -113,6 +113,9 @@ const MESSAGES: Record<string, Entry> = {
     en: "When off, a \"Time's up!\" toast still appears when a timer finishes.",
     "zh-Hant": "關閉時，計時器結束仍會顯示「時間到！」提示窗。",
   },
+  "settings.timer_mode_label": { en: "Timer direction", "zh-Hant": "計時方向" },
+  "settings.timer_mode_countdown": { en: "Countdown", "zh-Hant": "倒數計時" },
+  "settings.timer_mode_countup": { en: "Count up", "zh-Hant": "正數計時" },
   "settings.autostart_label": { en: "Launch at login", "zh-Hant": "登入時啟動" },
   "settings.chimes_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
   "settings.chimes_desc": {
