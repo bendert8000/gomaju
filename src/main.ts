@@ -34,6 +34,7 @@ interface SettingsDto {
   resume_prompt_enabled: boolean;
   show_timer_toasts: boolean;
   timer_count_up: boolean;
+  timer_toast_progress: boolean;
 }
 
 interface HotkeysDto {
@@ -158,6 +159,7 @@ function render(cfg: ConfigFile): void {
   inp("notifications").checked = cfg.settings.notifications;
   inp("show-timer-toasts").checked = cfg.settings.show_timer_toasts;
   sel("timer-mode").value = cfg.settings.timer_count_up ? "countup" : "countdown";
+  inp("timer-toast-progress").checked = cfg.settings.timer_toast_progress;
   inp("autostart").checked = cfg.autostart;
   inp("hk-toggle").value = cfg.hotkeys.toggle ?? "";
   inp("hk-break").value = cfg.hotkeys.break_now ?? "";
@@ -205,6 +207,7 @@ function collectConfig(): ConfigFile {
       notifications: inp("notifications").checked,
       show_timer_toasts: inp("show-timer-toasts").checked,
       timer_count_up: sel("timer-mode").value === "countup",
+      timer_toast_progress: inp("timer-toast-progress").checked,
     },
     hotkeys: {
       toggle: blankToNull(inp("hk-toggle").value),
