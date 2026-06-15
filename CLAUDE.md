@@ -74,11 +74,17 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
 
 ## Timers (countdown timers, separate from breaks & alarms)
 
-- A **countdown** is a reusable preset (name + `duration_secs` 1..=359_999 = `99:59:59` + chime),
-  unlike a wall-clock alarm; it's one-shot (fires once, then idle). The dependency-free
-  **definition** + `sanitize_countdowns` live in
+- A **countdown** is a reusable preset (`duration_secs` 1..=359_999 = `99:59:59` + chime), unlike a
+  wall-clock alarm; it's one-shot (fires once, then idle). It has **no user-set name** — its display
+  name is auto-derived per locale as `"{mm:ss|h:mm:ss} {timer-word}"` (`gomaju_core::countdown::
+  format_clock` + host `countdown::timer_display_name`, e.g. `"02:30 timer"` / `"02:30 計時器"`),
+  computed wherever the name is shown (fire notification + toasts) so it follows the active language.
+  A global **`settings.timer_count_up`** (Timers settings card, default off) flips all timers between
+  counting **down** to zero and **up** to the configured duration — a display-only transform
+  (`elapsed = duration − remaining`; the engine and fire instant are unchanged). The dependency-free
+  **definition** + `sanitize_countdowns` + `format_clock` live in
   `crates/gomaju-core/src/countdown.rs` (persisted in `config.toml` as `[[countdowns]]`, omitted
-  when empty). **Backend uses the noun `countdown`** (module/DTO/`cmd_*_countdown`) to avoid
+  when empty; an old `name=` field is ignored on load + dropped on save). **Backend uses the noun `countdown`** (module/DTO/`cmd_*_countdown`) to avoid
   colliding with the break engine's own "timer" (`cmd_reset_timer`, `Engine::reset_timer`); the
   **UI keeps "Timers"** (window label `timers`, `timers.html`/`src/timers.ts`, `timers.json`).
 - **Run state is host-only and in-memory** (`AppState.countdown_runtime: Mutex<HashMap<id,
@@ -134,9 +140,10 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   break toast) creates windows in a clean main-thread context. The commands (`cmd_start_countdown` /
   pause / reset / `cmd_toast_stop_countdown` / `cmd_dismiss_timer_done` / `cmd_save_countdowns`) only
   mutate run state; toasts appear/close on the next tick (≤250 ms). Each toast injects
-  `{id,name,remaining_secs,finished}` and (running) counts down locally; the host closes it on
-  finish/stop (no event push, empty capability). The toggle lives in its own **Timers** card in
-  Settings (`index.html`).
+  `{id,name,remaining_secs,finished,count_up,duration_secs}` (name = the auto-derived display name);
+  a **running** toast counts locally — down to 0, or up to `duration_secs` when `count_up` — while the
+  host closes it on finish/stop (no event push, empty capability). The toggles (show-toasts +
+  Countdown/Count-up direction) live in the **Timers** card in Settings (`index.html`).
 
 ## Break rules (two editors, shared UI)
 
