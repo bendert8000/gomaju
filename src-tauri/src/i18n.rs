@@ -95,6 +95,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "notif.break_title" => pick(locale, "Gomaju · Break reminder", "Gomaju · 休息提醒"),
         "notif.alarm_title" => pick(locale, "Gomaju · Alarm", "Gomaju · 鬧鐘"),
         "notif.timer_title" => pick(locale, "Gomaju · Timer", "Gomaju · 計時器"),
+        "timers.timer_word" => pick(locale, "timer", "計時器"),
 
         // Native window titles
         "title.settings" => pick(locale, "Gomaju — Settings", "Gomaju — 設定"),

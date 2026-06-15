@@ -77,6 +77,17 @@ pub fn state_str(run: Option<&CountdownRun>) -> &'static str {
     }
 }
 
+/// A timer's auto-derived display name: its duration as a clock plus the localized word —
+/// `"02:30 timer"` / `"02:30 計時器"`, `"1:00:00 timer"` past an hour. Timers have no user-set name;
+/// this is computed wherever the name is shown (notification + toasts) so it follows the locale.
+pub fn timer_display_name(duration_secs: u32, locale: &str) -> String {
+    format!(
+        "{} {}",
+        gomaju_core::countdown::format_clock(duration_secs),
+        crate::i18n::tr(locale, "timers.timer_word")
+    )
+}
+
 /// Spawn the countdown firing thread: a dedicated ~250 ms loop (finer than the alarm
 /// scheduler's 1 s, so a 1-second timer fires within a quarter-second of zero).
 ///
@@ -286,5 +297,12 @@ mod tests {
             state_str(Some(&CountdownRun::Paused { remaining: dur(1) })),
             "paused"
         );
+    }
+
+    #[test]
+    fn timer_display_name_formats_with_locale() {
+        assert_eq!(timer_display_name(150, "en"), "02:30 timer");
+        assert_eq!(timer_display_name(150, "zh-Hant"), "02:30 計時器");
+        assert_eq!(timer_display_name(3600, "en"), "1:00:00 timer");
     }
 }
