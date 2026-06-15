@@ -64,6 +64,7 @@ struct DesiredToast {
 ///   only when `show_running` (the `show_timer_toasts` setting) is true.
 /// - `finished`: (id, name) for timers with a pending "time's up" toast, already pruned to
 ///   config-member ids, in config order; always included.
+///
 /// Order is running-first then finished, so finished toasts stack above running ones.
 fn desired_toasts(
     show_running: bool,
