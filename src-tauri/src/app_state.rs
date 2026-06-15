@@ -46,6 +46,11 @@ pub struct AppState {
     /// the user's chosen "reset on restart" behavior. The countdown scheduler reads/transitions
     /// this each tick; the timer commands start/pause/reset entries here without touching disk.
     pub countdown_runtime: Mutex<HashMap<String, CountdownRun>>,
+    /// Pending "Time's up!" toasts (countdown id -> timer name captured at fire time). Populated by
+    /// the countdown scheduler when a timer fires while `show_timer_toasts` is OFF; reconciled into
+    /// `timer-done-<id>` windows by `timer_toast::sync`; cleared by `cmd_dismiss_timer_done` (the ✕)
+    /// and self-pruned to config-member ids by `sync`. In-memory only, like `countdown_runtime`.
+    pub finished_toasts: Mutex<HashMap<String, String>>,
 }
 
 impl AppState {
@@ -102,6 +107,7 @@ mod tests {
             running_since: Mutex::new(None),
             pause_reminder: Mutex::new(PauseReminderState::default()),
             countdown_runtime: Mutex::new(HashMap::new()),
+            finished_toasts: Mutex::new(HashMap::new()),
         }
     }
 

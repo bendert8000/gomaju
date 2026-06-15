@@ -177,6 +177,8 @@ pub fn run() {
                 pause_reminder: Mutex::new(Default::default()),
                 // Countdown timers always start idle (run state is never persisted).
                 countdown_runtime: Mutex::new(Default::default()),
+                // "Time's up!" toasts are never persisted (cold start has none), like run state.
+                finished_toasts: Mutex::new(Default::default()),
             });
 
             tray::build_tray(&handle)?;
