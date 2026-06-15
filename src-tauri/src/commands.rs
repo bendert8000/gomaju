@@ -100,6 +100,16 @@ fn require_timer_toast(window: &WebviewWindow) -> Result<(), String> {
     gate(is_timer_toast(window.label()), "timer-toast")
 }
 
+/// True for a finished-timer "time's up" toast window (`timer-done-<id>`).
+fn is_timer_done(label: &str) -> bool {
+    label.starts_with(crate::timer_toast::TIMER_DONE_PREFIX)
+}
+
+/// Reject the dismiss command invoked from any window other than a timer-done toast window.
+fn require_timer_done(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_timer_done(window.label()), "timer-done")
+}
+
 /// Reject the snooze command invoked from any window other than the pre-break warning toast.
 fn require_toast(window: &WebviewWindow) -> Result<(), String> {
     gate(window.label() == crate::toast::TOAST_LABEL, "toast")
@@ -501,6 +511,17 @@ pub fn cmd_save_countdowns(
             true
         })?
         .expect("save always writes");
+    // Drop any pending "time's up" toast for a timer that was just deleted (separate lock scope —
+    // never held with the runtime lock). sync() also prunes by config membership; this is immediate.
+    {
+        let valid: std::collections::HashSet<&str> =
+            config.countdowns.iter().map(|c| c.id.as_str()).collect();
+        state
+            .finished_toasts
+            .lock()
+            .unwrap()
+            .retain(|id, _| valid.contains(id.as_str()));
+    }
     let now = std::time::Instant::now();
     let mut map = state.countdown_runtime.lock().unwrap();
     {
@@ -602,6 +623,22 @@ pub fn cmd_toast_stop_countdown(
         let id = id.to_string();
         let mut map = state.countdown_runtime.lock().unwrap();
         crate::countdown::reset(&mut map, &id);
+    }
+    Ok(())
+}
+
+/// The ✕ on a finished-timer "time's up" toast: drop its entry so the scheduler's next reconcile
+/// tick closes the window. The id comes from the toast's **own** window label (no spoofable arg);
+/// we never create or close windows from this command (that would risk the WebView2 main-thread
+/// deadlock) — only mutate state.
+#[tauri::command]
+pub fn cmd_dismiss_timer_done(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_timer_done(&window)?;
+    if let Some(id) = crate::timer_toast::id_from_done_label(window.label()) {
+        state.finished_toasts.lock().unwrap().remove(id);
     }
     Ok(())
 }
@@ -942,7 +979,7 @@ pub fn cmd_set_locale(window: WebviewWindow, app: AppHandle, locale: String) -> 
 #[cfg(test)]
 mod tests {
     use super::{
-        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, is_timers,
+        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, is_timer_done, is_timers,
         shows_chime_picker,
     };
 
@@ -1026,5 +1063,15 @@ mod tests {
         assert!(!has_chime_preview("overlay-0"));
         assert!(!has_chime_preview("warning-toast"));
         assert!(!has_chime_preview(""));
+    }
+
+    #[test]
+    fn only_a_timer_done_window_may_dismiss() {
+        assert!(is_timer_done("timer-done-abc"));
+        // The running-toast family and every other window must be rejected.
+        assert!(!is_timer_done("timer-toast-abc"));
+        assert!(!is_timer_done("timers"));
+        assert!(!is_timer_done("settings"));
+        assert!(!is_timer_done(""));
     }
 }

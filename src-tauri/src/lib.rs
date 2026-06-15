@@ -278,6 +278,7 @@ pub fn run() {
             commands::cmd_reset_countdown,
             commands::cmd_close_countdowns,
             commands::cmd_toast_stop_countdown,
+            commands::cmd_dismiss_timer_done,
             commands::cmd_get_rules,
             commands::cmd_set_rule_flags,
             commands::cmd_close_breaks,
