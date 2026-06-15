@@ -11,6 +11,10 @@ interface ToastInfo {
   count_up: boolean;
   duration_secs: number;
   progress: boolean;
+  // Finished toasts: seconds since finish (where the overtime count starts) + whether to count
+  // overtime past zero (per-timer toasts on) vs. show a static "Time's up!" (off).
+  overtime_secs: number;
+  count: boolean;
 }
 
 const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
@@ -21,6 +25,8 @@ const info = readInjected<ToastInfo>("__GOMAJU_TIMER_TOAST__", {
   count_up: false,
   duration_secs: 0,
   progress: false,
+  overtime_secs: 0,
+  count: false,
 });
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
@@ -48,16 +54,45 @@ window.addEventListener("DOMContentLoaded", () => {
   const time = $("time");
 
   if (info.finished) {
-    // Terminal "Time's up!" toast: no countdown, the ✕ just dismisses (the id is derived from this
-    // window's own label on the Rust side — no arg to spoof).
+    // Terminal finish toast: the ✕ just dismisses (the id is derived from this window's own label
+    // on the Rust side — no arg to spoof).
     $("icon").textContent = "⏰";
-    time.textContent = t("timers.times_up");
     stop.title = t("timers.dismiss");
     stop.setAttribute("aria-label", t("timers.dismiss"));
     stop.addEventListener("click", () => {
       invoke("cmd_dismiss_timer_done").catch(() => {});
     });
-    $("bar-track").hidden = true; // terminal toast: no progress bar
+    $("bar-track").hidden = true; // finish toast: no progress bar
+    if (info.count) {
+      // Per-timer toasts on → this overtime toast owns the chime: play it now, on load, so the
+      // sound lands with the visible zero (the host skips the chime in this mode). The running
+      // toast can't play it — the host closes it at the fire instant, before its local zero.
+      invoke("cmd_toast_play_chime").catch(() => {});
+      // Signal "finished, now overdue": turn the clock red and show a short note under the row.
+      time.classList.add("timer-toast__time--over");
+      const note = $("note");
+      note.textContent = t("timers.times_up");
+      note.hidden = false;
+      // Keep counting overtime past zero, following the Timer direction: count-up rises from zero
+      // (00:16), a countdown goes negative (-00:12). `overtime_secs` is where the local count
+      // starts (its origin is the timer's finish instant on the host, so a late tick doesn't skew it).
+      let overtime = Math.max(0, Math.floor(info.overtime_secs));
+      const render = (): void => {
+        time.textContent = info.count_up
+          ? fmt(overtime)
+          : overtime === 0
+            ? fmt(0)
+            : `-${fmt(overtime)}`;
+      };
+      render();
+      window.setInterval(() => {
+        overtime += 1;
+        render();
+      }, 1000);
+    } else {
+      // Per-timer toasts off → a static "Time's up!".
+      time.textContent = t("timers.times_up");
+    }
     return;
   }
 

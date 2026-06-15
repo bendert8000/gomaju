@@ -1,25 +1,30 @@
 //! On-screen toasts for countdown timers — small always-on-top windows stacked bottom-right above
-//! the tray. The `show_timer_toasts` setting selects **which** family appears:
-//! - **on** → a live **countdown** toast per *running* timer (`timer-toast-<id>`), closed at 00:00;
-//! - **off** → no running toast, but a persistent **"time's up"** toast (`timer-done-<id>`) when a
-//!   timer fires, kept until the user dismisses it (drawn from [`AppState::finished_toasts`]).
+//! the tray. Two families:
+//! - `timer-toast-<id>` — a live **countdown** toast per *running* timer, shown only when the
+//!   `show_timer_toasts` setting is on. It closes at 00:00 (the run leaves `countdown_runtime`).
+//! - `timer-done-<id>` — a persistent **finish** toast, created on **every** fire (drawn from
+//!   [`AppState::finished_toasts`]) and kept until the user dismisses it. With per-timer toasts
+//!   **on** it counts **overtime** past zero — a countdown into the negative (`-00:12`), a count-up
+//!   restarting from zero (`00:16`); with them **off** it shows a static **"Time's up!"**.
 //!
-//! Both families are reconciled by [`sync`]: it builds the *desired* set ([`desired_toasts`] —
-//! running timers when the setting is on, plus the finished set pruned to config-member ids, which
-//! self-heals any delete/fire race) and diffs it against the *actual* `timer-toast-*` / `timer-done-*`
-//! windows, creating/closing only the difference, then re-stacking. `sync` is driven from the
-//! **countdown scheduler's background thread** (~every 250 ms, with a cheap label-set early-out
-//! recomputed from live windows) — NOT from the start/pause/reset/dismiss commands. That matters:
-//! those commands run on the main thread inside a WebView2 IPC callback, and creating a webview
-//! window from there re-enters the message loop and deadlocks on Windows. Driving it from a
-//! background thread (like the break toast) makes window creation happen in a clean main-thread
-//! context.
+//! So at finish the running toast closes and the finish toast takes over (a brief window swap that
+//! coincides with the chime). Both families are reconciled by [`sync`]: it builds the *desired* set
+//! ([`desired_toasts`] — running timers when the setting is on, plus the finished set pruned to
+//! config-member ids, which self-heals any delete/fire race) and diffs it against the *actual*
+//! `timer-toast-*` / `timer-done-*` windows, creating/closing only the difference, then re-stacking.
+//! `sync` is driven from the **countdown scheduler's background thread** (~every 250 ms, with a cheap
+//! label-set early-out recomputed from live windows) — NOT from the start/pause/reset/dismiss
+//! commands. That matters: those commands run on the main thread inside a WebView2 IPC callback, and
+//! creating a webview window from there re-enters the message loop and deadlocks on Windows. Driving
+//! it from a background thread (like the break toast) makes window creation happen in a clean
+//! main-thread context.
 //!
-//! A running toast counts down locally in JS from an injected `remaining_secs`; the host
-//! authoritatively closes it on finish/stop, so any sub-second drift is cosmetic. A finished toast
-//! shows "time's up" and is closed when its `finished_toasts` entry is dropped (the ✕ →
-//! `cmd_dismiss_timer_done`, or the timer being deleted). (No events are pushed to the windows, so
-//! their capability needs no extra permissions.)
+//! Both toasts count locally in JS — the running one down from an injected `remaining_secs`, the
+//! finish one up from an injected `overtime_secs` (its origin is the timer's `finish_at`, so the
+//! up-to-250 ms tick lag doesn't skew the count). The host authoritatively closes the running toast
+//! on finish/stop; the finish toast is closed when its `finished_toasts` entry is dropped (the ✕ →
+//! `cmd_dismiss_timer_done`, re-arming/resetting the timer, or deleting it). (No events are pushed to
+//! the windows, so their capability needs no extra permissions.)
 
 use std::collections::HashSet;
 use std::time::Instant;
@@ -67,23 +72,31 @@ struct DesiredToast {
     count_up: bool,
     duration_secs: u32,
     progress: bool,
+    /// Whole seconds elapsed since this timer finished (finished toasts only; 0 for running).
+    overtime_secs: u32,
+    /// Finished toasts only: count the overtime past zero (per-timer toasts on) vs. show a static
+    /// "Time's up!" (off). Ignored by running toasts.
+    count: bool,
 }
 
 /// Compute the ordered desired toast set.
 /// - `running`: (id, name, remaining_secs, duration_secs) for currently-running timers, in config
 ///   order; included only when `show_running` (the `show_timer_toasts` setting) is true.
-/// - `finished`: (id, name) for timers with a pending "time's up" toast, already pruned to
+/// - `finished`: (id, name, overtime_secs) for timers with a pending finish toast, already pruned to
 ///   config-member ids, in config order; always included.
-/// - `count_up`: the global `timer_count_up` setting; propagated to running toasts only.
+/// - `count_up`: the global `timer_count_up` setting; propagated to running **and** finished toasts
+///   (a finished toast counts overtime up from zero, or a countdown's negative, per this flag).
 /// - `progress`: the global `timer_toast_progress` setting; propagated to running toasts only.
 ///
-/// Order is running-first then finished, so finished toasts stack above running ones.
+/// A finished toast counts its overtime past zero only when `show_running` is true (per-timer toasts
+/// on); when off it shows a static "Time's up!". Order is running-first then finished, so finished
+/// toasts stack above running ones.
 fn desired_toasts(
     show_running: bool,
     count_up: bool,
     progress: bool,
     running: &[(String, String, u32, u32)], // (id, name, remaining_secs, duration_secs)
-    finished: &[(String, String)],          // (id, name)
+    finished: &[(String, String, u32)],     // (id, name, overtime_secs)
 ) -> Vec<DesiredToast> {
     let mut out = Vec::new();
     if show_running {
@@ -97,19 +110,23 @@ fn desired_toasts(
                 count_up,
                 duration_secs: *duration,
                 progress,
+                overtime_secs: 0,
+                count: false,
             });
         }
     }
-    for (id, name) in finished {
+    for (id, name, overtime) in finished {
         out.push(DesiredToast {
             id: id.clone(),
             label: done_label_for(id),
             name: name.clone(),
             remaining_secs: 0,
             finished: true,
-            count_up: false,
+            count_up,
             duration_secs: 0,
             progress: false,
+            overtime_secs: *overtime,
+            count: show_running,
         });
     }
     out
@@ -125,6 +142,10 @@ struct ToastInfo<'a> {
     count_up: bool,
     duration_secs: u32,
     progress: bool,
+    /// Finished toasts: seconds elapsed since finish, where the local overtime count starts.
+    overtime_secs: u32,
+    /// Finished toasts: count overtime past zero (true) vs. show static "Time's up!" (false).
+    count: bool,
 }
 
 /// Reconcile the open toasts with the running timers + the `show_timer_toasts` setting. Creates
@@ -169,14 +190,23 @@ pub fn sync(app: &AppHandle) {
     };
 
     // Finished set (released): prune to config-member ids (self-healing — kills the
-    // delete-then-insert resurrection race), then take them in config order.
-    let finished: Vec<(String, String)> = {
+    // delete-then-insert resurrection race), then take them in config order, computing each one's
+    // overtime (now - finish_at) for the live "counting past zero" display.
+    let finished: Vec<(String, String, u32)> = {
         let mut fin = st.finished_toasts.lock().unwrap();
         let valid: HashSet<&str> = order.iter().map(|(id, _)| id.as_str()).collect();
         fin.retain(|id, _| valid.contains(id.as_str()));
         order
             .iter()
-            .filter_map(|(id, _dur)| fin.get(id).map(|name| (id.clone(), name.clone())))
+            .filter_map(|(id, _dur)| {
+                fin.get(id).map(|f| {
+                    let overtime = now
+                        .saturating_duration_since(f.finish_at)
+                        .as_secs()
+                        .min(u32::MAX as u64) as u32;
+                    (id.clone(), f.name.clone(), overtime)
+                })
+            })
             .collect()
     };
 
@@ -232,6 +262,8 @@ fn build_toast(app: &AppHandle, d: &DesiredToast) {
         count_up: d.count_up,
         duration_secs: d.duration_secs,
         progress: d.progress,
+        overtime_secs: d.overtime_secs,
+        count: d.count,
     })
     .unwrap_or_else(|_| "null".into());
     let init = format!(
@@ -247,7 +279,8 @@ fn build_toast(app: &AppHandle, d: &DesiredToast) {
         .skip_taskbar(true)
         .resizable(false)
         .focused(false) // never steal focus from the user's work
-        .inner_size(300.0, 64.0)
+        // The overtime toast (finished + counting) is a touch taller to fit its "Time's up!" note.
+        .inner_size(300.0, if d.finished && d.count { 84.0 } else { 64.0 })
         .visible(false)
         .initialization_script(&init)
         .build()
@@ -292,20 +325,38 @@ mod tests {
     fn run(id: &str, name: &str, secs: u32, dur: u32) -> (String, String, u32, u32) {
         (id.to_string(), name.to_string(), secs, dur)
     }
-    fn fin(id: &str, name: &str) -> (String, String) {
-        (id.to_string(), name.to_string())
+    fn fin(id: &str, name: &str, overtime: u32) -> (String, String, u32) {
+        (id.to_string(), name.to_string(), overtime)
     }
 
     #[test]
     fn unchecked_mode_shows_only_finished_toasts() {
         let running = vec![run("a", "A", 30, 60)];
-        let finished = vec![fin("b", "B")];
+        let finished = vec![fin("b", "B", 0)];
         let d = desired_toasts(false, false, true, &running, &finished);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].label, "timer-done-b");
         assert!(d[0].finished);
         assert_eq!(d[0].id, "b");
         assert!(!d[0].progress);
+        // Toasts off -> finished toast is static "Time's up!", not a counting overtime clock.
+        assert!(!d[0].count);
+    }
+
+    #[test]
+    fn finished_toast_counts_overtime_only_when_toasts_on() {
+        let finished = vec![fin("b", "B", 12)];
+        // Toasts on: the finished toast counts overtime and follows the count-up direction.
+        let on = desired_toasts(true, true, true, &[], &finished);
+        assert_eq!(on[0].label, "timer-done-b");
+        assert!(on[0].finished);
+        assert!(on[0].count, "toasts on -> finished toast counts overtime");
+        assert_eq!(on[0].overtime_secs, 12);
+        assert!(on[0].count_up, "count_up flag reaches finished toasts (for the sign)");
+        // Toasts off: same overtime value carried, but rendered static (count = false).
+        let off = desired_toasts(false, false, true, &[], &finished);
+        assert!(!off[0].count);
+        assert_eq!(off[0].overtime_secs, 12);
     }
 
     #[test]
@@ -333,7 +384,7 @@ mod tests {
     #[test]
     fn running_first_then_finished_in_order() {
         let running = vec![run("a", "A", 30, 60)];
-        let finished = vec![fin("b", "B"), fin("c", "C")];
+        let finished = vec![fin("b", "B", 0), fin("c", "C", 0)];
         let d = desired_toasts(true, false, true, &running, &finished);
         let labels: Vec<&str> = d.iter().map(|x| x.label.as_str()).collect();
         assert_eq!(labels, ["timer-toast-a", "timer-done-b", "timer-done-c"]);
@@ -349,7 +400,7 @@ mod tests {
     #[test]
     fn progress_flag_propagates_to_running_only() {
         let running = vec![run("a", "A", 30, 60)];
-        let finished = vec![fin("b", "B")];
+        let finished = vec![fin("b", "B", 0)];
         let d = desired_toasts(true, false, true, &running, &finished);
         assert!(d[0].progress, "running toast carries progress");
         assert!(!d[1].progress, "finished toast never shows a bar");

@@ -98,10 +98,17 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   due-check **and** the state transition (one-shot: fire, then remove) **atomically under one
   `countdown_runtime` lock** before any side effect — so a concurrent reset/pause/save can't be
   clobbered and a deleted/reset timer can't be resurrected. Lock order is always config→runtime.
-  Side effects after unlock: notification (gated by `settings.notifications`) + chime via
-  `audio::play_countdown_chime`, a **single-slot** cue (busy-flag guard mirroring `PREVIEW`) so
-  many simultaneous timers don't stack overlapping audio. The chime is **not** gated by
-  `settings.sound` (a timer the user started should always sound, like an alarm).
+  Side effects after unlock: the OS notification (gated by `settings.notifications`) + the chime
+  (`audio::play_countdown_chime`, a **single-slot** cue — busy-flag guard mirroring `PREVIEW` — so
+  many simultaneous timers don't stack overlapping audio). The chime is **not** gated by
+  `settings.sound` (a timer the user started should always sound, like an alarm). **Both are gated by
+  `show_timer_toasts`:** when **on**, the in-app finish/overtime toast IS the finish indicator, so the
+  host fires **neither** the OS notification (it would duplicate the toast) **nor** the chime — the
+  **finish/overtime toast plays the chime on load** (`cmd_toast_play_chime`, gated by
+  `require_timer_done`) so the sound lands with the toast's visible zero. When **off**, the host owns
+  both (notification + chime). So exactly one path notifies/sounds per finish. (The running toast
+  can't play the chime: the host closes it at the fire instant, before its local zero — its successor
+  the finish toast does.)
 - The **Timers window** (`timers.html` / `src/timers.ts`, label `timers`, tray "Timers…") does
   CRUD via `cmd_get_countdowns`/`cmd_save_countdowns` (both return `CountdownView` = def + live
   state) + the start/pause/reset commands, gated by `require_timers`. Duration is **three 2-digit
@@ -121,14 +128,21 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   capability `timer-toast-*` / `timer-done-*` in `overlay.json`): the **`settings.show_timer_toasts`**
   bool (default on) selects **which** toast, not whether there is one. **Checked** → one small
   frameless, always-on-top, non-focus-stealing **countdown** toast per **running** timer (windows
-  `timer-toast-<id>`), stacked bottom-right, closed at `00:00`. **Unchecked** → no running toast, but
-  when a timer fires a persistent **"Time's up!"** toast (windows `timer-done-<id>`, a separate prefix)
-  appears and **stays until the user clicks ✕** — independent of `settings.notifications`, one toast
-  per timer id (a re-fire just refreshes it). The pending finished set is `AppState.finished_toasts:
-  Mutex<HashMap<id,name>>` (in-memory, reset on cold start), filled by the countdown scheduler when a
-  timer fires while the setting is off (name captured at fire time), and cleared by
-  `cmd_dismiss_timer_done` (the ✕; id from the window's own `timer-done-` label) — the next tick closes
-  the window. `timer_toast::sync(app)` is the single idempotent reconciler for **both** families:
+  `timer-toast-<id>`), stacked bottom-right, closed at `00:00`. On **every** fire (checked or not) a
+  persistent finish toast (windows `timer-done-<id>`, a separate prefix) appears and **stays until the
+  user clicks ✕** — independent of `settings.notifications`, one toast per timer id (a re-fire just
+  refreshes it). **Checked** → that finish toast counts **overtime** past zero (a countdown into the
+  negative `-00:12`; a count-up restarting from zero `00:16`), so at `00:00` the running toast closes
+  and the finish toast takes over (a brief window swap that coincides with the chime); its clock turns
+  **red** and a short **"Time's up!"** note (reusing `timers.times_up`) sits under the row, so this
+  overtime toast is built a touch taller (84 vs 64 px). **Unchecked** →
+  the finish toast shows a static **"Time's up!"** (the running toast never existed). The pending
+  finished set is `AppState.finished_toasts: Mutex<HashMap<id, FinishedToast{name, finish_at}>>`
+  (in-memory, reset on cold start), filled by the countdown scheduler on every fire (name captured at
+  fire time; `finish_at` is the overtime origin so a late tick doesn't skew the count), and cleared by
+  `cmd_dismiss_timer_done` (the ✕; id from the window's own `timer-done-` label) **or** by re-arming /
+  resetting the timer (`cmd_start_countdown` / `cmd_reset_countdown`) — the next tick closes the window.
+  `timer_toast::sync(app)` is the single idempotent reconciler for **both** families:
   desired = running timers in config order (only if the setting is on) **plus** finished toasts pruned
   to config-member ids (always, which also self-heals any delete/fire race — a deleted timer's toast
   can't resurrect); it diffs vs the actual `timer-toast-*` / `timer-done-*` windows, creates/closes the
@@ -140,12 +154,15 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   break toast) creates windows in a clean main-thread context. The commands (`cmd_start_countdown` /
   pause / reset / `cmd_toast_stop_countdown` / `cmd_dismiss_timer_done` / `cmd_save_countdowns`) only
   mutate run state; toasts appear/close on the next tick (≤250 ms). Each toast injects
-  `{id,name,remaining_secs,finished,count_up,duration_secs,progress}` (name = the auto-derived display
-  name); a **running** toast counts locally — down to 0, or up to `duration_secs` when `count_up` — and,
-  when `progress` (the `settings.timer_toast_progress` setting, default on) is set, shows a 4px bar that
-  mirrors the on-screen number — fills (`elapsed/duration`) when counting up, drains from full
-  (`remaining/duration`) when counting down; the host closes it on finish/stop (no event push, empty
-  capability). The toggles
+  `{id,name,remaining_secs,finished,count_up,duration_secs,progress,overtime_secs,count}` (name = the
+  auto-derived display name); a **running** toast counts locally — down to 0, or up to `duration_secs`
+  when `count_up` — and, when `progress` (the `settings.timer_toast_progress` setting, default on) is
+  set, shows a 4px bar that mirrors the on-screen number — fills (`elapsed/duration`) when counting up,
+  drains from full (`remaining/duration`) when counting down; the host closes it on finish/stop. A
+  **finish** toast (`finished`) instead counts **overtime** locally from `overtime_secs` when `count`
+  (= `show_timer_toasts`) — count-up rises from zero, a countdown shows `-mm:ss` — or, when `count` is
+  off, shows the static "Time's up!" string; it has no progress bar. (No event push, empty
+  capability.) The toggles
   (show-toasts + Countdown/Count-up direction + progress bar) live in the **Timers** card in Settings
   (`index.html`).
 

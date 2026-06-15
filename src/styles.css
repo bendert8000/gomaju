@@ -1025,6 +1025,26 @@ input.chime-volume-picker {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
+  /* The countdown is the toast's focal point: enlarge + embolden it. line-height:1 keeps the
+     box at the glyph height (24px @ 1.5rem), still under the ✕ button (1.6rem), so the row and
+     the 64px toast window don't grow. */
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Overtime (finished + counting): the clock turns red to signal the timer is past due. */
+.timer-toast__time--over {
+  color: #ff6b6b;
+}
+/* Short "finished" note under the row on the overtime toast. */
+.timer-toast__note {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #ff6b6b;
+}
+.timer-toast__note[hidden] {
+  display: none;
 }
 .timer-toast__stop {
   flex: 0 0 auto;

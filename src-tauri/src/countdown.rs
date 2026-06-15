@@ -102,9 +102,11 @@ pub fn spawn_scheduler(app: AppHandle) {
         std::thread::sleep(Duration::from_millis(250));
         let now = Instant::now();
 
-        // 1) Snapshot the defs + locale + notification gate under the config lock. The chimes
-        //    list is deliberately NOT cloned here — only when a timer actually fires (step 3) —
-        //    so an idle app (the common case) doesn't clone it 4×/second forever.
+        // 1) Snapshot the defs + locale + notification gate + show-toasts under the config lock. The
+        //    chimes list is deliberately NOT cloned here — only when a timer actually fires (step 3) —
+        //    so an idle app (the common case) doesn't clone it 4×/second forever. `show_toasts` gates
+        //    only the **chime**: when per-timer toasts are on, the finish/overtime toast plays it on
+        //    load (synced to its visible zero); when off, the host plays it here.
         let (defs, locale, notify, show_toasts): (HashMap<String, CountdownDto>, String, bool, bool) = {
             let st = app.state::<AppState>();
             let cfg = st.config.lock().unwrap();
@@ -113,40 +115,51 @@ pub fn spawn_scheduler(app: AppHandle) {
                 .iter()
                 .map(|c| (c.id.clone(), c.clone()))
                 .collect();
-            (defs, cfg.locale.clone(), cfg.settings.notifications, cfg.settings.show_timer_toasts)
+            (
+                defs,
+                cfg.locale.clone(),
+                cfg.settings.notifications,
+                cfg.settings.show_timer_toasts,
+            )
         };
 
         // 2) Atomic due-check + transition under the runtime lock. Collect what to fire.
         let mut fired: Vec<(String, String, u8)> = Vec::new(); // (name, chime_id, volume)
-        let mut to_finish: Vec<(String, String)> = Vec::new(); // (id, name) for "time's up" toasts
+        let mut to_finish: Vec<(String, String, Instant)> = Vec::new(); // (id, name, finish_at)
         {
             let st = app.state::<AppState>();
             let mut map = st.countdown_runtime.lock().unwrap();
-            let due: Vec<String> = map
+            let due: Vec<(String, Instant)> = map
                 .iter()
                 .filter_map(|(id, run)| match run {
-                    CountdownRun::Running { finish_at } if *finish_at <= now => Some(id.clone()),
+                    CountdownRun::Running { finish_at } if *finish_at <= now => {
+                        Some((id.clone(), *finish_at))
+                    }
                     _ => None,
                 })
                 .collect();
-            for id in due {
+            for (id, finish_at) in due {
                 // Either way the timer leaves the running set (one-shot). Fire only if its def
                 // still exists; a def deleted out from under us just drops the orphan silently.
                 if let Some(def) = defs.get(&id) {
                     let display = timer_display_name(def.duration_secs, &locale);
                     fired.push((display.clone(), def.chime_id.clone(), def.chime_volume_pct));
-                    if !show_toasts {
-                        to_finish.push((id.clone(), display));
-                    }
+                    // Record the finish on every fire: `sync` shows it as a static "Time's up!"
+                    // (toasts off) or a live overtime clock (toasts on). `finish_at` (not `now`)
+                    // is the overtime origin, so the up-to-250 ms tick lag doesn't skew the count.
+                    to_finish.push((id.clone(), display, finish_at));
                 }
                 map.remove(&id);
             }
         }
 
-        // 3) Side effects only after both locks are released.
+        // 3) Side effects only after both locks are released. When per-timer toasts are ON the
+        //    in-app finish/overtime toast IS the finish indicator (and plays the chime on load via
+        //    `cmd_toast_play_chime`), so the host fires NEITHER the OS notification NOR the chime —
+        //    both would be redundant with (and noisier than) the toast. When OFF, the host owns both,
+        //    so the chimes list is snapshot only in that case.
         if !fired.is_empty() {
-            // Something fired — only now snapshot the chimes list + dir for playback.
-            let (chimes, dir) = {
+            let chime_ctx = (!show_toasts).then(|| {
                 let st = app.state::<AppState>();
                 let chimes = st.chimes.lock().unwrap().clone();
                 let dir = st
@@ -155,26 +168,30 @@ pub fn spawn_scheduler(app: AppHandle) {
                     .map(|p| p.join("chimes"))
                     .unwrap_or_default();
                 (chimes, dir)
-            };
+            });
             for (name, chime_id, volume) in fired {
                 crate::rlog!("gomaju: countdown fired ({name})");
-                if notify {
+                if notify && !show_toasts {
                     runtime::show_notification(
                         &app,
                         crate::i18n::tr(&locale, "notif.timer_title"),
                         &name,
                     );
                 }
-                audio::play_countdown_chime(&chime_id, volume, &chimes, &dir);
+                if let Some((chimes, dir)) = &chime_ctx {
+                    audio::play_countdown_chime(&chime_id, volume, chimes, dir);
+                }
             }
         }
-        // Record "time's up" toasts (unchecked mode). Own lock, no nesting — config -> runtime ->
-        // finished_toasts. The sync() call below (same tick) creates the windows off the main thread.
+        // Record the finish for the `timer-done-<id>` toast. Own lock, no nesting — config ->
+        // runtime -> finished_toasts. The sync() call below (same tick) creates the windows off the
+        // main thread.
         if !to_finish.is_empty() {
             let st = app.state::<AppState>();
             let mut fin = st.finished_toasts.lock().unwrap();
-            for (id, name) in to_finish {
-                fin.insert(id, name); // one toast per id; a re-fire just refreshes the entry
+            for (id, name, finish_at) in to_finish {
+                // One toast per id; a re-fire just refreshes the entry (and its overtime origin).
+                fin.insert(id, crate::app_state::FinishedToast { name, finish_at });
             }
         }
         // Reconcile the running-timer toasts every tick (cheap no-op when unchanged). Done here on

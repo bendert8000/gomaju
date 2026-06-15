@@ -578,8 +578,14 @@ pub fn cmd_start_countdown(
         return Ok(()); // unknown/unsaved id -> no-op
     };
     let now = std::time::Instant::now();
-    let mut map = state.countdown_runtime.lock().unwrap();
-    crate::countdown::start(&mut map, &id, duration, now);
+    {
+        let mut map = state.countdown_runtime.lock().unwrap();
+        crate::countdown::start(&mut map, &id, duration, now);
+    }
+    // Re-arming clears any pending finish/overtime toast for this id (separate lock scope — never
+    // held with the runtime lock). The scheduler's next sync then closes the done toast and opens a
+    // fresh running toast, so the overtime count can't bleed into the restarted timer.
+    state.finished_toasts.lock().unwrap().remove(&id);
     Ok(())
 }
 
@@ -605,8 +611,12 @@ pub fn cmd_reset_countdown(
     id: String,
 ) -> Result<(), String> {
     require_timers(&window)?;
-    let mut map = state.countdown_runtime.lock().unwrap();
-    crate::countdown::reset(&mut map, &id);
+    {
+        let mut map = state.countdown_runtime.lock().unwrap();
+        crate::countdown::reset(&mut map, &id);
+    }
+    // Reset also clears a lingering finish/overtime toast for this id (separate lock scope).
+    state.finished_toasts.lock().unwrap().remove(&id);
     Ok(())
 }
 
@@ -647,6 +657,38 @@ pub fn cmd_dismiss_timer_done(
     if let Some(id) = crate::timer_toast::id_from_done_label(window.label()) {
         state.finished_toasts.lock().unwrap().remove(id);
     }
+    Ok(())
+}
+
+/// Play a finished timer's chime, invoked by its overtime toast (`timer-done-<id>`) the instant it
+/// loads — so the sound lands with the toast's visible zero. Used only when per-timer toasts are ON;
+/// the scheduler plays the chime itself when they're OFF, so exactly one path sounds per finish. The
+/// id comes from the toast's own window label (no spoofable arg); a timer deleted out from under the
+/// toast is a silent no-op. Playing audio (unlike creating a window) from a command is safe — it just
+/// spawns a rodio thread, single-slotted so simultaneous timers can't pile up overlapping audio.
+#[tauri::command]
+pub fn cmd_toast_play_chime(window: WebviewWindow, state: State<'_, AppState>) -> Result<(), String> {
+    require_timer_done(&window)?;
+    let Some(id) = crate::timer_toast::id_from_done_label(window.label()) else {
+        return Ok(());
+    };
+    let chime = {
+        let cfg = state.config.lock().unwrap();
+        cfg.countdowns
+            .iter()
+            .find(|c| c.id.as_str() == id)
+            .map(|c| (c.chime_id.clone(), c.chime_volume_pct))
+    };
+    let Some((chime_id, volume)) = chime else {
+        return Ok(()); // timer deleted out from under the toast -> nothing to play
+    };
+    let dir = state
+        .config_path
+        .parent()
+        .map(|p| p.join("chimes"))
+        .unwrap_or_default();
+    let chimes = state.chimes.lock().unwrap();
+    crate::audio::play_countdown_chime(&chime_id, volume, &chimes, &dir);
     Ok(())
 }
 

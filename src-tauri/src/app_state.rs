@@ -16,6 +16,16 @@ pub struct PauseReminderState {
     pub generation: u64,
 }
 
+/// A finished countdown awaiting its `timer-done-<id>` toast: the timer's display name plus the
+/// instant it finished. `finish_at` lets `timer_toast::sync` compute the overtime (`now - finish_at`)
+/// for the live "counting past zero" display; the name is captured at fire time (a timer reads idle
+/// once fired, so its derived name is recomputed from the duration here).
+#[derive(Debug, Clone)]
+pub struct FinishedToast {
+    pub name: String,
+    pub finish_at: Instant,
+}
+
 /// Application state shared between the tray, commands, and the ticker thread.
 /// The engine and config are each behind their own mutex (low contention: the
 /// ticker locks the engine ~once/second; commands lock briefly).
@@ -46,11 +56,13 @@ pub struct AppState {
     /// the user's chosen "reset on restart" behavior. The countdown scheduler reads/transitions
     /// this each tick; the timer commands start/pause/reset entries here without touching disk.
     pub countdown_runtime: Mutex<HashMap<String, CountdownRun>>,
-    /// Pending "Time's up!" toasts (countdown id -> timer name captured at fire time). Populated by
-    /// the countdown scheduler when a timer fires while `show_timer_toasts` is OFF; reconciled into
-    /// `timer-done-<id>` windows by `timer_toast::sync`; cleared by `cmd_dismiss_timer_done` (the ✕)
-    /// and self-pruned to config-member ids by `sync`. In-memory only, like `countdown_runtime`.
-    pub finished_toasts: Mutex<HashMap<String, String>>,
+    /// Pending finish toasts (countdown id -> name + finish instant). Populated by the countdown
+    /// scheduler on **every** fire; reconciled into `timer-done-<id>` windows by `timer_toast::sync`,
+    /// which shows a static "Time's up!" when `show_timer_toasts` is OFF or a live overtime clock
+    /// (counting past zero) when it's ON. Cleared by `cmd_dismiss_timer_done` (the ✕), by
+    /// re-arming/resetting the timer (`cmd_start_countdown`/`cmd_reset_countdown`), and self-pruned to
+    /// config-member ids by `sync`. In-memory only, like `countdown_runtime`.
+    pub finished_toasts: Mutex<HashMap<String, FinishedToast>>,
 }
 
 impl AppState {
