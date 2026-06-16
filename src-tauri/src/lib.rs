@@ -1,4 +1,5 @@
 mod alarm;
+mod alarm_toast;
 mod alarms_window;
 mod app_state;
 mod audio;
@@ -179,6 +180,8 @@ pub fn run() {
                 countdown_runtime: Mutex::new(Default::default()),
                 // "Time's up!" toasts are never persisted (cold start has none), like run state.
                 finished_toasts: Mutex::new(Default::default()),
+                // Pending alarm toasts are never persisted either (cold start has none).
+                fired_alarm_toasts: Mutex::new(Default::default()),
             });
 
             tray::build_tray(&handle)?;
@@ -279,6 +282,7 @@ pub fn run() {
             commands::cmd_close_countdowns,
             commands::cmd_toast_stop_countdown,
             commands::cmd_dismiss_timer_done,
+            commands::cmd_dismiss_alarm_toast,
             commands::cmd_toast_play_chime,
             commands::cmd_get_rules,
             commands::cmd_set_rule_flags,

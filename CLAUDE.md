@@ -45,7 +45,10 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
 
 ## Notifications (platform notes)
 
-- Break/soft notifications use `tauri-plugin-notification` (`runtime::show_notification`).
+- Only two native notifications remain (`runtime::show_notification`, `tauri-plugin-notification`):
+  a **countdown timer** firing while its in-app toast is off, plus the startup toast below. **Breaks
+  fire no native notification** — the fullscreen overlay is the indicator, soft and strict alike.
+  **Alarms** show their own persistent in-app toast (see Alarms), not a native notification.
 - The **startup** "Running in the system tray" toast is special: `runtime::show_startup_notification`
   auto-dismisses after ~3s. It fires on every cold start (gated by the `notifications`
   setting) to remind the user the app keeps running in the tray after its windows close.
@@ -57,8 +60,14 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
 ## Alarms (clock alarms, separate from breaks)
 
 - Wall-clock alarms (name + time + recurrence Once/Daily/Weekly/Bi-weekly/Monthly/Yearly)
-  live in `config.toml` as `[[alarms]]`. They fire a notification + a distinct repeating
-  tone (`audio::play_alarm`) regardless of run state.
+  live in `config.toml` as `[[alarms]]`. They fire a **persistent in-app toast** + a distinct
+  repeating tone (`audio::play_alarm`) regardless of run state. The toast (`alarm-toast-<id>`,
+  `alarm-toast.html`/`src/alarm-toast.ts`) shows the name + `{time} · {recurrence}` and stays until
+  the user clicks ✕ — replacing the old auto-dismissing OS notification (so it behaves the same on
+  Linux/macOS). It is reconciled by `alarm_toast::sync` from the scheduler's 1s background thread (the
+  safe window-creation pattern), backed by the in-memory `AppState.fired_alarm_toasts` (filled on
+  every fire, cleared by `cmd_dismiss_alarm_toast` — the ✕ only drops the entry; the next tick closes
+  the window, never the command).
 - **Bi-weekly** reuses Weekly's `weekdays` plus the `date` field as a start-week anchor:
   fires the ticked days every *other* Monday-aligned week from that week, never before the
   start date. Week-parity is pure integer math — `days_from_civil` + `monday_week` in
@@ -194,6 +203,14 @@ Versioning: `package.json` is canonical. Use `npm run version:set -- 0.2.0` to u
   asks the OS via `GetGUIThreadInfo` + `GUI_INMENUMODE` (`menu_is_open`, keyed on the GUI thread id
   captured at build) and returns early, leaving the cache untouched so the content catches up on the
   next tick after the menu closes (no-op off Windows).
+- **Manual "instant" break actions** (tray/toast **"Break now"**, overlay **"Skip"**, start/pause/
+  reset) run inside a tray-menu or WebView2-IPC callback on the **main thread**, so they apply their
+  engine effects via `runtime::spawn_apply_effects` (a one-shot background thread) — never inline.
+  Applying effects inline would build/close overlay webviews on the main thread re-entrantly and
+  **deadlock WebView2 on Windows**; the engine tick is immune only because it already runs off-thread.
+  On a **completed** break, `EndBreak` defers the overlay close by ~1 tick so the overlay's local
+  countdown (which lags by the window's startup latency) drains to **00:00** — number and progress
+  bar — before the window hides, instead of vanishing at 00:01. A skip closes at once.
 - Each rule has a `repeat` flag (default true). A **once** rule (`repeat=false`) fires one
   break, then the engine disables it (`Effect::RuleDisabled`) and the host persists
   `enabled=false` (`runtime::persist_rule_disabled`) — same auto-disable model as alarm

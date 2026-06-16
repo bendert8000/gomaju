@@ -26,6 +26,18 @@ pub struct FinishedToast {
     pub finish_at: Instant,
 }
 
+/// A fired wall-clock alarm awaiting its `alarm-toast-<id>` toast: the alarm's name, scheduled
+/// "HH:MM" time, and recurrence key (lowercase — matches the frontend `alarms.repeat_*` labels),
+/// plus the fire instant for a stable stack order. Captured at fire time, so editing/deleting the
+/// alarm afterward never disturbs a toast already on screen.
+#[derive(Debug, Clone)]
+pub struct FiredAlarmToast {
+    pub name: String,
+    pub time: String,
+    pub recurrence: &'static str,
+    pub fired_at: Instant,
+}
+
 /// Application state shared between the tray, commands, and the ticker thread.
 /// The engine and config are each behind their own mutex (low contention: the
 /// ticker locks the engine ~once/second; commands lock briefly).
@@ -63,6 +75,11 @@ pub struct AppState {
     /// re-arming/resetting the timer (`cmd_start_countdown`/`cmd_reset_countdown`), and self-pruned to
     /// config-member ids by `sync`. In-memory only, like `countdown_runtime`.
     pub finished_toasts: Mutex<HashMap<String, FinishedToast>>,
+    /// Pending alarm toasts (alarm id -> name/time/recurrence + fire instant). Filled by the alarm
+    /// scheduler on **every** fire; reconciled into `alarm-toast-<id>` windows by `alarm_toast::sync`.
+    /// Cleared by `cmd_dismiss_alarm_toast` (the ✕). In-memory only, like `finished_toasts` — every
+    /// cold start begins with no pending alarm toasts.
+    pub fired_alarm_toasts: Mutex<HashMap<String, FiredAlarmToast>>,
 }
 
 impl AppState {
@@ -120,6 +137,7 @@ mod tests {
             pause_reminder: Mutex::new(PauseReminderState::default()),
             countdown_runtime: Mutex::new(HashMap::new()),
             finished_toasts: Mutex::new(HashMap::new()),
+            fired_alarm_toasts: Mutex::new(HashMap::new()),
         }
     }
 

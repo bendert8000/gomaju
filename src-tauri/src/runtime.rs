@@ -4,7 +4,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
-use gomaju_core::{config, Effect, Enforcement, RunState};
+use gomaju_core::{config, Effect, RunState};
 
 use crate::app_state::AppState;
 use crate::idle::IdleSource;
@@ -107,7 +107,7 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
 
                 // Read presentation settings from the cached config before building the
                 // overlay (the display mode is purely presentational — the engine never sees it).
-                let (notify, locale, break_display, note, quote) = {
+                let (break_display, note, quote) = {
                     let state = app.state::<AppState>();
                     let cfg = state.config.lock().unwrap();
                     let rule = cfg.rules.iter().find(|r| r.id == *rule_id);
@@ -137,8 +137,6 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                         crate::audio::play_break_chime(chime_id, chime_volume_pct, &chimes, &dir);
                     }
                     (
-                        cfg.settings.notifications,
-                        cfg.locale.clone(),
                         cfg.settings.break_display.as_str().to_string(),
                         note,
                         quote,
@@ -158,13 +156,6 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                     },
                 );
                 let _ = app.emit("break-start", rule_id.clone());
-
-                // Notifications augment soft breaks; strict breaks already take
-                // over the whole screen, so a toast would be redundant.
-                if notify && *enforcement == Enforcement::Soft {
-                    let body = crate::i18n::tr(&locale, "notif.soft_break").replace("{name}", name);
-                    show_notification(app, crate::i18n::tr(&locale, "notif.break_title"), &body);
-                }
             }
             Effect::BreakTick { rule_id, remaining } => {
                 let _ = app.emit(
@@ -176,7 +167,23 @@ pub fn apply_effects(app: &AppHandle, effects: &[Effect]) {
                 );
             }
             Effect::EndBreak { rule_id, completed } => {
-                overlay::close_all(app);
+                // The overlay runs its own local countdown, which starts only once the window has
+                // finished its WebView2 startup — so it lags the engine by that latency and, at the
+                // true end, is still showing ~00:01 (and the progress bar a thin sliver). On a
+                // completed break, defer the close by ~one tick so that visual drains all the way to
+                // 00:00 — number and bar — before the window hides, instead of vanishing at 1.
+                // Safe to defer: `fire_break` reset every shorter / co-due / currently-due rule, so
+                // no new break can fire within this grace. A skip ends the break at once (there is
+                // no countdown left to finish), so it still closes immediately.
+                if *completed {
+                    let handle = app.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_millis(1000));
+                        overlay::close_all(&handle);
+                    });
+                } else {
+                    overlay::close_all(app);
+                }
                 let _ = app.emit("break-end", ());
                 // A short cue when a break runs its full course (not on a manual skip), if the
                 // user enabled break sounds — signals "you're done, back to work". Uses the rule's
@@ -254,35 +261,55 @@ fn persist_rule_disabled(app: &AppHandle, rule_id: &str) {
 
 // --- Actions shared by the tray menu and the IPC commands ---
 
+/// Apply engine effects from a **background thread**, so any window create/destroy they trigger
+/// (break overlays, the pre-break toast) is marshalled onto the main thread from a clean context.
+///
+/// The `action_*` helpers and the IPC command handlers run inside **main-thread callbacks** — the
+/// tray menu's `on_menu_event` and the WebView2 IPC dispatch. Calling [`apply_effects`] directly
+/// there builds/closes webview windows on the main thread **re-entrantly** (inside the menu's modal
+/// loop or the IPC callback), which deadlocks WebView2 on Windows: e.g. clicking the pre-break
+/// toast's "Break now" froze the app the instant the overlays were built. The engine tick is
+/// immune only because it already runs off the main thread; routing these effects through a
+/// one-shot thread gives them the same clean main-thread marshalling. (See CLAUDE.md — the Timers
+/// note on "re-enters the message loop and deadlocks/hangs on Windows".) The engine mutation itself
+/// stays synchronous on the caller; only the side-effecting `apply_effects` is deferred.
+pub fn spawn_apply_effects(app: &AppHandle, effects: Vec<Effect>) {
+    if effects.is_empty() {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || apply_effects(&app, &effects));
+}
+
 pub fn action_start(app: &AppHandle, state: &AppState) {
     let fx = state.engine.lock().unwrap().start();
-    apply_effects(app, &fx);
+    spawn_apply_effects(app, fx);
 }
 
 pub fn action_pause(app: &AppHandle, state: &AppState) {
     let fx = state.engine.lock().unwrap().pause();
-    apply_effects(app, &fx);
+    spawn_apply_effects(app, fx);
 }
 
 pub fn action_skip(app: &AppHandle, state: &AppState) {
     let fx = state.engine.lock().unwrap().skip();
-    apply_effects(app, &fx);
+    spawn_apply_effects(app, fx);
 }
 
 pub fn action_break_now(app: &AppHandle, state: &AppState) {
     let fx = state.engine.lock().unwrap().break_now();
-    apply_effects(app, &fx);
+    spawn_apply_effects(app, fx);
 }
 
 /// Take a **specific** rule's break immediately (the tray "click a break line" action).
 pub fn action_break_now_rule(app: &AppHandle, state: &AppState, rule_id: &str) {
     let fx = state.engine.lock().unwrap().break_now_rule(rule_id);
-    apply_effects(app, &fx);
+    spawn_apply_effects(app, fx);
 }
 
 pub fn action_reset(app: &AppHandle, state: &AppState) {
     let fx = state.engine.lock().unwrap().reset_timers();
-    apply_effects(app, &fx);
+    spawn_apply_effects(app, fx);
 }
 
 /// A native-dialog title prefixed with the app name, so an OS popup is identifiable as Gomaju's

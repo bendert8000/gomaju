@@ -9,8 +9,8 @@ use tauri::{AppHandle, Manager};
 
 use gomaju_core::alarm::{alarm_is_due, days_in_month, parse_hhmm, AlarmDto, RepeatDto};
 
-use crate::app_state::AppState;
-use crate::{audio, runtime};
+use crate::app_state::{AppState, FiredAlarmToast};
+use crate::audio;
 
 /// The next local time this alarm will fire, or `None` if it can't (disabled, a past
 /// one-time alarm, or an unparseable time).
@@ -81,6 +81,10 @@ pub fn spawn_scheduler(app: AppHandle) {
         let mut last_min: Option<(i32, u32, u32, u32, u32)> = None;
         loop {
             std::thread::sleep(Duration::from_secs(1));
+            // Reconcile alarm toasts every second so a ✕ dismissal closes its window promptly (and a
+            // toast from the previous second's fire shows). Window ops run from this background
+            // thread — the safe pattern — never from the dismiss command.
+            crate::alarm_toast::sync(&app);
             let now = Local::now();
             let stamp = (now.year(), now.month(), now.day(), now.hour(), now.minute());
             if last_min == Some(stamp) {
@@ -101,27 +105,38 @@ pub fn spawn_scheduler(app: AppHandle) {
             let ymd = now.format("%Y-%m-%d").to_string();
 
             // Snapshot under lock, then release it before running side effects.
-            let (alarms, chimes, locale): (Vec<AlarmDto>, Vec<gomaju_core::chime::ChimeDto>, String) = {
+            let (alarms, chimes): (Vec<AlarmDto>, Vec<gomaju_core::chime::ChimeDto>) = {
                 let st = app.state::<AppState>();
-                let (alarms, locale) = {
+                let alarms = {
                     let cfg = st.config.lock().unwrap();
-                    (cfg.alarms.clone(), cfg.locale.clone())
+                    cfg.alarms.clone()
                 };
                 let chimes = st.chimes.lock().unwrap().clone();
-                (alarms, chimes, locale)
+                (alarms, chimes)
             };
 
-            // Notify per alarm (names are distinct + informative), but play the tone at
-            // most once per minute so several alarms at the same time don't overlap into
-            // a cacophony of audio streams. When several fire together, the first one's chime
-            // wins (its assigned chime, or the default alarm tone if it has none).
+            // Show a persistent toast per fired alarm (this replaces the old auto-dismissing native
+            // notification — see alarm_toast.rs), but play the tone at most once per minute so
+            // several alarms at the same time don't overlap into a cacophony of audio streams. When
+            // several fire together, the first one's chime wins (its assigned chime, or the default).
             let mut fired_chime: Option<(String, u8)> = None;
             for a in &alarms {
                 if !alarm_is_due(a, hh, mm, weekday_mon0, month, day, dim, &ymd) {
                     continue;
                 }
                 crate::rlog!("gomaju: alarm fired ({})", a.name);
-                runtime::show_notification(&app, crate::i18n::tr(&locale, "notif.alarm_title"), &a.name);
+                {
+                    let st = app.state::<AppState>();
+                    st.fired_alarm_toasts.lock().unwrap().insert(
+                        a.id.clone(),
+                        FiredAlarmToast {
+                            name: a.name.clone(),
+                            time: a.time.clone(),
+                            recurrence: recurrence_key(a.repeat),
+                            fired_at: std::time::Instant::now(),
+                        },
+                    );
+                }
                 if fired_chime.is_none() {
                     fired_chime = Some((a.chime_id.clone(), a.chime_volume_pct));
                 }
@@ -139,8 +154,24 @@ pub fn spawn_scheduler(app: AppHandle) {
                 };
                 audio::play_alarm_chime(&chime_id, chime_volume_pct, &chimes, &dir);
             }
+            // Show any just-fired alarm toasts immediately, so the toast lands with the chime
+            // rather than ~1s later on the next tick.
+            crate::alarm_toast::sync(&app);
         }
     });
+}
+
+/// The lowercase recurrence key shown in the alarm toast, matching the frontend `alarms.repeat_*`
+/// labels (the toast localizes it on the JS side).
+fn recurrence_key(repeat: RepeatDto) -> &'static str {
+    match repeat {
+        RepeatDto::Once => "once",
+        RepeatDto::Daily => "daily",
+        RepeatDto::Weekly => "weekly",
+        RepeatDto::Biweekly => "biweekly",
+        RepeatDto::Monthly => "monthly",
+        RepeatDto::Yearly => "yearly",
+    }
 }
 
 /// Disable a fired one-time alarm so it never fires again (including across restarts).

@@ -110,6 +110,16 @@ fn require_timer_done(window: &WebviewWindow) -> Result<(), String> {
     gate(is_timer_done(window.label()), "timer-done")
 }
 
+/// True for an alarm toast window (`alarm-toast-<id>`).
+fn is_alarm_toast(label: &str) -> bool {
+    label.starts_with(crate::alarm_toast::ALARM_TOAST_PREFIX)
+}
+
+/// Reject the dismiss command invoked from any window other than an alarm toast window.
+fn require_alarm_toast(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_alarm_toast(window.label()), "alarm-toast")
+}
+
 /// Reject the snooze command invoked from any window other than the pre-break warning toast.
 fn require_toast(window: &WebviewWindow) -> Result<(), String> {
     gate(window.label() == crate::toast::TOAST_LABEL, "toast")
@@ -129,7 +139,7 @@ fn require_pause_toast(window: &WebviewWindow) -> Result<(), String> {
 fn reconfigure_engine(app: &AppHandle, state: &AppState, config: &ConfigFile) {
     let (rules, settings) = config.to_engine_inputs();
     let fx = state.engine.lock().unwrap().reconfigure(rules, settings);
-    runtime::apply_effects(app, &fx);
+    runtime::spawn_apply_effects(app, fx);
 }
 
 /// Open to overlay windows — they legitimately end the current break.
@@ -170,7 +180,7 @@ pub fn cmd_delay_break(
         .lock()
         .unwrap()
         .delay_break(&rule_id, std::time::Duration::from_secs(secs));
-    runtime::apply_effects(&app, &fx);
+    runtime::spawn_apply_effects(&app, fx);
     Ok(())
 }
 
@@ -656,6 +666,21 @@ pub fn cmd_dismiss_timer_done(
     require_timer_done(&window)?;
     if let Some(id) = crate::timer_toast::id_from_done_label(window.label()) {
         state.finished_toasts.lock().unwrap().remove(id);
+    }
+    Ok(())
+}
+
+/// The ✕ on an alarm toast: drop its entry so the alarm scheduler's next reconcile tick closes the
+/// window. The id comes from the toast's **own** window label (no spoofable arg); we never close
+/// windows from this command (that would risk the WebView2 main-thread deadlock) — only mutate state.
+#[tauri::command]
+pub fn cmd_dismiss_alarm_toast(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    require_alarm_toast(&window)?;
+    if let Some(id) = crate::alarm_toast::id_from_label(window.label()) {
+        state.fired_alarm_toasts.lock().unwrap().remove(id);
     }
     Ok(())
 }

@@ -90,9 +90,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         }
 
         // Notifications ({name} = rule/alarm name)
-        "notif.soft_break" => pick(locale, "{name} — time for a quick break", "{name} — 該休息一下了"),
         "notif.startup" => pick(locale, "Running in the system tray", "正在系統匣中執行"),
-        "notif.break_title" => pick(locale, "Gomaju · Break reminder", "Gomaju · 休息提醒"),
         "notif.alarm_title" => pick(locale, "Gomaju · Alarm", "Gomaju · 鬧鐘"),
         "notif.timer_title" => pick(locale, "Gomaju · Timer", "Gomaju · 計時器"),
         "timers.timer_word" => pick(locale, "timer", "計時器"),

@@ -75,17 +75,24 @@ const setFill = (rem: number): void => {
   }
 };
 
-// Local visual countdown. The engine is authoritative and closes the window at
-// the real end of the break.
+// Local visual countdown. The engine is authoritative and closes the window at the real end of
+// the break — and it defers that close by ~1s on a completed break so this visual is seen reaching
+// zero rather than vanishing at 00:01. Derive the remaining seconds from elapsed wall-clock (not a
+// running `- 1`) so the display can't accumulate setInterval drift over a long break and reliably
+// lands on 00:00; poll a bit finer than 1s so the final tick to zero is prompt.
+const startMs = Date.now();
 let remaining = info.duration_secs;
 timeEl.textContent = fmtMMSS(remaining);
 setFill(remaining); // 100% — matches the CSS base so there's no startup animation
 const countdown = window.setInterval(() => {
-  remaining = Math.max(0, remaining - 1);
-  timeEl.textContent = fmtMMSS(remaining);
-  setFill(remaining);
+  const next = Math.max(0, info.duration_secs - Math.floor((Date.now() - startMs) / 1000));
+  if (next !== remaining) {
+    remaining = next;
+    timeEl.textContent = fmtMMSS(remaining);
+    setFill(remaining);
+  }
   if (remaining <= 0) window.clearInterval(countdown);
-}, 1000);
+}, 250);
 
 async function skip(): Promise<void> {
   try {

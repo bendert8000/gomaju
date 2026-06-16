@@ -38,6 +38,7 @@ export default defineConfig(async () => ({
         alarms: "alarms.html",
         timers: "timers.html",
         timerToast: "timer-toast.html",
+        alarmToast: "alarm-toast.html",
         breaks: "breaks.html",
         chimes: "chimes.html",
       },
