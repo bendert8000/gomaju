@@ -42,6 +42,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "tray.rules" => pick(locale, "Breaks…", "休息…"),
         "tray.alarms" => pick(locale, "Alarms…", "鬧鐘…"),
         "tray.timers" => pick(locale, "Timers…", "計時器…"),
+        "tray.stopwatch" => pick(locale, "Stopwatch…", "碼錶…"),
         "tray.settings" => pick(locale, "Settings…", "設定…"),
         "tray.quit" => pick(locale, "Quit Gomaju", "結束 Gomaju"),
         "tray.tooltip" => pick(locale, "Gomaju — break reminder", "Gomaju — 休息提醒"),
@@ -100,6 +101,7 @@ pub fn tr(locale: &str, key: &str) -> &'static str {
         "title.rules" => pick(locale, "Gomaju — Break rules", "Gomaju — 休息規則"),
         "title.alarms" => pick(locale, "Gomaju — Alarms", "Gomaju — 鬧鐘"),
         "title.timers" => pick(locale, "Gomaju — Timers", "Gomaju — 計時器"),
+        "title.stopwatch" => pick(locale, "Gomaju — Stopwatch", "Gomaju — 碼錶"),
         "title.chimes" => pick(locale, "Gomaju — Chimes", "Gomaju — 鈴聲"),
 
         _ => {

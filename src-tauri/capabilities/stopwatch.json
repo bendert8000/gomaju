@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "stopwatch",
+  "description": "Capability for the stopwatch window. No core API access beyond core:event:allow-listen, which is granted so it can listen for the locale-reload broadcast (src/locale-reload.ts). The stopwatch is entirely frontend (no backend run-state); it only invokes cmd_window_ready (generic) plus cmd_close_stopwatch and cmd_stopwatch_beep, the latter two restricted to this window by the require_stopwatch() caller-check in src/commands.rs.",
+  "windows": ["stopwatch"],
+  "permissions": ["core:event:allow-listen"]
+}

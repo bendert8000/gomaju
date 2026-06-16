@@ -64,6 +64,61 @@ export function confirmUnsaved(): Promise<CloseChoice> {
   });
 }
 
+/** Confirm closing the stopwatch while it holds data (closing resets it — frontend-only state).
+ * Resolves `true` to close (discard the time + laps), `false` to keep the window open. Cancel is
+ * the safe/primary default: Esc, Enter, and overlay-click all keep it open; only an explicit click
+ * on Close discards. */
+export function confirmStopwatchClose(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    // Static scaffolding only; all text is set via textContent below (no interpolation, no XSS).
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sw-close-title">
+        <div class="brand-tag">Gomaju</div>
+        <h2 id="sw-close-title" class="modal__title"></h2>
+        <p class="modal__msg"></p>
+        <div class="modal__actions">
+          <button class="btn-ghost modal__close" type="button"></button>
+          <button class="btn-primary modal__cancel" type="button"></button>
+        </div>
+      </div>`;
+
+    const $ = <T extends HTMLElement>(sel: string): T => overlay.querySelector(sel) as T;
+    $(".modal__title").textContent = t("confirm.stopwatch_close_title");
+    $(".modal__msg").textContent = t("confirm.stopwatch_close_msg");
+    $(".modal__close").textContent = t("common.close");
+    $(".modal__cancel").textContent = t("confirm.cancel");
+
+    const prevFocus = document.activeElement as HTMLElement | null;
+
+    function done(close: boolean): void {
+      document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      prevFocus?.focus?.();
+      resolve(close);
+    }
+
+    function onKey(e: KeyboardEvent): void {
+      // Both Esc and Enter take the safe path (keep open); only the Close button discards.
+      if (e.key === "Escape" || e.key === "Enter") {
+        e.preventDefault();
+        done(false);
+      }
+    }
+
+    $<HTMLButtonElement>(".modal__close").addEventListener("click", () => done(true));
+    $<HTMLButtonElement>(".modal__cancel").addEventListener("click", () => done(false));
+    overlay.addEventListener("mousedown", (e) => {
+      if (e.target === overlay) done(false); // click outside = keep open (safe)
+    });
+    document.addEventListener("keydown", onKey, true);
+
+    document.body.appendChild(overlay);
+    $<HTMLButtonElement>(".modal__cancel").focus(); // safe action is primary/default
+  });
+}
+
 export type QuotesConflictChoice = "overwrite" | "keep_disk";
 
 /** Shown on Save when `quotes.toml` changed on disk since the Quotes editor last synced. Resolves

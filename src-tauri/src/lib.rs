@@ -18,6 +18,7 @@ mod pause_toast;
 mod quotes;
 mod runtime;
 mod settings_window;
+mod stopwatch_window;
 mod timer_toast;
 mod timers_window;
 mod toast;
@@ -242,6 +243,9 @@ pub fn run() {
                 if std::env::var("GOMAJU_OPEN_TIMERS").is_ok() {
                     timers_window::open(&handle);
                 }
+                if std::env::var("GOMAJU_OPEN_STOPWATCH").is_ok() {
+                    stopwatch_window::open(&handle);
+                }
                 if std::env::var("GOMAJU_BREAK_ON_START").is_ok() {
                     let h = handle.clone();
                     std::thread::spawn(move || {
@@ -280,6 +284,8 @@ pub fn run() {
             commands::cmd_pause_countdown,
             commands::cmd_reset_countdown,
             commands::cmd_close_countdowns,
+            commands::cmd_close_stopwatch,
+            commands::cmd_stopwatch_beep,
             commands::cmd_toast_stop_countdown,
             commands::cmd_dismiss_timer_done,
             commands::cmd_dismiss_alarm_toast,
@@ -290,6 +296,8 @@ pub fn run() {
             commands::cmd_open_settings,
             commands::cmd_open_chimes,
             commands::cmd_set_locale,
+            commands::cmd_reload_localized_windows,
+            commands::cmd_reload_window,
             commands::cmd_get_chimes,
             commands::cmd_save_chimes,
             commands::cmd_preview_chime,

@@ -17,6 +17,7 @@ const MESSAGES: Record<string, Entry> = {
   "title.rules": { en: "Gomaju — Break rules", "zh-Hant": "Gomaju — 休息規則" },
   "title.alarms": { en: "Gomaju — Alarms", "zh-Hant": "Gomaju — 鬧鐘" },
   "title.timers": { en: "Gomaju — Timers", "zh-Hant": "Gomaju — 計時器" },
+  "title.stopwatch": { en: "Gomaju — Stopwatch", "zh-Hant": "Gomaju — 碼錶" },
   "title.chimes": { en: "Gomaju — Chimes", "zh-Hant": "Gomaju — 鈴聲" },
 
   // --- Common ---
@@ -33,6 +34,13 @@ const MESSAGES: Record<string, Entry> = {
   },
   "confirm.dont_save": { en: "Don't Save", "zh-Hant": "不儲存" },
   "confirm.cancel": { en: "Cancel", "zh-Hant": "取消" },
+
+  // --- Stopwatch "close discards the running time" confirm modal ---
+  "confirm.stopwatch_close_title": { en: "Close the stopwatch?", "zh-Hant": "要關閉碼錶嗎？" },
+  "confirm.stopwatch_close_msg": {
+    en: "Closing resets the stopwatch — the current time and laps will be lost.",
+    "zh-Hant": "關閉會重設碼錶 — 目前的時間與計次將會遺失。",
+  },
 
   // --- Quotes "changed on disk" conflict modal (Settings Quotes card) ---
   "confirm.quotes_conflict_title": {
@@ -120,6 +128,15 @@ const MESSAGES: Record<string, Entry> = {
     en: "Show a progress bar on timer toasts",
     "zh-Hant": "在計時器提示窗顯示進度條",
   },
+  "settings.stopwatch_heading": { en: "Stopwatch", "zh-Hant": "碼錶" },
+  "settings.stopwatch_beep_enabled_label": {
+    en: "Play a sound when starting/pausing the stopwatch",
+    "zh-Hant": "開始／暫停碼錶時播放音效",
+  },
+  "settings.stopwatch_beep_volume_label": {
+    en: "Start/pause beep volume (%, 0 = off)",
+    "zh-Hant": "開始/暫停嗶聲音量（%，0 ＝ 關閉）",
+  },
   "settings.autostart_label": { en: "Launch at login", "zh-Hant": "登入時啟動" },
   "settings.chimes_heading": { en: "Chimes", "zh-Hant": "鈴聲" },
   "settings.chimes_desc": {
@@ -165,7 +182,7 @@ const MESSAGES: Record<string, Entry> = {
   "card.on": { en: "ON", "zh-Hant": "開" },
   "card.off": { en: "OFF", "zh-Hant": "關" },
   "card.reset": { en: "Reset", "zh-Hant": "重設" },
-  "card.repeat": { en: "Repeat", "zh-Hant": "重複" },
+  "card.repeat": { en: "Repeat this break", "zh-Hant": "重複此休息" },
   "card.repeat_title": {
     en: "Repeats on its schedule — turn off to fire once, then auto-disable",
     "zh-Hant": "依排程重複 — 關閉則只執行一次後自動停用",
@@ -221,6 +238,15 @@ const MESSAGES: Record<string, Entry> = {
   "timers.times_up": { en: "Time's up!", "zh-Hant": "時間到！" },
   "timers.dismiss": { en: "Dismiss", "zh-Hant": "關閉" },
 
+  // --- Stopwatch window ---
+  "stopwatch.heading": { en: "Gomaju — Stopwatch", "zh-Hant": "Gomaju — 碼錶" },
+  "stopwatch.start": { en: "Start", "zh-Hant": "開始" },
+  "stopwatch.pause": { en: "Pause", "zh-Hant": "暫停" },
+  "stopwatch.resume": { en: "Resume", "zh-Hant": "繼續" },
+  "stopwatch.lap": { en: "Lap", "zh-Hant": "計次" },
+  "stopwatch.reset": { en: "Reset", "zh-Hant": "重設" },
+  "stopwatch.no_laps": { en: "No laps yet.", "zh-Hant": "尚無計次。" },
+
   // Compact countdown to an alarm's next fire (largest two non-zero units). Each locale is a
   // self-contained template so units *and* spacing read naturally — e.g. "2d 3h" vs "2天3小時".
   "dur.dh": { en: "{d}d {h}h", "zh-Hant": "{d}天{h}小時" },
@@ -256,6 +282,7 @@ const MESSAGES: Record<string, Entry> = {
   "chimes.length": { en: "Length", "zh-Hant": "長度" },
   "chimes.volume": { en: "Volume", "zh-Hant": "音量" },
   "chimes.melody": { en: "Melody", "zh-Hant": "旋律" },
+  "chimes.play_note": { en: "Click to play this note", "zh-Hant": "點擊播放此音" },
   "chimes.rest": { en: "Rest", "zh-Hant": "休止" },
   "chimes.clear": { en: "Clear", "zh-Hant": "清除" },
   "chimes.import": { en: "Import file…", "zh-Hant": "匯入檔案…" },

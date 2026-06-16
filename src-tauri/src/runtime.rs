@@ -473,6 +473,72 @@ pub fn set_locale(app: &AppHandle, code: &str) {
     refresh_tray(app, state);
 }
 
+/// A window module's `open(app)` builder (focus-if-present, else build).
+type WindowOpener = fn(&AppHandle);
+
+/// The user-facing windows that carry localized UI, each paired with its `open()` builder. Single
+/// source of truth: a window's label and how to re-open it live together, so they can't drift (a
+/// missing entry would otherwise close a window on a locale change and never re-open it). Transient
+/// toasts/overlays are excluded — they're short-lived and re-created constantly, so they always
+/// pick up the current locale on their own.
+const LOCALIZED_WINDOWS: [(&str, WindowOpener); 6] = [
+    (crate::settings_window::SETTINGS_LABEL, crate::settings_window::open),
+    (crate::breaks_window::BREAKS_LABEL, crate::breaks_window::open),
+    (crate::alarms_window::ALARMS_LABEL, crate::alarms_window::open),
+    (crate::timers_window::TIMERS_LABEL, crate::timers_window::open),
+    (crate::chimes_window::CHIMES_LABEL, crate::chimes_window::open),
+    (crate::stopwatch_window::STOPWATCH_LABEL, crate::stopwatch_window::open),
+];
+
+/// The `open()` builder for a localized window label, if it is one.
+fn opener_for(label: &str) -> Option<WindowOpener> {
+    LOCALIZED_WINDOWS
+        .iter()
+        .find(|(l, _)| *l == label)
+        .map(|(_, open)| *open)
+}
+
+/// Ask every open window to recreate itself in the freshly-saved locale (it's injected at window
+/// creation, so a rebuild is the only way an open window adopts a new language). Broadcast as an
+/// event — rather than destroying windows from here — so each window's frontend can run its own
+/// unsaved-changes guard first and a window with pending edits isn't torn down silently. Each
+/// window responds by calling `cmd_reload_window` for itself (see `reload_window`).
+pub fn request_locale_reload(app: &AppHandle) {
+    if let Err(e) = app.emit("locale-reload", ()) {
+        crate::rlog!("gomaju: failed to broadcast locale reload: {e}");
+    }
+}
+
+/// Recreate ONE localized window so it re-renders in the current locale: close it, then re-open it
+/// once it is actually gone. The re-open is hopped onto a background thread so `open()`'s
+/// `run_on_main_thread` *posts* the build (to a later main-thread turn) instead of running it
+/// inline: re-opening inline from the `Destroyed` callback would run while Tauri still has the
+/// dying window's label registered, so `open()` would hit its focus-if-present early-return and
+/// never rebuild. The caller's frontend has already cleared its unsaved-changes guard, so
+/// `destroy()` here is safe. Drive from an async command so this posts off the IPC thread (see
+/// `cmd_open_settings`).
+pub fn reload_window(app: &AppHandle, label: &str) {
+    let Some(open) = opener_for(label) else {
+        crate::rlog!("gomaju: refusing to reload non-localized window '{label}'");
+        return;
+    };
+    let app = app.clone();
+    let label = label.to_string();
+    let _ = app.clone().run_on_main_thread(move || {
+        let Some(window) = app.get_webview_window(&label) else {
+            return;
+        };
+        let app = app.clone();
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                let app = app.clone();
+                std::thread::spawn(move || open(&app));
+            }
+        });
+        let _ = window.destroy();
+    });
+}
+
 /// Track when the timer (re)entered Running. Cleared on pause/stop; left intact
 /// across breaks (InBreak) so elapsed time keeps counting through a break.
 fn update_running_since(app: &AppHandle, state: RunState) {

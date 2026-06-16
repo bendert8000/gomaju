@@ -7,12 +7,14 @@
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body class="overlay">
+    <!-- Pinned near the top of the overlay; kept OUT of .overlay__content so the content's
+         fade-in `transform` can't become the quote's containing block (which would mis-place it). -->
+    <div class="overlay__quote" id="break-quote" hidden></div>
     <main class="overlay__content">
       <div class="brand-tag overlay__brand">
         <span class="overlay__brand-text">Gomaju</span>
         <img class="overlay__brand-mascot" src="/eyeman-3.png" alt="" aria-hidden="true" draggable="false" />
       </div>
-      <div class="overlay__quote" id="break-quote" hidden></div>
       <div class="overlay__name" id="break-name">Time for a break</div>
       <div class="overlay__note" id="break-note" hidden></div>
       <div class="overlay__timer" id="break-timer">--:--</div>

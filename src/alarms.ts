@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, LOCALE, t } from "./i18n";
 import { fillChimeSelect, type ChimeOption } from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+import { installLocaleReload } from "./locale-reload";
 import {
   installPreviewEndedListener,
   resetActivePreview,
@@ -300,6 +301,8 @@ async function init(): Promise<void> {
     save,
     close: () => void invoke("cmd_close_alarms"),
   });
+  // Recreate this window in the new language when a locale change is Saved, honoring unsaved edits.
+  installLocaleReload(() => guard.confirmCanClose());
   // Live countdowns: poll the backend each second (cheap; mirrors the rules window's status
   // poll, and auto-picks-up an alarm re-arming after it fires). Only the ".alarm-next" lines
   // are rewritten — never the editable rows — so in-progress edits are never discarded.

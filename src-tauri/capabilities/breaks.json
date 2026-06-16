@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "breaks",
-  "description": "Capability for the breaks quick-select window (the break-rules dashboard). Empty permission set: it only invokes app-defined commands (cmd_get_rules / cmd_set_rule_flags / cmd_close_breaks / cmd_open_settings / cmd_window_ready), which are not capability-gated. Those commands are restricted to this window by the require_breaks() caller-check in src/commands.rs.",
+  "description": "Capability for the breaks quick-select window (the break-rules dashboard). It only invokes app-defined commands (cmd_get_rules / cmd_set_rule_flags / cmd_close_breaks / cmd_open_settings / cmd_reload_window / cmd_window_ready), which are not capability-gated. Those commands are restricted to this window by the require_breaks() caller-check in src/commands.rs. core:event:allow-listen is granted so it can listen for the locale-reload broadcast (src/locale-reload.ts).",
   "windows": ["breaks"],
-  "permissions": []
+  "permissions": ["core:event:allow-listen"]
 }

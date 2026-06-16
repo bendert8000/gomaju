@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { applyI18n, t } from "./i18n";
 import { fillChimeSelect, type ChimeOption } from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+import { installLocaleReload } from "./locale-reload";
 import {
   installPreviewEndedListener,
   resetActivePreview,
@@ -305,6 +306,8 @@ async function init(): Promise<void> {
     save,
     close: () => void invoke("cmd_close_countdowns"),
   });
+  // Recreate this window in the new language when a locale change is Saved, honoring unsaved edits.
+  installLocaleReload(() => guard.confirmCanClose());
   // Live countdowns: poll each second (cheap; mirrors the alarms window). Only the toggle label
   // and remaining readout are rewritten — never the editable rows — so edits are never discarded.
   window.setInterval(() => void refresh(), 1000);

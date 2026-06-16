@@ -18,6 +18,11 @@ gomaju uses least-privilege capabilities, scoped by window label:
   are restricted to this window by `require_timers()` in `src/commands.rs`; the chime picker
   reads `cmd_get_chimes` and previews via `cmd_preview_chime_by_id` (allowed by
   `shows_chime_picker()`, which now includes `timers`).
+- **`stopwatch.json`** — the `stopwatch` window. Only `core:event:allow-listen`, granted so it
+  can listen for the `locale-reload` broadcast (`src/locale-reload.ts`). The stopwatch is
+  entirely frontend (no backend run-state); it only invokes `cmd_window_ready` (generic) and
+  `cmd_close_stopwatch`, the latter restricted to this window by `require_stopwatch()` in
+  `src/commands.rs`.
 - **`chimes.json`** — the `chimes` (chime editor) window. **Empty** permission set: it only
   invokes app commands. The write commands (`cmd_save_chimes` / `cmd_import_chime_file` /
   `cmd_preview_chime` / `cmd_close_chimes`) are restricted to this window by `require_chimes()`;

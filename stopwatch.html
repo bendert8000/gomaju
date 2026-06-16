@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gomaju — Stopwatch</title>
+    <script type="module" src="/src/stopwatch.ts" defer></script>
+  </head>
+  <body class="settings-page stopwatch-page">
+    <header class="settings-header">
+      <h1 data-i18n="stopwatch.heading">Gomaju — Stopwatch</h1>
+    </header>
+
+    <main class="settings-main stopwatch-main">
+      <div class="stopwatch-display" id="sw-display">
+        <span id="sw-main">00:00</span><span id="sw-cs" class="stopwatch-display__cs">.00</span>
+      </div>
+
+      <div class="stopwatch-controls">
+        <button id="sw-lap" type="button" class="btn-ghost" data-i18n="stopwatch.lap">Lap</button>
+        <button id="sw-toggle" type="button" class="btn-primary" data-i18n="stopwatch.start">Start</button>
+        <button id="sw-reset" type="button" class="btn-ghost" data-i18n="stopwatch.reset">Reset</button>
+      </div>
+
+      <div class="stopwatch-laps" id="sw-laps-wrap" hidden>
+        <ol id="sw-laps"></ol>
+      </div>
+      <p class="muted stopwatch-no-laps" id="sw-no-laps" data-i18n="stopwatch.no_laps">No laps yet.</p>
+    </main>
+
+    <footer class="settings-footer">
+      <span class="muted"></span>
+      <div class="actions">
+        <button id="close-btn" type="button" class="btn-ghost" data-i18n="common.close">Close</button>
+      </div>
+    </footer>
+  </body>
+</html>

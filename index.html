@@ -108,6 +108,18 @@
       </section>
 
       <section class="card">
+        <h2 data-i18n="settings.stopwatch_heading">Stopwatch</h2>
+        <label class="field field--checkbox">
+          <input id="stopwatch-beep-enabled" type="checkbox" />
+          <span data-i18n="settings.stopwatch_beep_enabled_label">Play a sound when starting/pausing the stopwatch</span>
+        </label>
+        <label class="field">
+          <span data-i18n="settings.stopwatch_beep_volume_label">Start/pause beep volume (%, 0 = off)</span>
+          <input id="stopwatch-beep-volume" type="number" min="0" max="100" />
+        </label>
+      </section>
+
+      <section class="card">
         <h2 data-i18n="settings.quotes_heading">Quotes</h2>
         <label class="field field--checkbox">
           <input id="show-quotes" type="checkbox" />

@@ -25,6 +25,9 @@ export interface UnsavedGuard {
   markSaved: () => void;
   /** Run the guard, then close if appropriate. Wire this to the in-app Close button. */
   requestClose: () => Promise<void>;
+  /** Prompt about unsaved edits (if any) WITHOUT closing. Resolves `true` when it's OK to proceed
+   *  (form was clean, saved, or discarded), `false` when the user cancelled. */
+  confirmCanClose: () => Promise<boolean>;
 }
 
 const snapshot = (v: unknown): string => JSON.stringify(v);
@@ -36,21 +39,17 @@ export function installUnsavedGuard(hooks: GuardHooks): UnsavedGuard {
     baseline = snapshot(hooks.collect());
   };
 
+  // Prompt about unsaved edits without closing; resolve whether it's OK to proceed.
+  async function confirmCanClose(): Promise<boolean> {
+    if (!isDirty()) return true;
+    const choice = await confirmUnsaved();
+    if (choice === "save") return await hooks.save(); // proceed only if persisted
+    if (choice === "dont_save") return true; // discard
+    return false; // cancel -> stay open
+  }
+
   async function decideAndClose(): Promise<void> {
-    if (!isDirty()) {
-      hooks.close();
-      return;
-    }
-    switch (await confirmUnsaved()) {
-      case "cancel":
-        return; // stay open
-      case "save":
-        if (await hooks.save()) hooks.close(); // close only if persisted
-        return;
-      case "dont_save":
-        hooks.close(); // discard + close
-        return;
-    }
+    if (await confirmCanClose()) hooks.close();
   }
 
   let inFlight = false;
@@ -70,5 +69,5 @@ export function installUnsavedGuard(hooks: GuardHooks): UnsavedGuard {
     void requestClose();
   });
 
-  return { isDirty, markSaved, requestClose };
+  return { isDirty, markSaved, requestClose, confirmCanClose };
 }

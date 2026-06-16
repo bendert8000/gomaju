@@ -9,6 +9,7 @@ import {
   type RuleDto,
 } from "./rule-editor";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+import { installLocaleReload } from "./locale-reload";
 import { collectQuotes, quoteRow, renderQuotes } from "./quotes-editor";
 import { confirmQuotesConflict } from "./confirm-save";
 import { installPreviewEndedListener } from "./chime-preview";
@@ -35,6 +36,8 @@ interface SettingsDto {
   show_timer_toasts: boolean;
   timer_count_up: boolean;
   timer_toast_progress: boolean;
+  stopwatch_beep_enabled: boolean;
+  stopwatch_beep_volume_pct: number;
 }
 
 interface HotkeysDto {
@@ -160,6 +163,8 @@ function render(cfg: ConfigFile): void {
   inp("show-timer-toasts").checked = cfg.settings.show_timer_toasts;
   sel("timer-mode").value = cfg.settings.timer_count_up ? "countup" : "countdown";
   inp("timer-toast-progress").checked = cfg.settings.timer_toast_progress;
+  inp("stopwatch-beep-enabled").checked = cfg.settings.stopwatch_beep_enabled;
+  inp("stopwatch-beep-volume").value = String(cfg.settings.stopwatch_beep_volume_pct);
   inp("autostart").checked = cfg.autostart;
   inp("hk-toggle").value = cfg.hotkeys.toggle ?? "";
   inp("hk-break").value = cfg.hotkeys.break_now ?? "";
@@ -167,14 +172,20 @@ function render(cfg: ConfigFile): void {
   sel("app-locale").value = cfg.locale;
 }
 
+// True once the user has picked a different language in THIS window's dropdown (vs. the locale the
+// window was built with). Gates the Save-time window reload, so an unrelated Save — or a Save after
+// the language was changed elsewhere (e.g. the tray) — never reopens every window.
+let localeReloadPending = false;
+
 /** Switch the whole-app UI language (the Language card). Persists + relabels the tray immediately;
- * open windows (including this one) re-render in the new language when reopened. */
+ * open windows re-render in the new language only when the user Saves (see `saveFromButton`). */
 async function setAppLocale(code: string): Promise<void> {
   if (!code || code === current.locale) return;
   try {
     await invoke("cmd_set_locale", { locale: code });
     current.locale = code; // keep the in-memory config in sync so a later Save preserves it
     sel("app-locale").value = code; // reflect the applied locale in the dropdown
+    localeReloadPending = code !== LOCALE; // back to the build-time locale ⇒ nothing to reload
   } catch (err) {
     console.error("gomaju: set locale failed", err);
     sel("app-locale").value = current.locale; // failed: restore the dropdown to the live locale
@@ -208,6 +219,11 @@ function collectConfig(): ConfigFile {
       show_timer_toasts: inp("show-timer-toasts").checked,
       timer_count_up: sel("timer-mode").value === "countup",
       timer_toast_progress: inp("timer-toast-progress").checked,
+      stopwatch_beep_enabled: inp("stopwatch-beep-enabled").checked,
+      stopwatch_beep_volume_pct: Math.min(
+        100,
+        readNonNegative("stopwatch-beep-volume", current.settings.stopwatch_beep_volume_pct),
+      ),
     },
     hotkeys: {
       toggle: blankToNull(inp("hk-toggle").value),
@@ -312,6 +328,21 @@ async function save(): Promise<boolean> {
   }
 }
 
+// The explicit Save button: persist, then — if the user changed the language in this window —
+// ask every open window to recreate itself in the new locale (the locale is injected at window
+// creation, so a rebuild is the only way an open window adopts a new language; each window runs
+// its own unsaved-changes guard before reloading). Kept out of `save()` itself so the
+// unsaved-guard's save-on-close path never triggers a reload.
+async function saveFromButton(): Promise<void> {
+  const ok = await save();
+  if (ok && localeReloadPending) {
+    localeReloadPending = false;
+    invoke("cmd_reload_localized_windows").catch((err) =>
+      console.error("gomaju: reload windows for locale failed", err),
+    );
+  }
+}
+
 async function init(): Promise<void> {
   document.title = t("title.settings");
   applyI18n(document.body);
@@ -339,6 +370,9 @@ async function init(): Promise<void> {
     save,
     close: () => void invoke("cmd_close_settings"),
   });
+  // Recreate this window in the new language when the user Saves a locale change (any window),
+  // honoring unsaved edits via the guard.
+  installLocaleReload(() => guard.confirmCanClose());
 
   try {
     const status = await invoke<string>("cmd_get_idle_status");
@@ -366,7 +400,7 @@ async function init(): Promise<void> {
     invoke("cmd_open_chimes").catch((err) => console.error("gomaju: open chimes failed", err));
   });
   sel("app-locale").addEventListener("change", () => void setAppLocale(sel("app-locale").value));
-  $("save-btn").addEventListener("click", () => void save());
+  $("save-btn").addEventListener("click", () => void saveFromButton());
   $("close-btn").addEventListener("click", () => void guard.requestClose());
 }
 

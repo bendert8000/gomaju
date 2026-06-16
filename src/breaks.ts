@@ -3,6 +3,7 @@ import { applyI18n, t } from "./i18n";
 import { fmtMMSS } from "./util";
 import type { RuleDto } from "./rule-editor";
 import { type StatusDto } from "./status";
+import { installLocaleReload } from "./locale-reload";
 
 // "Quick select today's breaks" dashboard: each rule is a big tappable card. Details are
 // read-only (edit them in Settings); only On/Off (tap the card) and Repeat/Once (segmented
@@ -98,11 +99,11 @@ function card(rule: RuleDto, index: number): HTMLElement {
     <div class="rule-card__foot">
       <span class="rule-card__countdown"></span>
       <button class="rule-card__reset" type="button">${t("card.reset")}</button>
+      <button class="rule-repeat" type="button" aria-pressed="${rule.repeat}" title="${t("card.repeat_title")}">
+        <span class="rule-repeat__dot" aria-hidden="true"></span>
+        <span class="rule-repeat__label">${t("card.repeat")}</span>
+      </button>
     </div>
-    <button class="rule-repeat" type="button" aria-pressed="${rule.repeat}" title="${t("card.repeat_title")}">
-      <span class="rule-repeat__dot" aria-hidden="true"></span>
-      <span class="rule-repeat__label">${t("card.repeat")}</span>
-    </button>
   `;
   (item.querySelector(".rule-card__name") as HTMLElement).textContent = rule.name;
   (item.querySelector(".rule-card__meta") as HTMLElement).textContent =
@@ -143,38 +144,89 @@ function render(rules: RuleDto[]): void {
   rules.forEach((rule, i) => deck.appendChild(card(rule, i)));
 }
 
-async function load(): Promise<void> {
-  render(await invoke<RuleDto[]>("cmd_get_rules"));
+async function getStatus(): Promise<StatusDto> {
+  try {
+    return await invoke<StatusDto>("cmd_get_status");
+  } catch {
+    return { state: "stopped", all: [] }; // non-fatal: fall back to config order
+  }
 }
 
-// Live status — each enabled card gets its own countdown.
-async function refreshStatus(): Promise<void> {
-  let s: StatusDto;
-  try {
-    s = await invoke<StatusDto>("cmd_get_status");
-  } catch {
-    return; // non-fatal
-  }
+// Sort key by next fire time: a rule's index in `status.all` (enabled, soonest-first), or
+// +Infinity for rules with no pending fire (disabled / engine reports none) so they sort last.
+function rankByNextFire(status: StatusDto): (id: string) => number {
+  const idx = new Map(status.all.map((b, i) => [b.rule_id, i] as const));
+  return (id) => idx.get(id) ?? Number.POSITIVE_INFINITY;
+}
 
-  // Per-card countdowns: only while actually running, and only on cards shown ON (so a
-  // stale poll can't contradict an optimistic OFF toggle made before the engine reconfigures).
-  const remaining = new Map(s.all.map((b) => [b.rule_id, b.remaining_secs]));
+// Comparator: soonest next-fire first. Equal ranks (incl. two +Infinity disabled rules) compare 0
+// and keep their current relative order — Array.sort is stable — which avoids both the
+// `Infinity - Infinity = NaN` trap and an O(n) indexOf tiebreaker per comparison.
+function byRank<T>(rank: (id: string) => number, idOf: (x: T) => string) {
+  return (a: T, b: T): number => {
+    const ra = rank(idOf(a));
+    const rb = rank(idOf(b));
+    return ra === rb ? 0 : ra - rb;
+  };
+}
+
+// Per-card countdowns: only while actually running, and only on cards shown ON (so a stale poll
+// can't contradict an optimistic OFF toggle made before the engine reconfigures).
+function fillCountdowns(status: StatusDto): void {
+  const remaining = new Map(status.all.map((b) => [b.rule_id, b.remaining_secs]));
   for (const item of document.querySelectorAll<HTMLElement>(".rule-item")) {
     const secs = remaining.get(item.dataset.id ?? "");
-    const show = s.state === "running" && item.dataset.on === "true" && secs != null;
+    const show = status.state === "running" && item.dataset.on === "true" && secs != null;
     (item.querySelector(".rule-card__countdown") as HTMLElement).textContent = show
       ? t("card.next_in", { mmss: fmtMMSS(secs) })
       : "";
   }
 }
 
+async function load(): Promise<void> {
+  const [rules, status] = await Promise.all([invoke<RuleDto[]>("cmd_get_rules"), getStatus()]);
+  // Soonest-first; rules with no pending fire (disabled) keep config order at the tail.
+  render([...rules].sort(byRank(rankByNextFire(status), (r: RuleDto) => r.id)));
+  fillCountdowns(status); // reuse the status we just fetched — no second round-trip
+}
+
+// Live poll (1s): refresh the countdown text and keep the deck sorted.
+async function refreshStatus(): Promise<void> {
+  let s: StatusDto;
+  try {
+    s = await invoke<StatusDto>("cmd_get_status");
+  } catch {
+    return; // non-fatal: keep the last-good countdowns and order
+  }
+  fillCountdowns(s);
+  // Only re-sort live while running — when paused/stopped there's no visible countdown to explain
+  // a move, and the cards should stay put.
+  if (s.state === "running") reorderCards(s);
+}
+
+// Keep the deck sorted by next fire time as countdowns tick (a fired/reset break jumps to the
+// tail). Touches the DOM only when the order actually changed, so a steady poll never churns it.
+function reorderCards(status: StatusDto): void {
+  const deck = $("rules");
+  // Don't reorder while the user is interacting with a control in the deck — re-parenting a node
+  // blurs a focused descendant and drops an in-flight click. The next tick re-checks once focus
+  // leaves, so the order still catches up.
+  if (deck.contains(document.activeElement)) return;
+  const items = Array.from(deck.querySelectorAll<HTMLElement>(".rule-item"));
+  if (items.length < 2) return;
+  const ordered = [...items].sort(byRank(rankByNextFire(status), (el: HTMLElement) => el.dataset.id ?? ""));
+  if (ordered.every((el, i) => el === items[i])) return; // already in order
+  ordered.forEach((el) => deck.appendChild(el));
+}
+
 async function init(): Promise<void> {
   document.title = t("title.rules");
   applyI18n(document.body);
   invoke("cmd_window_ready", { label: "breaks" }).catch(() => {});
-  await load();
-  await refreshStatus();
+  await load(); // also fills the initial countdowns from the status it fetched
   window.setInterval(refreshStatus, 1000);
+  // No unsaved edits here (each toggle auto-saves), so recreate freely on a Saved locale change.
+  installLocaleReload();
   $("settings-btn").addEventListener("click", () => invoke("cmd_open_settings"));
   $("close-btn").addEventListener("click", () => invoke("cmd_close_breaks"));
   // Re-sync from disk when returning to this window (e.g. after editing in Settings, or a

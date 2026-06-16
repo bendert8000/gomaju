@@ -248,6 +248,25 @@ pub fn play_alarm_chime(chime_id: &str, volume_pct: u8, chimes: &[ChimeDto], chi
     );
 }
 
+/// A short UI beep — one soft ~90 ms sine blip at `volume_pct` (0–100). Fire-and-forget feedback for
+/// the stopwatch Start/Pause button. Synthesized via [`tone_source`] (attack + release envelope) so
+/// it can't click, and routed through the same rodio path as every other sound. `volume_pct == 0`
+/// plays nothing. Deliberately not gated by `settings.sound`: it's direct feedback for a button the
+/// user just pressed (its own volume — including mute at 0 — is the control).
+pub fn play_beep(volume_pct: u8) {
+    if volume_pct == 0 {
+        return;
+    }
+    play("beep", move |sink| {
+        sink.set_volume(volume_pct as f32 / 100.0);
+        sink.append(tone_source(&ToneStep {
+            freq_hz: 880,
+            duration_ms: 90,
+            fade_in_ms: 8,
+        }));
+    });
+}
+
 /// True while a countdown chime is sounding. Several countdown timers can come due in the same
 /// tick; the cues are fire-and-forget, so without a guard they'd stack unbounded overlapping
 /// audio threads. We allow at most one countdown chime at a time:

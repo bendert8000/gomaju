@@ -68,7 +68,9 @@ body {
 
 /* Optional inspirational quote (from the user's quotes.toml). Italic + dimmer than the note so it
    reads as an ambient flourish, on both soft and strict screens. Pinned near the TOP of the overlay
-   (out of the centered content stack) so the name/timer stay centered; `top` is the height knob. */
+   and kept a DIRECT child of `.overlay` (not inside `.overlay__content`) so the content's fade-in
+   `transform` never becomes its containing block; `top` is the height knob. Fades in via opacity
+   only — animating a transform here would fight the `translateX(-50%)` centering. */
 .overlay__quote {
   position: absolute;
   top: 14vh;
@@ -79,8 +81,10 @@ body {
   font-size: clamp(0.85rem, 1.8vw, 1.25rem);
   font-style: italic;
   font-weight: 400;
-  opacity: 0.62;
+  --quote-opacity: 0.62; /* single source for the resting opacity (used by the fade keyframe too) */
+  opacity: var(--quote-opacity);
   text-wrap: balance;
+  animation: gomaju-fade-in-opacity 600ms ease-out;
 }
 .overlay__quote:empty {
   display: none;
@@ -214,6 +218,17 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Transform-free fade for elements (e.g. the quote) that own a layout `transform`
+   and can't have it animated, but should still ease in with the rest. */
+@keyframes gomaju-fade-in-opacity {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--quote-opacity);
   }
 }
 
@@ -830,6 +845,82 @@ input.chime-volume-picker {
   font-size: 0.82rem;
 }
 
+/* --- Stopwatch window --- */
+
+.stopwatch-main {
+  align-items: center;
+  text-align: center;
+}
+.stopwatch-display {
+  /* Left-anchored (NOT centered) so the leading digits stay put and only the 1/100s field on the
+     right updates — no re-centering jitter; tabular-nums keeps every digit the same width. The
+     larger left margin nudges the block toward the centre without ever centering it (which would
+     re-introduce the vibration). */
+  align-self: flex-start;
+  text-align: left;
+  margin: 0.6rem 0 0.2rem 6rem;
+  font-size: clamp(3rem, 14vw, 5rem);
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+/* The ".cc" centiseconds, 25% smaller than the rest of the time (sized relative to the display). */
+.stopwatch-display__cs {
+  font-size: 0.75em;
+}
+.stopwatch-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.stopwatch-controls .btn-primary,
+.stopwatch-controls .btn-ghost {
+  min-width: 5.5rem;
+  padding: 0.6rem 1.1rem;
+}
+.stopwatch-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.stopwatch-laps {
+  width: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.stopwatch-laps ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.stopwatch-lap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-variant-numeric: tabular-nums;
+}
+.stopwatch-lap__n {
+  flex: 1;
+  text-align: left;
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+.stopwatch-lap__split {
+  font-size: 1rem;
+}
+.stopwatch-lap__total {
+  min-width: 6.5rem;
+  text-align: right;
+  opacity: 0.55;
+  font-size: 0.85rem;
+}
+.stopwatch-no-laps {
+  text-align: center;
+}
+
 /* --- Alarms window --- */
 
 .alarm-item {
@@ -1195,8 +1286,11 @@ input.chime-volume-picker {
   gap: 0.6rem;
   padding: 0 0.35rem;
 }
-.rule-item[data-on="false"] .rule-card__foot {
-  display: none; /* a disabled break has nothing to count down or reset */
+/* A disabled break has nothing to count down or reset — but Repeat stays editable, so hide
+   only those two and keep the foot (with the Repeat checkbox) visible. */
+.rule-item[data-on="false"] .rule-card__countdown,
+.rule-item[data-on="false"] .rule-card__reset {
+  display: none;
 }
 /* Reset is tinted with the break's accent (blue = Soft, orange = Strict). */
 .rule-card__reset {
@@ -1259,12 +1353,12 @@ input.chime-volume-picker {
   opacity: 0.82;
 }
 
-/* Repeat toggle (radio-style) — scoped to the dashboard card so it never leaks onto the
+/* Repeat toggle (checkbox-style) — scoped to the dashboard card so it never leaks onto the
    Settings grid's plain `.rule-repeat` checkbox (same class name, different control). */
 .rule-item .rule-repeat {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
+  align-self: center; /* sits on the foot row, centered with the Reset button */
   margin-left: 0.25rem;
   gap: 0.4rem;
   font: inherit;
@@ -1283,24 +1377,39 @@ input.chime-volume-picker {
   opacity: 0.9;
 }
 .rule-item .rule-repeat__dot {
+  position: relative; /* anchor for the ::after checkmark */
   width: 0.85rem;
   height: 0.85rem;
   flex: none;
   box-sizing: border-box;
   border: 2px solid currentColor;
-  border-radius: 999px;
+  border-radius: 4px; /* square checkbox (was a radio circle) */
   transition:
     border-color 0.15s,
     background 0.15s;
 }
-/* selected = repeating */
+/* checked = repeating */
 .rule-item[data-repeat="true"] .rule-repeat {
   opacity: 1;
   color: var(--accent);
 }
 .rule-item[data-repeat="true"] .rule-repeat__dot {
   border-color: var(--accent);
-  background: radial-gradient(circle, var(--accent) 0 42%, transparent 46%);
+  background: var(--accent);
+}
+/* Checkmark drawn with a rotated bottom-right border (no asset/font needed). Its colour is a
+   heavily-darkened accent rather than a fixed hex, so it stays in contrast with the accent fill
+   even if the accent is retuned. */
+.rule-item[data-repeat="true"] .rule-repeat__dot::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 0.2rem;
+  height: 0.42rem;
+  border: solid color-mix(in srgb, var(--accent), #04130a 80%);
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 /* --- Unsaved-changes confirm modal (Settings + Alarms) --- */

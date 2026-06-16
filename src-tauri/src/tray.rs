@@ -133,6 +133,13 @@ fn build_menu(
         true,
         None::<&str>,
     )?;
+    let stopwatch = MenuItem::with_id(
+        app,
+        "stopwatch",
+        i18n::tr(locale, "tray.stopwatch"),
+        true,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(
         app,
         "settings",
@@ -150,7 +157,7 @@ fn build_menu(
     )?;
 
     let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> =
-        Vec::with_capacity(status_items.len() + alarm_items.len() + 11);
+        Vec::with_capacity(status_items.len() + alarm_items.len() + 12);
     // Today's upcoming alarms first (when there are any), then a divider before the breaks.
     if !alarm_items.is_empty() {
         for it in &alarm_items {
@@ -172,6 +179,7 @@ fn build_menu(
         &rules,
         &alarms,
         &timers,
+        &stopwatch,
         &settings,
         &sep2,
         &quit,
@@ -220,6 +228,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "settings" => crate::settings_window::open(app),
                 "alarms" => crate::alarms_window::open(app),
                 "timers" => crate::timers_window::open(app),
+                "stopwatch" => crate::stopwatch_window::open(app),
                 "quit" => {
                     crate::rlog!("gomaju: quit requested");
                     app.exit(0);

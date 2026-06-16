@@ -15,6 +15,7 @@ import {
   type ToneStep,
 } from "./notes";
 import { installUnsavedGuard, type UnsavedGuard } from "./unsaved-guard";
+import { installLocaleReload } from "./locale-reload";
 
 // Assigned in init() once the chimes are first rendered; referenced only afterwards.
 let guard!: UnsavedGuard;
@@ -49,11 +50,13 @@ const DEFAULT_MELODY: Note[] = [
 ];
 
 /** One melody note as a removable chip. The note lives in `data-midi` (empty = rest) + `data-dur`
- * (ms) — semantic state on the DOM, never pixel coordinates. */
-function noteChip(note: Note): HTMLElement {
+ * (ms) — semantic state on the DOM, never pixel coordinates. `card` is the owning chime card, so a
+ * click on the chip can audition its note (same single-note feedback as the palette). */
+function noteChip(note: Note, card: HTMLElement): HTMLElement {
   const chip = document.createElement("span");
   chip.className = "melody-chip";
   chip.draggable = true; // drag to reorder within the melody strip
+  chip.title = t("chimes.play_note"); // click to hear this note again
   chip.dataset.midi = note.midi == null ? "" : String(note.midi);
   chip.dataset.dur = String(note.durationMs);
   chip.dataset.len = durationTier(note.durationMs); // drives the per-length badge color (CSS)
@@ -76,6 +79,12 @@ function noteChip(note: Note): HTMLElement {
     e.dataTransfer?.setData("text/plain", "");
   });
   chip.addEventListener("dragend", () => chip.classList.remove("dragging"));
+  // Click the chip to audition its note again (rests are silent). A real drag suppresses the
+  // click, so reorder still works; a click on the ✕ removes the chip, so don't also play.
+  chip.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".melody-chip-x")) return;
+    if (note.midi != null) void playNote(card, note);
+  });
   chip.append(label, rm);
   return chip;
 }
@@ -156,7 +165,7 @@ function chimeCard(c: ChimeDto): HTMLElement {
 
   const strip = q<HTMLElement>(card, ".melody-strip");
   for (const n of steps.length ? stepsToNotes(steps) : DEFAULT_MELODY) {
-    strip.appendChild(noteChip(n));
+    strip.appendChild(noteChip(n, card));
   }
   // Drag-to-reorder: while a chip from THIS strip is being dragged, move it to the cursor position
   // live. Scoped to this strip (`.dragging` lives on the dragged chip), so a drag can't cross cards.
@@ -184,7 +193,7 @@ function chimeCard(c: ChimeDto): HTMLElement {
         midi = degree === 8 ? solfegeToMidi(key, 1, octave) + 12 : solfegeToMidi(key, degree, octave);
       }
       const note: Note = { midi, durationMs: noteDur() };
-      strip.appendChild(noteChip(note));
+      strip.appendChild(noteChip(note, card));
       if (midi != null) void playNote(card, note); // immediate feedback; rests are silent
     });
   }
@@ -360,6 +369,8 @@ async function init(): Promise<void> {
     save,
     close: () => void invoke("cmd_close_chimes"),
   });
+  // Recreate this window in the new language when a locale change is Saved, honoring unsaved edits.
+  installLocaleReload(() => guard.confirmCanClose());
 
   $("add-chime").addEventListener("click", () => {
     $("chimes").appendChild(

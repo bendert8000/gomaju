@@ -21,6 +21,8 @@ resume_prompt_enabled = true
 show_timer_toasts = true
 timer_count_up = false
 timer_toast_progress = true
+stopwatch_beep_enabled = true
+stopwatch_beep_volume_pct = 20
 
 [hotkeys]
 

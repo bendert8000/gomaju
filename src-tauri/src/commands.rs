@@ -13,6 +13,7 @@ use crate::breaks_window::{self, BREAKS_LABEL};
 use crate::chimes_window::{self, CHIMES_LABEL};
 use crate::idle::IdleStatus;
 use crate::settings_window::{self, SETTINGS_LABEL};
+use crate::stopwatch_window::{self, STOPWATCH_LABEL};
 use crate::timers_window::{self, TIMERS_LABEL};
 use crate::{autostart, hotkeys, runtime};
 
@@ -39,6 +40,11 @@ fn is_chimes(label: &str) -> bool {
 /// Pure, unit-testable predicate: is this window label the timers window?
 fn is_timers(label: &str) -> bool {
     label == TIMERS_LABEL
+}
+
+/// Pure, unit-testable predicate: is this window label the stopwatch window?
+fn is_stopwatch(label: &str) -> bool {
+    label == STOPWATCH_LABEL
 }
 
 /// Windows that show a chime picker (`<select>`), and so may preview a chime by id: the settings
@@ -88,6 +94,11 @@ fn require_chimes(window: &WebviewWindow) -> Result<(), String> {
 /// Reject a timers command invoked from any window other than the timers window.
 fn require_timers(window: &WebviewWindow) -> Result<(), String> {
     gate(is_timers(window.label()), "timers")
+}
+
+/// Reject a stopwatch command invoked from any window other than the stopwatch window.
+fn require_stopwatch(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_stopwatch(window.label()), "stopwatch")
 }
 
 /// True for a per-timer toast window (`timer-toast-<id>`).
@@ -637,6 +648,31 @@ pub fn cmd_close_countdowns(window: WebviewWindow, app: AppHandle) -> Result<(),
     Ok(())
 }
 
+/// Close the stopwatch window (the in-app Close button). The stopwatch has no backend state, so
+/// closing simply discards the window — and with it the running stopwatch (reset on close).
+#[tauri::command]
+pub fn cmd_close_stopwatch(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_stopwatch(&window)?;
+    stopwatch_window::close(&app);
+    Ok(())
+}
+
+/// Play a short beep — audio feedback for the stopwatch Start/Pause action, at the configured
+/// `settings.stopwatch_beep_volume_pct` (0 = silent). Silent when `stopwatch_beep_enabled` is
+/// off (the master toggle). Best-effort.
+#[tauri::command]
+pub fn cmd_stopwatch_beep(window: WebviewWindow, state: State<'_, AppState>) -> Result<(), String> {
+    require_stopwatch(&window)?;
+    let (enabled, volume_pct) = {
+        let settings = &state.config.lock().unwrap().settings;
+        (settings.stopwatch_beep_enabled, settings.stopwatch_beep_volume_pct)
+    };
+    if enabled {
+        crate::audio::play_beep(volume_pct);
+    }
+    Ok(())
+}
+
 /// The ✕ on a running-timer toast: stop (reset) that timer. The id comes from the toast's **own**
 /// window label, so it can't target another timer; resetting it makes the scheduler's next
 /// reconcile tick close this toast.
@@ -1050,11 +1086,31 @@ pub fn cmd_set_locale(window: WebviewWindow, app: AppHandle, locale: String) -> 
     Ok(())
 }
 
+/// Ask every open window to recreate itself in the just-saved language (each runs its own
+/// unsaved-changes guard first, then calls `cmd_reload_window`). The Settings Save button calls
+/// this when the user changed the language in this window.
+#[tauri::command]
+pub fn cmd_reload_localized_windows(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    require_settings(&window)?;
+    runtime::request_locale_reload(&app);
+    Ok(())
+}
+
+/// Recreate the CALLING window in the current locale (close + re-open). Invoked by each window's
+/// frontend, in response to the `locale-reload` broadcast, once its unsaved-changes guard clears.
+/// Restricted to the caller's own window (it can only reload itself). Async + main-thread-marshalled
+/// for the same deadlock reason as `cmd_open_settings`.
+#[tauri::command]
+pub async fn cmd_reload_window(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
+    runtime::reload_window(&app, window.label());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, is_timer_done, is_timers,
-        shows_chime_picker,
+        has_chime_preview, is_alarms, is_breaks, is_chimes, is_settings, is_stopwatch,
+        is_timer_done, is_timers, shows_chime_picker,
     };
 
     #[test]
@@ -1110,6 +1166,17 @@ mod tests {
         assert!(!is_timers("overlay-0"));
         assert!(!is_timers("Timers")); // case-sensitive
         assert!(!is_timers(""));
+    }
+
+    #[test]
+    fn only_the_stopwatch_window_is_privileged_for_stopwatch_commands() {
+        assert!(is_stopwatch("stopwatch"));
+        assert!(!is_stopwatch("settings"));
+        assert!(!is_stopwatch("timers"));
+        assert!(!is_stopwatch("breaks"));
+        assert!(!is_stopwatch("overlay-0"));
+        assert!(!is_stopwatch("Stopwatch")); // case-sensitive
+        assert!(!is_stopwatch(""));
     }
 
     #[test]

@@ -154,6 +154,14 @@ pub struct SettingsDto {
     /// Defaults on.
     #[serde(default = "default_true")]
     pub timer_toast_progress: bool,
+    /// Play a short beep when the stopwatch is started/paused. A master on/off for the cue
+    /// (the volume below still applies when on). Defaults on. UI/host-only.
+    #[serde(default = "default_true")]
+    pub stopwatch_beep_enabled: bool,
+    /// Volume (0–100%) of the short beep the stopwatch plays on Start/Pause. 0 = silent.
+    /// Defaults to 20% (matches the chime default). UI/host-only.
+    #[serde(default = "default_chime_volume")]
+    pub stopwatch_beep_volume_pct: u8,
 }
 
 fn default_warn_seconds() -> u64 {
@@ -247,6 +255,8 @@ impl Default for SettingsDto {
             show_timer_toasts: true,
             timer_count_up: false,
             timer_toast_progress: true,
+            stopwatch_beep_enabled: true,
+            stopwatch_beep_volume_pct: default_chime_volume(),
         }
     }
 }
