@@ -318,6 +318,10 @@ pub fn run() {
                 if code.is_none() {
                     api.prevent_exit();
                 } else {
+                    // Real quit. Arm the force-exit watchdog FIRST, so even if the save below — or
+                    // Tauri's window teardown that follows — wedges on a stuck overlay webview, the
+                    // process still dies on its own (no more Task-Manager kills).
+                    runtime::arm_quit_watchdog();
                     // Clean quit (tray "Quit" -> app.exit(0)): final break-progress save. A forced
                     // OS reboot won't run this — the ticker's periodic autosave is the safety net.
                     runtime::persist_progress(app);

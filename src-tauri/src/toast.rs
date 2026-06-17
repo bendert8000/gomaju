@@ -21,21 +21,28 @@ pub struct WarningInfo {
 /// Show the pre-break countdown toast (bottom-right of the primary monitor, just above the
 /// system tray). It does NOT take focus, so it won't interrupt what the user is typing.
 pub fn show(app: &AppHandle, info: WarningInfo) {
-    close(app);
     let app = app.clone();
-    let _ = app
-        .clone()
-        .run_on_main_thread(move || build_toast(&app, &info));
+    let _ = app.clone().run_on_main_thread(move || {
+        destroy_existing(&app);
+        build_toast(&app, &info);
+    });
 }
 
 /// Close the countdown toast if present.
 pub fn close(app: &AppHandle) {
     let app = app.clone();
-    let _ = app.clone().run_on_main_thread(move || {
-        if let Some(window) = app.get_webview_window(TOAST_LABEL) {
-            let _ = window.close();
-        }
-    });
+    let _ = app
+        .clone()
+        .run_on_main_thread(move || destroy_existing(&app));
+}
+
+/// Destroy the toast window if present. MUST run on the main thread. `destroy()` (forcible, not
+/// the cooperative `close()`) so a wedged webview is still reaped and its label freed before a
+/// rebuild in the same closure.
+fn destroy_existing(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(TOAST_LABEL) {
+        let _ = window.destroy();
+    }
 }
 
 fn build_toast(app: &AppHandle, info: &WarningInfo) {

@@ -4,10 +4,12 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 /// `commands::require_breaks` imports it so the IPC gate can't drift from the real label.
 pub const BREAKS_LABEL: &str = "breaks";
 
-/// Close the breaks window if it is open.
+/// Close the breaks window if it is open. Uses `destroy()` (not the cooperative `close()`) to
+/// match the other window modules; the breaks dashboard has no close-requested guard, so there's
+/// nothing to re-enter, and a wedged webview is still reaped.
 pub fn close(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(BREAKS_LABEL) {
-        let _ = window.close();
+        let _ = window.destroy();
     }
 }
 

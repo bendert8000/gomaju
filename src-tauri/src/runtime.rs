@@ -22,10 +22,27 @@ struct BreakTickPayload {
 /// coarse enough to stay cheap.
 const PROGRESS_SAVE_INTERVAL_SECS: u64 = 60;
 
+/// Hold off advancing the engine — so NO break can fire — for this long after launch. A break
+/// whose fullscreen overlays are built while the app's own windows are still initializing on the
+/// Windows UI thread (the just-auto-opened breaks window's WebView2, the ~3s startup-toast
+/// auto-hide) wedges: the overlay's WebView2 controller never finishes its async init, the page
+/// never loads, the windows can't tear down, and `app.exit()` hangs (Task-Manager-kill territory).
+/// Resumed progress makes an over-threshold break due immediately, so without this grace the very
+/// first break fires ~5s into startup and collides. Covers that settle window with margin.
+///
+/// TEMPORARY DIAGNOSTIC: set to 0 to re-expose the wedge and let the per-step instrumentation in
+/// `overlay::place_and_show` name the exact blocking call. RESTORE to 6 after capturing the log.
+const STARTUP_GRACE: Duration = Duration::from_secs(0);
+
 /// Spawn the once-per-second ticker on a dedicated OS thread (no async runtime
 /// needed). It reads idle time, advances the engine, and applies the effects.
 pub fn spawn_ticker(app: AppHandle, idle: Box<dyn IdleSource>) {
     std::thread::spawn(move || {
+        // Let the UI thread / windows settle before the engine can fire anything (see STARTUP_GRACE).
+        std::thread::sleep(STARTUP_GRACE);
+        crate::rlog!("gomaju: ticker startup grace elapsed; engine now ticking");
+        // Anchor `last` AFTER the grace so the first delta is ~1s (not 1s + grace) — otherwise the
+        // grace would itself be counted as work and could fire the break it was meant to defer.
         let mut last = Instant::now();
         let mut last_save = Instant::now();
         loop {
@@ -71,6 +88,20 @@ pub fn persist_progress(app: &AppHandle) {
     if let Err(e) = gomaju_core::progress::save_progress(&st.session_path, &file) {
         crate::rlog!("gomaju: failed to persist break progress ({e})");
     }
+}
+
+/// Guarantee the process actually dies on quit. Tauri's graceful exit closes every window, and on
+/// Windows a wedged overlay webview can block that teardown indefinitely — the bug that forced
+/// Task-Manager kills. Arm this at quit *before* any work that could itself hang: a background
+/// thread force-exits after a short grace. If the graceful exit finishes first, the whole process
+/// (this thread included) is already gone and the force-exit never runs. Runs from a plain OS
+/// thread so it stays alive even when the main/UI thread is wedged.
+pub fn arm_quit_watchdog() {
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(2));
+        crate::rlog!("gomaju: graceful quit timed out (~2s); forcing process exit");
+        std::process::exit(0);
+    });
 }
 
 /// Interpret engine effects: emit events for the UI and create/destroy overlays.
@@ -773,8 +804,10 @@ fn win_startup_toast(app: &AppHandle, body: &str) -> windows::core::Result<()> {
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(3));
         let _ = app.run_on_main_thread(move || {
-            if let Err(e) = notifier.Hide(&toast) {
-                crate::rlog!("gomaju: startup toast hide failed ({e})");
+            crate::rlog!("gomaju: startup toast -> Hide (on UI thread)");
+            match notifier.Hide(&toast) {
+                Ok(()) => crate::rlog!("gomaju: startup toast hidden"),
+                Err(e) => crate::rlog!("gomaju: startup toast hide failed ({e})"),
             }
         });
     });
