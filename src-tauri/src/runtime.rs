@@ -2,7 +2,6 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use gomaju_core::{config, Effect, RunState};
 
@@ -343,38 +342,22 @@ pub fn action_reset(app: &AppHandle, state: &AppState) {
     spawn_apply_effects(app, fx);
 }
 
-/// A native-dialog title prefixed with the app name, so an OS popup is identifiable as Gomaju's
-/// (matches the "Gomaju — …" window-title convention).
-fn gomaju_dialog_title(loc: &str, key: &str) -> String {
-    format!("Gomaju — {}", crate::i18n::tr(loc, key))
-}
-
-/// Ask the user to confirm before wiping the countdown, then reset on "Reset".
-///
-/// Shared by the tray "Reset timer" item and the Settings "Reset" button. Uses the
-/// non-blocking callback form of the dialog so it is safe from the tray's main-thread
-/// menu handler (a `blocking_show` there could deadlock the event loop) and from the
-/// command thread alike. The state is re-fetched from the handle inside the callback,
-/// since a borrowed `&AppState` can't outlive into the `'static` closure.
+/// Ask the user to confirm before wiping the countdown, then reset on the affirmative button.
+/// Shared by the tray "Reset timer" item and the Settings "Reset" button. Shows the in-app confirm
+/// prompt (centered on the primary monitor); the action runs in [`resolve_confirm`].
 pub fn confirm_then_reset(app: &AppHandle) {
     let loc = crate::i18n::current_locale(app);
-    let handle = app.clone();
-    app.dialog()
-        .message(crate::i18n::tr(&loc, "dialog.reset_timer_msg"))
-        .title(gomaju_dialog_title(&loc, "dialog.reset_timer_title"))
-        .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom(
-            crate::i18n::tr(&loc, "dialog.reset").to_string(),
-            crate::i18n::tr(&loc, "dialog.cancel").to_string(),
-        ))
-        .show(move |confirmed| {
-            if confirmed {
-                let state = handle.state::<AppState>();
-                action_reset(&handle, state.inner());
-            } else {
-                crate::rlog!("gomaju: timer reset cancelled");
-            }
-        });
+    crate::confirm::show(
+        app,
+        crate::confirm::ConfirmInfo {
+            kind: "reset_all".into(),
+            rule_id: String::new(),
+            title: crate::i18n::tr(&loc, "dialog.reset_timer_title").to_string(),
+            message: crate::i18n::tr(&loc, "dialog.reset_timer_msg").to_string(),
+            primary: crate::i18n::tr(&loc, "dialog.reset").to_string(),
+            secondary: crate::i18n::tr(&loc, "dialog.cancel").to_string(),
+        },
+    );
 }
 
 /// Cold-start prompt: a recent saved break-progress snapshot exists — ask whether to resume it or
@@ -384,36 +367,18 @@ pub fn confirm_then_reset(app: &AppHandle) {
 pub fn confirm_resume_break_progress(app: &AppHandle, age_secs: u64) {
     let loc = crate::i18n::current_locale(app);
     let age = crate::i18n::human_dur(&loc, age_secs);
-    let handle = app.clone();
-    app.dialog()
-        .message(crate::i18n::tr(&loc, "dialog.resume_progress_msg").replace("{age}", &age))
-        .title(gomaju_dialog_title(&loc, "dialog.resume_progress_title"))
-        .kind(MessageDialogKind::Info)
-        // OK / default (Enter) = Resume (the safe, non-destructive path); the other button —
-        // and Esc/close, which a bool dialog can't distinguish — = Start fresh.
-        .buttons(MessageDialogButtons::OkCancelCustom(
-            crate::i18n::tr(&loc, "dialog.resume").to_string(),
-            crate::i18n::tr(&loc, "dialog.start_fresh").to_string(),
-        ))
-        .show(move |resume| {
-            let st = handle.state::<AppState>();
-            // If the user already started/changed state from the tray, don't override them; just
-            // make sure their current progress is on disk.
-            let already_acted = st.engine.lock().unwrap().state() != RunState::Stopped;
-            if already_acted {
-                persist_progress(&handle);
-                return;
-            }
-            if resume {
-                // Keep the restored work; start() emits StateChanged so apply_effects updates
-                // running_since, the state-changed event, pause reminders, and the tray.
-                action_start(&handle, st.inner());
-            } else {
-                action_reset(&handle, st.inner()); // zero every rule's work
-                action_start(&handle, st.inner());
-                persist_progress(&handle); // overwrite session.toml now so a crash can't re-prompt
-            }
-        });
+    // Primary = Resume (the safe, non-destructive path); secondary — and Esc/close — = Start fresh.
+    crate::confirm::show(
+        app,
+        crate::confirm::ConfirmInfo {
+            kind: "resume".into(),
+            rule_id: String::new(),
+            title: crate::i18n::tr(&loc, "dialog.resume_progress_title").to_string(),
+            message: crate::i18n::tr(&loc, "dialog.resume_progress_msg").replace("{age}", &age),
+            primary: crate::i18n::tr(&loc, "dialog.resume").to_string(),
+            secondary: crate::i18n::tr(&loc, "dialog.start_fresh").to_string(),
+        },
+    );
 }
 
 /// Per-break variant of [`confirm_then_reset`]: confirm, then restart just one rule's
@@ -427,24 +392,17 @@ pub fn confirm_then_reset_one(app: &AppHandle, rule_id: String) {
             None => return,
         }
     };
-    let handle = app.clone();
-    app.dialog()
-        .message(crate::i18n::tr(&loc, "dialog.reset_break_msg").replace("{name}", &name))
-        .title(gomaju_dialog_title(&loc, "dialog.reset_break_title"))
-        .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom(
-            crate::i18n::tr(&loc, "dialog.reset").to_string(),
-            crate::i18n::tr(&loc, "dialog.cancel").to_string(),
-        ))
-        .show(move |confirmed| {
-            if confirmed {
-                let st = handle.state::<AppState>();
-                let fx = st.engine.lock().unwrap().reset_timer(&rule_id);
-                apply_effects(&handle, &fx);
-            } else {
-                crate::rlog!("gomaju: break reset cancelled ({rule_id})");
-            }
-        });
+    crate::confirm::show(
+        app,
+        crate::confirm::ConfirmInfo {
+            kind: "reset_one".into(),
+            rule_id,
+            title: crate::i18n::tr(&loc, "dialog.reset_break_title").to_string(),
+            message: crate::i18n::tr(&loc, "dialog.reset_break_msg").replace("{name}", &name),
+            primary: crate::i18n::tr(&loc, "dialog.reset").to_string(),
+            secondary: crate::i18n::tr(&loc, "dialog.cancel").to_string(),
+        },
+    );
 }
 
 /// Tray "take this break" prompt: confirm, then immediately start just this rule's break.
@@ -459,23 +417,69 @@ pub fn confirm_then_break_one(app: &AppHandle, rule_id: String) {
             None => return,
         }
     };
-    let handle = app.clone();
-    app.dialog()
-        .message(crate::i18n::tr(&loc, "dialog.break_now_msg").replace("{name}", &name))
-        .title(gomaju_dialog_title(&loc, "dialog.break_now_title"))
-        .kind(MessageDialogKind::Info)
-        .buttons(MessageDialogButtons::OkCancelCustom(
-            crate::i18n::tr(&loc, "dialog.break_now_ok").to_string(),
-            crate::i18n::tr(&loc, "dialog.cancel").to_string(),
-        ))
-        .show(move |confirmed| {
-            if confirmed {
-                let st = handle.state::<AppState>();
-                action_break_now_rule(&handle, st.inner(), &rule_id);
+    crate::confirm::show(
+        app,
+        crate::confirm::ConfirmInfo {
+            kind: "break_one".into(),
+            rule_id,
+            title: crate::i18n::tr(&loc, "dialog.break_now_title").to_string(),
+            message: crate::i18n::tr(&loc, "dialog.break_now_msg").replace("{name}", &name),
+            primary: crate::i18n::tr(&loc, "dialog.break_now_ok").to_string(),
+            secondary: crate::i18n::tr(&loc, "dialog.cancel").to_string(),
+        },
+    );
+}
+
+/// Apply a confirm-prompt answer (from `cmd_confirm_resolve`). `kind`/`rule_id` are the action
+/// descriptor the prompt was created with (echoed back by the window); `choice` is "primary" (the
+/// affirmative button) or anything else (the secondary button — also Esc/close). Closes the prompt,
+/// then dispatches. Window-creating actions go through the off-thread `action_*` helpers, so this is
+/// safe to call from the resolve command's main-thread IPC callback.
+pub fn resolve_confirm(app: &AppHandle, kind: &str, rule_id: &str, choice: &str) {
+    crate::confirm::close(app);
+    let primary = choice == "primary";
+    let st = app.state::<AppState>();
+    match kind {
+        "break_one" => {
+            if primary {
+                action_break_now_rule(app, st.inner(), rule_id);
             } else {
                 crate::rlog!("gomaju: take-break cancelled ({rule_id})");
             }
-        });
+        }
+        "reset_all" => {
+            if primary {
+                action_reset(app, st.inner());
+            } else {
+                crate::rlog!("gomaju: timer reset cancelled");
+            }
+        }
+        "reset_one" => {
+            if primary {
+                let fx = st.engine.lock().unwrap().reset_timer(rule_id);
+                spawn_apply_effects(app, fx);
+            } else {
+                crate::rlog!("gomaju: break reset cancelled ({rule_id})");
+            }
+        }
+        "resume" => {
+            // If the user already started/changed state from the tray, don't override them; just
+            // make sure their current progress is on disk.
+            let already_acted = st.engine.lock().unwrap().state() != RunState::Stopped;
+            if already_acted {
+                persist_progress(app);
+            } else if primary {
+                // Keep the restored work; start() emits StateChanged so apply_effects updates
+                // running_since, the state-changed event, pause reminders, and the tray.
+                action_start(app, st.inner());
+            } else {
+                action_reset(app, st.inner()); // zero every rule's work
+                action_start(app, st.inner());
+                persist_progress(app); // overwrite session.toml now so a crash can't re-prompt
+            }
+        }
+        other => crate::rlog!("gomaju: unknown confirm kind '{other}'"),
+    }
 }
 
 /// Switch the UI language (from the tray): persist it to config, then relabel the tray

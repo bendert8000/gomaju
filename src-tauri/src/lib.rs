@@ -7,6 +7,7 @@ mod autostart;
 mod breaks_window;
 mod chimes_window;
 mod commands;
+mod confirm;
 mod countdown;
 mod hotkeys;
 mod i18n;
@@ -265,6 +266,7 @@ pub fn run() {
             commands::cmd_break_now_rule,
             commands::cmd_resume_from_pause_reminder,
             commands::cmd_stay_paused_from_reminder,
+            commands::cmd_confirm_resolve,
             commands::cmd_get_config,
             commands::cmd_get_idle_status,
             commands::cmd_get_status,

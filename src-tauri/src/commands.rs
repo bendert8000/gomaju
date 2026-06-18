@@ -10,6 +10,7 @@ use gomaju_core::countdown::CountdownDto;
 use crate::alarms_window::{self, ALARMS_LABEL};
 use crate::app_state::AppState;
 use crate::breaks_window::{self, BREAKS_LABEL};
+use crate::confirm::CONFIRM_LABEL;
 use crate::chimes_window::{self, CHIMES_LABEL};
 use crate::idle::IdleStatus;
 use crate::settings_window::{self, SETTINGS_LABEL};
@@ -99,6 +100,16 @@ fn require_timers(window: &WebviewWindow) -> Result<(), String> {
 /// Reject a stopwatch command invoked from any window other than the stopwatch window.
 fn require_stopwatch(window: &WebviewWindow) -> Result<(), String> {
     gate(is_stopwatch(window.label()), "stopwatch")
+}
+
+/// Pure, unit-testable predicate: is this window label the confirm prompt?
+fn is_confirm(label: &str) -> bool {
+    label == CONFIRM_LABEL
+}
+
+/// Reject a confirm-resolve command invoked from any window other than the confirm prompt.
+fn require_confirm(window: &WebviewWindow) -> Result<(), String> {
+    gate(is_confirm(window.label()), "confirm")
 }
 
 /// True for a per-timer toast window (`timer-toast-<id>`).
@@ -228,6 +239,22 @@ pub fn cmd_stay_paused_from_reminder(
 ) -> Result<(), String> {
     require_pause_toast(&window)?;
     runtime::stay_paused_from_reminder(&app, state.inner());
+    Ok(())
+}
+
+/// Resolve the in-app confirm prompt: the window echoes back the action descriptor it was created
+/// with (`kind` + `rule_id`) plus which button was clicked (`choice` = "primary" / "secondary").
+/// Gated to the confirm window.
+#[tauri::command]
+pub fn cmd_confirm_resolve(
+    window: WebviewWindow,
+    app: AppHandle,
+    kind: String,
+    rule_id: String,
+    choice: String,
+) -> Result<(), String> {
+    require_confirm(&window)?;
+    runtime::resolve_confirm(&app, &kind, &rule_id, &choice);
     Ok(())
 }
 
